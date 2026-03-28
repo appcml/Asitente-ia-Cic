@@ -1,30 +1,31 @@
-name: Entrenamiento Nocturno
+name: Entrenamiento Nocturno del Bebé
 
 on:
   schedule:
-    - cron: '0 3 * * *'
-  workflow_dispatch:
+    - cron: '0 3 * * *'  # 3 AM cada día
+  workflow_dispatch:  # Manual también
 
 jobs:
   train:
     runs-on: ubuntu-latest
     
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4  # Actualizado a v4
     
     - name: Setup Python
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5  # Actualizado a v5
       with:
         python-version: '3.10'
     
     - name: Cache modelos
-      uses: actions/cache@v3
+      uses: actions/cache@v4  # Actualizado a v4
       with:
         path: checkpoints/
         key: bebe-checkpoints-${{ github.run_id }}
-        restore-keys: bebe-checkpoints-
+        restore-keys: |
+          bebe-checkpoints-
     
-    - name: Instalar
+    - name: Instalar dependencias
       run: |
         pip install torch --index-url https://download.pytorch.org/whl/cpu
         pip install -e .
@@ -35,11 +36,13 @@ jobs:
         from bebe_ia.main import BebeIA
         bebe = BebeIA()
         bebe.initialize()
-        bebe.sleep()
+        bebe.sleep()  # Entrenamiento profundo
         "
     
     - name: Subir checkpoint
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4  # ✅ ACTUALIZADO A V4
       with:
         name: bebe-entrenado-${{ github.run_number }}
         path: checkpoints/*.pt
+        retention-days: 30  # Guardar por 30 días
+        compression-level: 6  # Compresión para archivos grandes
