@@ -1,0 +1,45 @@
+name: Entrenamiento Nocturno
+
+on:
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+
+jobs:
+  train:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+    
+    - name: Cache modelos
+      uses: actions/cache@v3
+      with:
+        path: checkpoints/
+        key: bebe-checkpoints-${{ github.run_id }}
+        restore-keys: bebe-checkpoints-
+    
+    - name: Instalar
+      run: |
+        pip install torch --index-url https://download.pytorch.org/whl/cpu
+        pip install -e .
+    
+    - name: Dormir y aprender
+      run: |
+        python -c "
+        from bebe_ia.main import BebeIA
+        bebe = BebeIA()
+        bebe.initialize()
+        bebe.sleep()
+        "
+    
+    - name: Subir checkpoint
+      uses: actions/upload-artifact@v3
+      with:
+        name: bebe-entrenado-${{ github.run_number }}
+        path: checkpoints/*.pt
