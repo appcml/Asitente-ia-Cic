@@ -7,7 +7,7 @@ __author__ = "Tu Nombre"
 from .core.config import Config
 from .core.tokenizer import SimpleTokenizer
 from .core.model import BebeTransformer
-from .core.memory import MemorySystem
+from .core.memory import ContinualLearner as MemorySystem
 from .core.learner import ContinualLearner
 from .core.personality import BebePersonality
 
