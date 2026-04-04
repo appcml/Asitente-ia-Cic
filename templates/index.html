@@ -3,19 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🧠 Bebé IA Pro - Auto-Aprendizaje</title>
+    <title>🚀 Bebé IA - API HuggingFace</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         
         body {
             font-family: 'Segoe UI', system-ui, sans-serif;
-            background: linear-gradient(135deg, #0f0f23 0%, #1a1a2e 100%);
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
             color: #e0e0e0;
             min-height: 100vh;
         }
         
         .container {
-            max-width: 1000px;
+            max-width: 900px;
             margin: 0 auto;
             height: 100vh;
             display: flex;
@@ -29,9 +29,9 @@
         }
         
         .header h1 { font-size: 1.8em; }
-        .header p { opacity: 0.9; font-size: 0.85em; margin-top: 5px; }
+        .header p { font-size: 0.85em; opacity: 0.9; margin-top: 5px; }
         
-        .learning-status {
+        .stats {
             display: flex;
             justify-content: center;
             gap: 15px;
@@ -40,19 +40,10 @@
             flex-wrap: wrap;
         }
         
-        .status-badge {
+        .stat {
             background: rgba(255,255,255,0.15);
             padding: 5px 12px;
             border-radius: 15px;
-        }
-        
-        .auto-learning {
-            animation: pulse 2s infinite;
-        }
-        
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.6; }
         }
         
         .chat-area {
@@ -93,7 +84,7 @@
         }
         
         .sources {
-            margin-top: 10px;
+            margin-top: 8px;
             font-size: 0.75em;
             color: #888;
         }
@@ -104,7 +95,6 @@
             padding: 2px 8px;
             border-radius: 10px;
             margin-right: 5px;
-            margin-top: 5px;
         }
         
         .input-area {
@@ -168,18 +158,28 @@
         }
         
         .typing.show { display: block; }
+        
+        .model-badge {
+            display: inline-block;
+            background: #667eea;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 0.7em;
+            margin-left: 5px;
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <h1>🧠 Bebé IA Pro</h1>
-            <p>Modelo Grande + Aprendizaje Automático de Wikipedia, arXiv, GitHub</p>
+            <h1>🚀 Bebé IA Pro</h1>
+            <p>API HuggingFace + Aprendizaje Automático (Render-Ready)</p>
             
-            <div class="learning-status">
-                <span class="status-badge auto-learning" id="learningStatus">🔄 Auto-aprendiendo</span>
-                <span class="status-badge" id="memoryStats">🧠 Cargando...</span>
-                <span class="status-badge" id="stage">📚 Cargando...</span>
+            <div class="stats">
+                <span class="stat" id="stage">🍼 Cargando...</span>
+                <span class="stat" id="docs">📚 0 docs</span>
+                <span class="stat" id="learning">🔄 Auto: ON</span>
             </div>
         </div>
         
@@ -188,37 +188,33 @@
                 <div class="message-content">
 ¡Hola! Soy Bebé IA Pro 🚀
 
-**¿Qué me hace especial?**
-• 🧠 **Modelo Grande**: Uso Mistral 7B (o similar) para respuestas inteligentes
-• 📚 **Aprendo Solo**: Cada 30 minutos busco nueva información en:
-  - Wikipedia (conocimiento general)
-  - arXiv (papers científicos)
-  - GitHub (código y documentación)
-  - Conversaciones simuladas entre bots
+**Características:**
+• 🧠 **Modelo Grande**: Uso Mistral 7B vía API HuggingFace (gratis)
+• 📚 **Aprendo Solo**: Cada 30 minutos busco info en Wikipedia y arXiv
+• 💾 **Sin límites de RAM**: Todo en la nube, funciona en Render gratuito
+• 🔄 **Auto-actualización**: No necesitas hacer nada, aprendo solo
 
-**Fuentes de conocimiento activas:**
-<span class="source-tag">Wikipedia</span>
-<span class="source-tag">arXiv</span>
-<span class="source-tag">GitHub</span>
-<span class="source-tag">Bot Conversations</span>
+**Cómo funciona:**
+1. Pregúntame cualquier cosa
+2. Si no sé mucho, buscaré en Wikipedia automáticamente
+3. Para la próxima vez, ya sabré más
 
-Pregúntame cualquier cosa. Si no sé, ¡aprenderé automáticamente!
+¡Pregúntame sobre IA, ciencia, programación... cualquier tema!
                 </div>
-                <div class="sources">Sistema iniciado • Auto-learning activo</div>
+                <div class="sources">Sistema listo • API HuggingFace activa</div>
             </div>
         </div>
         
-        <div class="typing" id="typing">🧠 Consultando modelo grande + memoria...</div>
+        <div class="typing" id="typing">🧠 Consultando API HuggingFace...</div>
         
         <div class="input-area">
             <div class="input-box">
-                <input type="text" id="userInput" placeholder="Pregúntame algo... (aprendo de cada conversación)" autocomplete="off">
+                <input type="text" id="userInput" placeholder="Pregúntame algo..." autocomplete="off">
                 <button class="btn btn-send" onclick="sendMessage()">➤</button>
             </div>
             <div class="controls">
-                <button class="btn btn-control" onclick="forceLearn('wikipedia')">📚 Aprender Wiki</button>
-                <button class="btn btn-control" onclick="forceLearn('arxiv')">📄 Aprender Paper</button>
-                <button class="btn btn-control" onclick="forceLearn('github')">💻 Aprender Repo</button>
+                <button class="btn btn-control" onclick="forceLearn('wikipedia')">📚 Wiki</button>
+                <button class="btn btn-control" onclick="forceLearn('arxiv')">📄 Paper</button>
                 <button class="btn btn-control" onclick="showStatus()">📊 Estado</button>
                 <button class="btn btn-control" onclick="showTeach()">🎓 Enseñar</button>
             </div>
@@ -226,132 +222,107 @@ Pregúntame cualquier cosa. Si no sé, ¡aprenderé automáticamente!
     </div>
 
     <script>
-        // Cargar estado
         loadStatus();
-        setInterval(loadStatus, 30000); // Actualizar cada 30s
+        setInterval(loadStatus, 30000);
         
-        document.getElementById('userInput').addEventListener('keypress', function(e) {
+        document.getElementById('userInput').addEventListener('keypress', e => {
             if (e.key === 'Enter') sendMessage();
         });
         
         async function sendMessage() {
             const input = document.getElementById('userInput');
-            const message = input.value.trim();
-            if (!message) return;
+            const msg = input.value.trim();
+            if (!msg) return;
             
-            addMessage(message, 'user');
+            addMessage(msg, 'user');
             input.value = '';
             document.getElementById('typing').classList.add('show');
             
             try {
-                const response = await fetch('/chat', {
+                const res = await fetch('/chat', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({message: message})
+                    body: JSON.stringify({message: msg})
                 });
+                const data = await res.json();
                 
-                const data = await response.json();
                 document.getElementById('typing').classList.remove('show');
                 
-                // Mostrar fuentes usadas
-                let sourcesHtml = '';
-                if (data.sources_used && data.sources_used.length > 0) {
-                    sourcesHtml = '<div class="sources">Fuentes: ' + 
-                        data.sources_used.map(s => `<span class="source-tag">${s}</span>`).join('') + 
-                        '</div>';
+                let content = data.response;
+                if (data.sources && data.sources.length > 0) {
+                    content += '\n\n<div class="sources">Fuentes: ' + 
+                        data.sources.map(s => `<span class="source-tag">${s}</span>`).join('') + 
+                        ` <span class="model-badge">${data.model_used}</span></div>`;
                 }
                 
-                const content = data.response + sourcesHtml;
-                addMessage(content, 'bot', `Bebé IA Pro • ${data.stage}`);
+                addMessage(content, 'bot', `Bebé IA • ${data.stage}`);
                 
-            } catch (error) {
+            } catch (e) {
                 document.getElementById('typing').classList.remove('show');
-                addMessage('Error conectando con el modelo 😅', 'bot', 'Error');
+                addMessage('Error de conexión con API 😅', 'bot', 'Error');
             }
         }
         
         function addMessage(content, sender, meta) {
-            const chatArea = document.getElementById('chatArea');
-            const messageDiv = document.createElement('div');
-            messageDiv.className = `message ${sender}`;
-            
-            const contentDiv = document.createElement('div');
-            contentDiv.className = 'message-content';
-            contentDiv.innerHTML = content;
-            
-            const sourcesDiv = document.createElement('div');
-            sourcesDiv.className = 'sources';
-            sourcesDiv.textContent = meta || (sender === 'user' ? 'Tú' : 'Bebé IA');
-            
-            messageDiv.appendChild(contentDiv);
-            messageDiv.appendChild(sourcesDiv);
-            chatArea.appendChild(messageDiv);
-            chatArea.scrollTop = chatArea.scrollHeight;
+            const chat = document.getElementById('chatArea');
+            const div = document.createElement('div');
+            div.className = `message ${sender}`;
+            div.innerHTML = `
+                <div class="message-content">${content}</div>
+                <div class="sources">${meta || (sender === 'user' ? 'Tú' : 'Bebé IA')}</div>
+            `;
+            chat.appendChild(div);
+            chat.scrollTop = chat.scrollHeight;
         }
         
         async function loadStatus() {
             try {
-                const response = await fetch('/status');
-                const data = await response.json();
-                
-                document.getElementById('memoryStats').textContent = 
-                    `🧠 ${data.memory_stats.total_documents} documentos`;
+                const res = await fetch('/status');
+                const data = await res.json();
                 document.getElementById('stage').textContent = data.stage;
-                
-                const learning = data.learning_stats;
-                if (learning.daily_learned >= learning.max_daily) {
-                    document.getElementById('learningStatus').textContent = '✅ Meta diaria alcanzada';
-                    document.getElementById('learningStatus').classList.remove('auto-learning');
-                }
+                document.getElementById('docs').textContent = `📚 ${data.knowledge.total} docs`;
             } catch (e) {}
         }
         
         async function forceLearn(source) {
-            const query = prompt(`¿Sobre qué tema quieres que aprenda de ${source}?`);
+            const query = prompt(`¿Sobre qué tema aprender de ${source}?`);
             if (!query) return;
             
-            addMessage(`🎓 Aprendiendo sobre "${query}" desde ${source}...`, 'bot', 'Sistema');
+            addMessage(`🎓 Aprendiendo "${query}" de ${source}...`, 'bot', 'Sistema');
             
-            try {
-                const response = await fetch('/learn', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({source: source, query: query})
-                });
-                const data = await response.json();
-                addMessage(data.message, 'bot', 'Sistema');
-                loadStatus();
-            } catch (e) {
-                addMessage('Error en aprendizaje 😅', 'bot', 'Error');
-            }
+            const res = await fetch('/learn', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({source, query})
+            });
+            const data = await res.json();
+            addMessage(data.message, 'bot', 'Sistema');
+            loadStatus();
         }
         
         async function showStatus() {
-            try {
-                const response = await fetch('/status');
-                const data = await response.json();
-                
-                let status = `📊 **Estado del Sistema**\n\n`;
-                status += `**Etapa:** ${data.stage}\n`;
-                status += `**Documentos:** ${data.memory_stats.total_documents}\n`;
-                status += `**Fuentes:** ${JSON.stringify(data.memory_stats.sources)}\n`;
-                status += `**Aprendidos hoy:** ${data.learning_stats.daily_learned}/${data.learning_stats.max_daily}\n`;
-                status += `**Conversaciones:** ${data.total_conversations}\n`;
-                status += `**Modelo:** ${data.model}`;
-                
-                addMessage(status, 'bot', 'Sistema');
-            } catch (e) {}
+            const res = await fetch('/status');
+            const data = await res.json();
+            
+            let text = `📊 **Estado**\n\n`;
+            text += `Etapa: ${data.stage}\n`;
+            text += `Documentos: ${data.knowledge.total}\n`;
+            text += `Fuentes: ${JSON.stringify(data.knowledge.sources)}\n`;
+            text += `Aprendidos hoy: ${data.learning.daily_learned}/${data.learning.max_daily}\n`;
+            text += `Modelo: ${data.model}`;
+            
+            addMessage(text, 'bot', 'Sistema');
         }
         
         function showTeach() {
-            const correction = prompt('¿Qué quieres enseñarme?');
-            if (correction) {
+            const text = prompt('¿Qué quieres enseñarme?');
+            if (text) {
                 fetch('/teach', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({correct: correction})
+                    body: JSON.stringify({correct: text})
                 }).then(() => {
-                    addMessage(`🎓 Aprendido: "${correction}"`, 'bot', 'Aprendizaje manual');
+                    addMessage(`🎓 Aprendido: "${text}"`, 'bot', 'Aprendizaje');
                 });
             }
         }
