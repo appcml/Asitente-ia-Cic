@@ -3,19 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🧠 Bebé IA Pro Ultra</title>
+    <title>🚀 Bebé IA Pro - Estable</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         
         body {
-            font-family: 'Segoe UI', system-ui, sans-serif;
-            background: linear-gradient(135deg, #0f0f23 0%, #1a1a2e 100%);
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
             color: #e0e0e0;
             min-height: 100vh;
         }
         
         .container {
-            max-width: 1200px;
+            max-width: 1000px;
             margin: 0 auto;
             height: 100vh;
             display: flex;
@@ -24,126 +24,80 @@
         
         .header {
             background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
-            padding: 15px 20px;
+            padding: 20px;
+            text-align: center;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        
+        .header h1 { 
+            font-size: 1.8em; 
+            margin-bottom: 5px;
+        }
+        
+        .header p { 
+            font-size: 0.9em; 
+            opacity: 0.9; 
+        }
+        
+        .stats {
             display: flex;
-            justify-content: space-between;
-            align-items: center;
-            flex-wrap: wrap;
-        }
-        
-        .header-left h1 { font-size: 1.5em; }
-        .header-left p { font-size: 0.8em; opacity: 0.9; }
-        
-        .header-right {
-            display: flex;
-            gap: 10px;
-            align-items: center;
-            flex-wrap: wrap;
-        }
-        
-        .mode-selector {
-            display: flex;
-            gap: 5px;
-            background: rgba(0,0,0,0.2);
-            padding: 5px;
-            border-radius: 20px;
-        }
-        
-        .mode-btn {
-            padding: 5px 15px;
-            border: none;
-            border-radius: 15px;
-            cursor: pointer;
-            font-size: 0.8em;
-            background: transparent;
-            color: #ccc;
-            transition: all 0.3s;
-        }
-        
-        .mode-btn.active {
-            background: #fff;
-            color: #667eea;
-        }
-        
-        .auth-btn {
-            padding: 8px 16px;
-            border-radius: 20px;
-            text-decoration: none;
-            font-size: 0.85em;
-            background: rgba(255,255,255,0.2);
-            color: white;
-        }
-        
-        .stats-bar {
-            display: flex;
+            justify-content: center;
             gap: 15px;
-            padding: 10px 20px;
-            background: #1a1a2e;
-            font-size: 0.8em;
+            margin-top: 15px;
+            font-size: 0.85em;
             flex-wrap: wrap;
         }
         
         .stat {
-            background: #252542;
-            padding: 5px 12px;
-            border-radius: 15px;
+            background: rgba(255,255,255,0.15);
+            padding: 8px 16px;
+            border-radius: 20px;
+            backdrop-filter: blur(10px);
         }
         
-        .main-content {
-            flex: 1;
+        .mode-selector {
             display: flex;
-            overflow: hidden;
+            justify-content: center;
+            gap: 10px;
+            margin-top: 15px;
         }
         
-        .sidebar {
-            width: 250px;
-            background: #0f0f23;
-            padding: 20px;
-            border-right: 1px solid #2a2a4a;
-            overflow-y: auto;
-        }
-        
-        .sidebar h3 {
-            font-size: 0.9em;
-            margin-bottom: 15px;
-            color: #667eea;
-        }
-        
-        .sidebar-btn {
-            width: 100%;
-            padding: 10px;
-            margin-bottom: 8px;
-            border: 1px solid #3a3a5c;
-            border-radius: 10px;
-            background: #1a1a2e;
-            color: #ccc;
+        .mode-btn {
+            padding: 8px 20px;
+            border: 2px solid rgba(255,255,255,0.3);
+            border-radius: 25px;
+            background: transparent;
+            color: white;
             cursor: pointer;
             font-size: 0.85em;
-            text-align: left;
             transition: all 0.3s;
         }
         
-        .sidebar-btn:hover {
-            background: #252542;
-            border-color: #667eea;
+        .mode-btn:hover {
+            background: rgba(255,255,255,0.1);
         }
         
-        .chat-container {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
+        .mode-btn.active {
+            background: white;
+            color: #667eea;
+            border-color: white;
         }
         
         .chat-area {
             flex: 1;
             overflow-y: auto;
             padding: 20px;
+            background: #1a1a2e;
         }
         
         .message {
             margin-bottom: 20px;
-            max-width: 80%;
+            max-width: 85%;
             animation: fadeIn 0.3s ease;
+        }
+        
+        .message.user { 
+            margin-left: auto; 
         }
         
         @keyframes fadeIn {
@@ -151,13 +105,12 @@
             to { opacity: 1; transform: translateY(0); }
         }
         
-        .message.user { margin-left: auto; }
-        
         .message-content {
             padding: 15px 20px;
             border-radius: 20px;
             line-height: 1.6;
             white-space: pre-wrap;
+            word-wrap: break-word;
         }
         
         .message.user .message-content {
@@ -171,9 +124,29 @@
         }
         
         .message-meta {
+            margin-top: 8px;
             font-size: 0.75em;
             color: #888;
-            margin-top: 5px;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        
+        .source-tag {
+            display: inline-block;
+            background: #3a3a5c;
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 0.85em;
+        }
+        
+        .model-badge {
+            background: #4caf50;
+            color: white;
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 0.85em;
         }
         
         .input-area {
@@ -182,10 +155,10 @@
             border-top: 1px solid #2a2a4a;
         }
         
-        .input-row {
+        .input-box {
             display: flex;
             gap: 10px;
-            margin-bottom: 10px;
+            margin-bottom: 15px;
         }
         
         #userInput {
@@ -196,9 +169,13 @@
             background: #1a1a2e;
             color: white;
             font-size: 1em;
+            outline: none;
+            transition: border-color 0.3s;
         }
         
-        #userInput:focus { outline: none; border-color: #667eea; }
+        #userInput:focus {
+            border-color: #667eea;
+        }
         
         .btn {
             padding: 15px 25px;
@@ -207,314 +184,388 @@
             cursor: pointer;
             font-size: 0.95em;
             transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
         
         .btn-send {
             background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
             color: white;
+            min-width: 60px;
         }
         
-        .btn-attach {
-            background: #252542;
-            color: #ccc;
-            padding: 15px;
+        .btn-send:hover {
+            transform: scale(1.05);
         }
         
-        .quick-actions {
+        .btn-send:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .controls {
             display: flex;
             gap: 10px;
+            justify-content: center;
             flex-wrap: wrap;
         }
         
-        .quick-btn {
-            padding: 8px 16px;
+        .btn-control {
+            background: #252542;
+            color: #ccc;
+            padding: 10px 20px;
+            font-size: 0.9em;
             border: 1px solid #3a3a5c;
             border-radius: 20px;
-            background: #1a1a2e;
-            color: #888;
-            cursor: pointer;
-            font-size: 0.8em;
         }
         
-        .quick-btn:hover {
-            border-color: #667eea;
-            color: #fff;
+        .btn-control:hover {
+            background: #3a3a5c;
+            color: white;
         }
         
         .typing {
             display: none;
-            padding: 10px 20px;
+            padding: 15px 20px;
             color: #4caf50;
+            font-style: italic;
+            align-items: center;
+            gap: 10px;
         }
         
-        .typing.show { display: block; }
-        
-        .source-tag {
-            display: inline-block;
-            background: #3a3a5c;
-            padding: 2px 8px;
-            border-radius: 10px;
-            font-size: 0.7em;
-            margin-right: 5px;
+        .typing.show {
+            display: flex;
         }
         
-        .model-badge {
-            background: #667eea;
+        .typing::before {
+            content: "🧠";
+            animation: pulse 1.5s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        .error-message {
+            background: #f44336;
             color: white;
-            padding: 2px 8px;
+            padding: 10px 15px;
             border-radius: 10px;
-            font-size: 0.7em;
+            margin-bottom: 10px;
+            display: none;
         }
         
-        @media (max-width: 768px) {
-            .sidebar { display: none; }
-            .header { flex-direction: column; gap: 10px; }
+        .error-message.show {
+            display: block;
+        }
+        
+        @media (max-width: 600px) {
+            .header h1 { font-size: 1.4em; }
+            .message { max-width: 95%; }
+            .controls { gap: 5px; }
+            .btn-control { padding: 8px 15px; font-size: 0.8em; }
         }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <div class="header-left">
-                <h1>🧠 Bebé IA Pro Ultra</h1>
-                <p>Multi-modelo + Auth + Documentos + Aprendizaje Continuo</p>
-            </div>
-            <div class="header-right">
-                <div class="mode-selector">
-                    <button class="mode-btn" onclick="setMode('fast')" id="mode-fast">⚡ Rápido</button>
-                    <button class="mode-btn active" onclick="setMode('balanced')" id="mode-balanced">⚖️ Balance</button>
-                    <button class="mode-btn" onclick="setMode('complete')" id="mode-complete">📚 Completo</button>
-                </div>
-                <a href="/login" class="auth-btn" id="authBtn">🔑 Login</a>
-            </div>
-        </div>
-        
-        <div class="stats-bar">
-            <span class="stat" id="statMemories">🧠 0 memorias</span>
-            <span class="stat" id="statLearning">🔄 Auto: ON</span>
-            <span class="stat" id="statUser">👤 Invitado</span>
-            <span class="stat" id="statMode">⚖️ Modo: Balance</span>
-        </div>
-        
-        <div class="main-content">
-            <div class="sidebar">
-                <h3>📚 Acciones</h3>
-                <button class="sidebar-btn" onclick="forceLearn('wikipedia')">📖 Aprender Wiki</button>
-                <button class="sidebar-btn" onclick="forceLearn('arxiv')">📄 Aprender Paper</button>
-                <button class="sidebar-btn" onclick="forceLearn('research')">🔬 Investigación</button>
-                <button class="sidebar-btn" onclick="showMemories()">🧠 Ver Memorias</button>
-                <button class="sidebar-btn" onclick="showHistory()">💬 Historial</button>
-                
-                <h3 style="margin-top: 20px;">📁 Documentos</h3>
-                <input type="file" id="fileInput" style="display:none" accept=".pdf,.docx,.txt,.md" onchange="uploadFile()">
-                <button class="sidebar-btn" onclick="document.getElementById('fileInput').click()">📎 Subir Documento</button>
+            <h1>🚀 Bebé IA Pro</h1>
+            <p>Modo Estable Offline - Aprendizaje Automático</p>
+            
+            <div class="stats">
+                <span class="stat" id="statStage">🍼 Cargando...</span>
+                <span class="stat" id="statMemories">📚 0 memorias</span>
+                <span class="stat" id="statLearning">🔄 Auto: ON</span>
             </div>
             
-            <div class="chat-container">
-                <div class="chat-area" id="chatArea">
-                    <div class="message bot">
-                        <div class="message-content">
-¡Bienvenido a Bebé IA Pro Ultra! 🚀
+            <div class="mode-selector">
+                <button class="mode-btn" onclick="setMode('fast')" id="mode-fast">⚡ Rápido</button>
+                <button class="mode-btn active" onclick="setMode('balanced')" id="mode-balanced">⚖️ Balanceado</button>
+                <button class="mode-btn" onclick="setMode('complete')" id="mode-complete">📚 Completo</button>
+            </div>
+        </div>
+        
+        <div class="chat-area" id="chatArea">
+            <div class="message bot">
+                <div class="message-content">
+¡Hola! Soy Bebé IA Pro 🚀
 
-**Características:**
-• 🧠 **3 modos de respuesta**: Rápido (⚡), Balanceado (⚖️), Completo (📚)
-• 👤 **Sesiones personalizadas**: Login con Google/GitHub para memoria personal
-• 📁 **Documentos**: Sube PDFs, Word o TXT y aprendo de ellos
-• 🔄 **Aprendizaje continuo**: Investigo automáticamente cada 15 minutos
-• 💾 **Persistencia total**: Nada se pierde, todo queda en base de datos
+**Versión Estable Offline:**
+• ✅ Funciona 100% sin APIs externas (no más "problemas técnicos")
+• 🧠 Respuestas instantáneas desde mi base de conocimiento
+• 📚 Aprendo automáticamente de Wikipedia cada 15 minutos
+• 💾 Todo se guarda en base de datos PostgreSQL
 
 **Modos de respuesta:**
-- ⚡ **Rápido**: Respuestas cortas y directas (TinyLlama)
-- ⚖️ **Balanceado**: Respuestas naturales (Gemma 2B) ← Por defecto
-- 📚 **Completo**: Respuestas detalladas y profundas (Zephyr 7B)
+• ⚡ **Rápido**: Respuestas cortas y directas
+• ⚖️ **Balanceado**: Respuestas naturales (recomendado)
+• 📚 **Completo**: Respuestas detalladas con oferta de investigación
 
-¡Comienza a conversar o sube un documento!
-                        </div>
-                        <div class="message-meta">Bebé IA • Sistema iniciado</div>
-                    </div>
+**Botones disponibles:**
+• 📖 **Wiki**: Aprender de Wikipedia sobre un tema
+• 📄 **Paper**: Investigación académica (usa Wikipedia)
+• 📊 **Estado**: Ver estadísticas del sistema
+• 🎓 **Enseñar**: Tú me enseñas algo nuevo
+
+¡Pregúntame sobre IA, Python, Machine Learning, o cualquier tema!
                 </div>
-                
-                <div class="typing" id="typing">🧠 Pensando...</div>
-                
-                <div class="input-area">
-                    <div class="input-row">
-                        <input type="text" id="userInput" placeholder="Escribe tu mensaje... (o usa los botones de acción)" autocomplete="off">
-                        <button class="btn btn-attach" onclick="document.getElementById('fileInput').click()" title="Adjuntar documento">📎</button>
-                        <button class="btn btn-send" onclick="sendMessage()">➤</button>
-                    </div>
-                    <div class="quick-actions">
-                        <button class="quick-btn" onclick="quickAsk('Resume mi documento')">📄 Resumen doc</button>
-                        <button class="quick-btn" onclick="quickAsk('Qué sabes de machine learning')">🤖 ML</button>
-                        <button class="quick-btn" onclick="quickAsk('Investiga el último tema')">🔍 Investigar</button>
-                        <button class="quick-btn" onclick="quickAsk('Muestra mis estadísticas')">📊 Stats</button>
-                    </div>
-                </div>
+                <div class="message-meta">Bebé IA • Sistema listo</div>
+            </div>
+        </div>
+        
+        <div class="error-message" id="errorMessage"></div>
+        
+        <div class="typing" id="typing">Pensando...</div>
+        
+        <div class="input-area">
+            <div class="input-box">
+                <input type="text" id="userInput" placeholder="Escribe tu mensaje aquí..." autocomplete="off">
+                <button class="btn btn-send" id="sendBtn" onclick="sendMessage()">➤</button>
+            </div>
+            
+            <div class="controls">
+                <button class="btn btn-control" onclick="forceLearn('wikipedia')">📖 Wiki</button>
+                <button class="btn btn-control" onclick="forceLearn('arxiv')">📄 Paper</button>
+                <button class="btn btn-control" onclick="showStatus()">📊 Estado</button>
+                <button class="btn btn-control" onclick="showTeach()">🎓 Enseñar</button>
+                <button class="btn btn-control" onclick="showMemories()">🧠 Memorias</button>
             </div>
         </div>
     </div>
 
     <script>
         let currentMode = 'balanced';
-        let isAuthenticated = false;
+        let isProcessing = false;
         
         // Inicializar
-        loadStatus();
-        setInterval(loadStatus, 30000);
-        
-        document.getElementById('userInput').addEventListener('keypress', e => {
-            if (e.key === 'Enter') sendMessage();
+        document.addEventListener('DOMContentLoaded', () => {
+            loadStatus();
+            setInterval(loadStatus, 30000); // Actualizar cada 30 segundos
+            
+            // Enter para enviar
+            document.getElementById('userInput').addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') sendMessage();
+            });
+            
+            // Focus en input
+            document.getElementById('userInput').focus();
         });
         
         function setMode(mode) {
             currentMode = mode;
-            document.querySelectorAll('.mode-btn').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.mode-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
             document.getElementById(`mode-${mode}`).classList.add('active');
-            
-            const modeNames = {fast: '⚡ Rápido', balanced: '⚖️ Balance', complete: '📚 Completo'};
-            document.getElementById('statMode').textContent = `Modo: ${modeNames[mode]}`;
+            console.log('Modo cambiado a:', mode);
         }
         
         async function sendMessage() {
-            const input = document.getElementById('userInput');
-            const msg = input.value.trim();
-            if (!msg) return;
+            if (isProcessing) return;
             
-            addMessage(msg, 'user');
+            const input = document.getElementById('userInput');
+            const message = input.value.trim();
+            
+            if (!message) return;
+            
+            // Mostrar mensaje del usuario
+            addMessage(message, 'user', 'Tú');
             input.value = '';
+            
+            // Mostrar indicador de carga
+            isProcessing = true;
             document.getElementById('typing').classList.add('show');
+            document.getElementById('sendBtn').disabled = true;
+            hideError();
             
             try {
-                const res = await fetch('/chat', {
+                const response = await fetch('/chat', {
                     method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({message: msg, mode: currentMode})
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        message: message,
+                        mode: currentMode
+                    })
                 });
-                const data = await res.json();
                 
-                document.getElementById('typing').classList.remove('show');
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
                 
-                let content = data.response;
-                let meta = `Bebé IA <span class="model-badge">${data.model_used}</span>`;
+                const data = await response.json();
+                
+                // Construir meta información
+                let metaHtml = `Bebé IA <span class="model-badge">${data.model_used || 'local'}</span>`;
                 
                 if (data.sources_used && data.sources_used.length > 0) {
-                    meta += ' • Fuentes: ' + data.sources_used.map(s => `<span class="source-tag">${s}</span>`).join('');
-                }
-                if (data.documents_processed > 0) {
-                    meta += ` • 📄 ${data.documents_processed} docs`;
+                    metaHtml += ' • ' + data.sources_used.map(s => 
+                        `<span class="source-tag">${s}</span>`
+                    ).join('');
                 }
                 
-                addMessage(content, 'bot', meta);
+                if (data.memories_found > 0) {
+                    metaHtml += ` • 🧠 ${data.memories_found} memorias`;
+                }
+                
+                addMessage(data.response, 'bot', metaHtml);
+                
+                // Actualizar estadísticas
                 loadStatus();
                 
-            } catch (e) {
+            } catch (error) {
+                console.error('Error:', error);
+                showError('Error de conexión. Intenta de nuevo.');
+                addMessage('Lo siento, tuve un problema de conexión. ¿Puedes intentar de nuevo?', 'bot', 'Error');
+            } finally {
+                isProcessing = false;
                 document.getElementById('typing').classList.remove('show');
-                addMessage('Error de conexión. Reintentando...', 'bot', 'Error');
+                document.getElementById('sendBtn').disabled = false;
+                input.focus();
             }
         }
         
-        function quickAsk(text) {
-            document.getElementById('userInput').value = text;
-            sendMessage();
-        }
-        
         function addMessage(content, sender, meta) {
-            const chat = document.getElementById('chatArea');
-            const div = document.createElement('div');
-            div.className = `message ${sender}`;
-            div.innerHTML = `
-                <div class="message-content">${content.replace(/\n/g, '<br>')}</div>
-                <div class="message-meta">${meta || (sender === 'user' ? 'Tú' : 'Bebé IA')}</div>
-            `;
-            chat.appendChild(div);
-            chat.scrollTop = chat.scrollHeight;
+            const chatArea = document.getElementById('chatArea');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${sender}`;
+            
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'message-content';
+            contentDiv.innerHTML = content.replace(/\n/g, '<br>');
+            
+            const metaDiv = document.createElement('div');
+            metaDiv.className = 'message-meta';
+            metaDiv.innerHTML = meta || (sender === 'user' ? 'Tú' : 'Bebé IA');
+            
+            messageDiv.appendChild(contentDiv);
+            messageDiv.appendChild(metaDiv);
+            chatArea.appendChild(messageDiv);
+            
+            // Scroll al final
+            chatArea.scrollTop = chatArea.scrollHeight;
         }
         
         async function loadStatus() {
             try {
-                const res = await fetch('/status');
-                const data = await res.json();
+                const response = await fetch('/status');
+                if (!response.ok) return;
                 
-                document.getElementById('statMemories').textContent = `🧠 ${data.total_memories} memorias`;
-                document.getElementById('statLearning').textContent = `🔄 Hoy: ${data.today_learned}`;
+                const data = await response.json();
                 
-                if (data.authenticated) {
-                    document.getElementById('statUser').textContent = `👤 ${data.user.name || 'Usuario'}`;
-                    document.getElementById('authBtn').textContent = '🔓 Salir';
-                    document.getElementById('authBtn').href = '/logout';
-                    isAuthenticated = true;
-                }
-            } catch (e) {}
+                document.getElementById('statStage').textContent = data.stage || '🍼 Aprendiz';
+                document.getElementById('statMemories').textContent = `📚 ${data.total_memories || 0} memorias`;
+                document.getElementById('statLearning').textContent = 
+                    data.learning_active ? `🔄 Hoy: ${data.daily_learned || 0}` : '🔄 OFF';
+                
+            } catch (e) {
+                console.error('Error cargando estado:', e);
+            }
         }
         
         async function forceLearn(source) {
-            const query = prompt(`¿Sobre qué tema quieres que investigue (${source})?`);
+            const query = prompt(`¿Sobre qué tema quieres que aprenda de ${source}?`);
             if (!query) return;
             
-            addMessage(`🔬 Iniciando investigación: "${query}"...`, 'bot', 'Sistema');
-            
-            const res = await fetch('/learn', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({source, query})
-            });
-            const data = await res.json();
-            addMessage(data.message, 'bot', 'Sistema');
-            loadStatus();
-        }
-        
-        async function uploadFile() {
-            const input = document.getElementById('fileInput');
-            const file = input.files[0];
-            if (!file) return;
-            
-            const formData = new FormData();
-            formData.append('document', file);
-            
-            addMessage(`📎 Subiendo: ${file.name}...`, 'bot', 'Sistema');
+            addMessage(`🔬 Iniciando aprendizaje: "${query}"...`, 'bot', 'Sistema');
             
             try {
-                const res = await fetch('/upload', {
+                const response = await fetch('/learn', {
                     method: 'POST',
-                    body: formData
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ source: source, query: query })
                 });
-                const data = await res.json();
-                addMessage(data.message, 'bot', 'Sistema');
-            } catch (e) {
-                addMessage('Error subiendo archivo 😅', 'bot', 'Error');
+                
+                const data = await response.json();
+                addMessage(data.message || data.error || 'Completado', 'bot', 'Sistema');
+                loadStatus();
+                
+            } catch (error) {
+                addMessage('❌ Error al iniciar aprendizaje', 'bot', 'Error');
             }
+        }
+        
+        async function showStatus() {
+            try {
+                const response = await fetch('/status');
+                const data = await response.json();
+                
+                let content = `📊 **Estado del Sistema**\n\n`;
+                content += `**Etapa:** ${data.stage}\n`;
+                content += `**Memorias totales:** ${data.total_memories}\n`;
+                content += `**Conversaciones:** ${data.total_conversations}\n`;
+                content += `**Aprendidos hoy:** ${data.daily_learned}\n`;
+                content += `**Modo:** ${data.mode}\n`;
+                content += `**Estado:** ${data.status}`;
+                
+                addMessage(content, 'bot', 'Sistema');
+                
+            } catch (error) {
+                addMessage('❌ Error obteniendo estado', 'bot', 'Error');
+            }
+        }
+        
+        function showTeach() {
+            const text = prompt('¿Qué quieres enseñarme? Escribe el conocimiento:');
+            if (!text) return;
             
-            input.value = '';
+            fetch('/teach', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ correct: text })
+            })
+            .then(response => response.json())
+            .then(data => {
+                addMessage(data.message || 'Aprendido', 'bot', 'Aprendizaje manual');
+                loadStatus();
+            })
+            .catch(() => {
+                addMessage('❌ Error guardando conocimiento', 'bot', 'Error');
+            });
         }
         
         async function showMemories() {
-            const res = await fetch('/memories');
-            const data = await res.json();
-            
-            let content = '🧠 **Últimas memorias:**\n\n';
-            data.forEach(m => {
-                content += `[${m.source}] ${m.topic || 'Sin tema'}\n`;
-                content += `${m.content.substring(0, 200)}...\n\n`;
-            });
-            
-            addMessage(content, 'bot', 'Sistema');
+            try {
+                const response = await fetch('/memories');
+                const data = await response.json();
+                
+                if (data.error) {
+                    addMessage(`Error: ${data.error}`, 'bot', 'Error');
+                    return;
+                }
+                
+                let content = '🧠 **Últimas memorias:**\n\n';
+                
+                if (data.length === 0) {
+                    content += 'No hay memorias aún. ¡Habla conmigo o usa los botones de aprendizaje!';
+                } else {
+                    data.forEach((m, i) => {
+                        content += `${i+1}. **[${m.source}]** ${m.topic}\n`;
+                        content += `   ${m.content.substring(0, 100)}...\n\n`;
+                    });
+                }
+                
+                addMessage(content, 'bot', 'Sistema');
+                
+            } catch (error) {
+                addMessage('❌ Error cargando memorias', 'bot', 'Error');
+            }
         }
         
-        async function showHistory() {
-            if (!isAuthenticated) {
-                addMessage('🔑 Inicia sesión para ver tu historial personal', 'bot', 'Sistema');
-                return;
-            }
-            
-            const res = await fetch('/history');
-            const data = await res.json();
-            
-            let content = '💬 **Tu historial:**\n\n';
-            data.slice(0, 5).forEach(c => {
-                content += `**Tú:** ${c.user.substring(0, 50)}...\n`;
-                content += **IA:** ${c.bot.substring(0, 100)}...\n\n`;
-            });
-            
-            addMessage(content, 'bot', 'Sistema');
+        function showError(msg) {
+            const errorDiv = document.getElementById('errorMessage');
+            errorDiv.textContent = msg;
+            errorDiv.classList.add('show');
+            setTimeout(hideError, 5000);
+        }
+        
+        function hideError() {
+            document.getElementById('errorMessage').classList.remove('show');
         }
     </script>
 </body>
