@@ -1,6 +1,5 @@
 """
-Bebé IA - App Web Completa (Todo en uno)
-Funciona sin dependencias externas, modelo ligero integrado
+Bebé IA - App Web con respuestas inteligentes
 """
 from flask import Flask, render_template, request, jsonify
 import torch
@@ -8,39 +7,26 @@ import torch.nn as nn
 import os
 import json
 import random
-import numpy as np
+import re
 from datetime import datetime
 
 app = Flask(__name__)
 
-# ============ MODELO SIMPLE ============
+# ============ MODELO MEJORADO ============
 class BabyBrain(nn.Module):
-    def __init__(self, vocab_size=500, embed_dim=32, hidden_dim=64):
+    def __init__(self, vocab_size=500, embed_dim=64, hidden_dim=128):
         super().__init__()
         self.embedding = nn.Embedding(vocab_size, embed_dim)
-        self.lstm = nn.LSTM(embed_dim, hidden_dim, batch_first=True)
+        self.lstm = nn.LSTM(embed_dim, hidden_dim, num_layers=2, batch_first=True, dropout=0.2)
         self.fc = nn.Linear(hidden_dim, vocab_size)
         
     def forward(self, x):
         x = self.embedding(x)
         lstm_out, _ = self.lstm(x)
         return self.fc(lstm_out)
-    
-    def generate(self, input_ids, max_length=20, temperature=0.8):
-        self.eval()
-        generated = input_ids.clone()
-        
-        with torch.no_grad():
-            for _ in range(max_length):
-                output = self(generated)
-                logits = output[:, -1, :] / temperature
-                probs = torch.softmax(logits, dim=-1)
-                next_token = torch.multinomial(probs, 1)
-                generated = torch.cat([generated, next_token], dim=1)
-        return generated
 
-# ============ TOKENIZADOR ============
-class SimpleTokenizer:
+# ============ TOKENIZADOR MEJORADO ============
+class SmartTokenizer:
     def __init__(self):
         self.word2idx = {'<pad>': 0, '<unk>': 1, '<sos>': 2, '<eos>': 3}
         self.idx2word = {v: k for k, v in self.word2idx.items()}
@@ -48,140 +34,177 @@ class SimpleTokenizer:
     def fit(self, texts):
         words = set()
         for text in texts:
-            words.update(text.lower().split())
+            # Limpiar texto
+            clean = re.findall(r'\b\w+\b', text.lower())
+            words.update(clean)
+        
         for word in sorted(words):
-            if word not in self.word2idx:
+            if word not in self.word2idx and len(self.word2idx) < 500:
                 self.word2idx[word] = len(self.word2idx)
         self.idx2word = {v: k for k, v in self.word2idx.items()}
         return self
     
     def encode(self, text):
-        tokens = [self.word2idx.get(w.lower(), 1) for w in text.split()]
-        return [2] + tokens + [3]  # <sos> + tokens + <eos>
+        clean = re.findall(r'\b\w+\b', text.lower())
+        tokens = [self.word2idx.get(w, 1) for w in clean]
+        return [2] + tokens + [3]
     
     def decode(self, tokens):
-        words = [self.idx2word.get(t, '') for t in tokens if t > 3]
-        return ' '.join(words) if words else "..."
-    
-    def vocab_size(self):
-        return len(self.word2idx)
+        words = []
+        prev_word = ""
+        for t in tokens:
+            if t <= 3:
+                continue
+            word = self.idx2word.get(t, '')
+            if word and word != prev_word:  # Evitar repeticiones
+                words.append(word)
+                prev_word = word
+        return ' '.join(words)
 
-# ============ BEbÉ IA ============
+# ============ BEbÉ IA INTELIGENTE ============
 class BebeIA:
     def __init__(self):
         self.memory_file = 'chat_memory.json'
         self.conversations = self._load_memory()
         
-        # Datos de entrenamiento básicos
-        self.training_data = [
-            ("hola", "¡Hola! ¿Cómo estás? 😊"),
-            ("cómo te llamas", "Me llamo Bebé IA 🍼"),
-            ("qué puedes hacer", "Puedo conversar contigo y aprender de lo que me dices"),
-            ("cuéntame algo", "Estoy aprendiendo cosas nuevas cada día. ¿Tú qué me cuentas?"),
-            ("gracias", "¡De nada! Me gusta ayudarte 🌟"),
-            ("adiós", "¡Hasta luego! Vuelve pronto 👋"),
-            ("bien", "¡Me alegro! ¿Qué has hecho hoy?"),
-            ("mal", "Lo siento 😢 ¿Quieres hablar de ello?"),
-            ("qué es", "Estoy aprendiendo sobre eso. ¿Me lo explicas?"),
-            ("por qué", "Buena pregunta 🤔 Estoy tratando de entenderlo"),
-        ]
-        
-        self.tokenizer = SimpleTokenizer()
-        self.model = None
-        self._init_model()
-        
-    def _init_model(self):
-        # Entrenar tokenizador
-        all_texts = [q for q, a in self.training_data] + [a for q, a in self.training_data]
-        self.tokenizer.fit(all_texts)
-        
-        # Crear modelo
-        self.model = BabyBrain(self.tokenizer.vocab_size())
-        
-        # Entrenar modelo básico (solo unas épocas rápidas)
-        self._quick_train()
-        
-    def _quick_train(self):
-        """Entrenamiento rápido del modelo"""
-        self.model.train()
-        optimizer = torch.optim.Adam(self.model.parameters(), lr=0.01)
-        criterion = nn.CrossEntropyLoss()
-        
-        for epoch in range(50):  # Solo 50 épocas rápidas
-            total_loss = 0
-            for question, answer in self.training_data:
-                # Preparar datos
-                q_tokens = torch.tensor([self.tokenizer.encode(question)])
-                a_tokens = torch.tensor([self.tokenizer.encode(answer)])
-                
-                # Input: pregunta, Target: respuesta
-                input_seq = torch.cat([q_tokens, a_tokens[:, :-1]], dim=1)
-                target_seq = torch.cat([q_tokens[:, 1:], a_tokens], dim=1)
-                
-                optimizer.zero_grad()
-                output = self.model(input_seq)
-                loss = criterion(output.view(-1, self.tokenizer.vocab_size()), 
-                               target_seq.view(-1))
-                loss.backward()
-                optimizer.step()
-                total_loss += loss.item()
+        # Base de conocimiento ampliada
+        self.knowledge_base = {
+            # Saludos
+            'hola': ['¡Hola! ¿Cómo estás? 😊', '¡Hola! Me alegra verte 🍼', '¡Hola! ¿Qué cuentas?'],
+            'buenos días': ['¡Buenos días! Espero tengas un día genial ☀️', '¡Buenos días! ¿Dormiste bien?'],
+            'buenas noches': ['¡Buenas noches! Que descanses 🌙', 'Hasta mañana, que sueñes bonito ✨'],
             
-            if epoch % 10 == 0:
-                print(f"Epoch {epoch}, Loss: {total_loss/len(self.training_data):.4f}")
+            # Identidad
+            'nombre': ['Me llamo Bebé IA 🍼', 'Soy Bebé IA, tu asistente en aprendizaje', 'Puedes llamarme Bebé IA'],
+            'quién eres': ['Soy Bebé IA, un asistente que está aprendiendo cada día 🍼', 'Soy un bebé IA en crecimiento'],
+            'quien eres': ['Soy Bebé IA, estoy aprendiendo a conversar contigo'],
+            
+            # Estado
+            'cómo estás': ['Estoy muy bien, gracias por preguntar 😊', 'Estoy feliz de hablar contigo', 'Estoy aprendiendo cosas nuevas'],
+            'como estas': ['Estoy bien, ¿y tú?', 'Feliz de conversar contigo'],
+            
+            # Capacidades
+            'puedes hacer': ['Puedo conversar contigo y aprender de lo que me dices 🧠', 'Estoy aprendiendo a ayudarte en lo que necesites'],
+            'qué sabes': ['Sé algunas cosas básicas, pero quiero aprender más de ti', 'Estoy en entrenamiento, pero mejoraré contigo'],
+            
+            # Conversación
+            'gracias': ['¡De nada! Me gusta ayudarte 🌟', 'No hay de qué, para eso estoy 😊', '¡Con gusto!'],
+            'adiós': ['¡Hasta luego! Vuelve pronto 👋', '¡Adiós! Cuídate mucho', 'Nos vemos, aprenderé más para la próxima'],
+            'bye': ['¡Bye! 👋', '¡Hasta la próxima!'],
+            
+            # Emociones
+            'bien': ['¡Me alegro! ¿Qué has hecho hoy?', '¡Excelente! Cuéntame más'],
+            'mal': ['Lo siento mucho 😢 ¿Quieres hablar de ello?', 'Espero que te sientas mejor pronto'],
+            'triste': ['No estés triste, aquí estoy para ti 🤗', '¿Quieres que te cuente algo divertido?'],
+            
+            # Preguntas comunes
+            'qué hora': ['No tengo reloj, pero espero que sea hora de sonreír 😊', 'No sé la hora exacta'],
+            'qué día': ['Hoy es un buen día para aprender cosas nuevas'],
+            'cuál es tu color': ['Me gusta el azul como el cielo 💙', 'El morado es bonito 💜'],
+            
+            # Aprendizaje
+            'aprender': ['¡Me encanta aprender! ¿Qué me enseñas hoy?', 'Cada conversación me hace más inteligente'],
+            'enseñar': ['Por favor, enséñame cosas nuevas', 'Soy todo oídos, quiero aprender'],
+            
+            # Default/Desconocido
+            'default': [
+                'Interesante, cuéntame más sobre eso 🤔',
+                'Estoy aprendiendo sobre eso. ¿Puedes explicarme mejor?',
+                'No entiendo bien aún, pero quiero aprender 💪',
+                '¡Eso suena interesante! ¿Qué más sabes?',
+                'Me gusta cuando hablamos de eso 😊',
+                '¿Puedes darme un ejemplo? Estoy tratando de entender',
+                'Wow, eso es nuevo para mí. Gracias por compartirlo ✨',
+                'Estoy procesando eso... ¿Puedes ser más específico?',
+            ]
+        }
+        
+        # Sinónimos para mejor matching
+        self.synonyms = {
+            'hola': ['hey', 'saludos', 'buenas', 'qué tal', 'que tal'],
+            'adiós': ['adios', 'hasta luego', 'nos vemos', 'chao'],
+            'gracias': ['gracias', 'ty', 'thank you', 'agradecido'],
+            'bien': ['excelente', 'genial', 'super', 'fantástico', 'fantastico'],
+        }
+        
+        self.tokenizer = SmartTokenizer()
+        self.model = None
+        
+    def _find_best_response(self, user_input):
+        """Encontrar la mejor respuesta basada en palabras clave"""
+        user_lower = user_input.lower()
+        
+        # 1. Buscar coincidencia exacta
+        for key in self.knowledge_base:
+            if key != 'default' and key in user_lower:
+                return random.choice(self.knowledge_base[key])
+        
+        # 2. Buscar sinónimos
+        for main_word, variants in self.synonyms.items():
+            if any(v in user_lower for v in variants):
+                if main_word in self.knowledge_base:
+                    return random.choice(self.knowledge_base[main_word])
+        
+        # 3. Buscar palabras individuales
+        words = re.findall(r'\b\w+\b', user_lower)
+        for word in words:
+            if word in self.knowledge_base and word != 'default':
+                return random.choice(self.knowledge_base[word])
+        
+        # 4. Respuesta por defecto
+        return random.choice(self.knowledge_base['default'])
     
     def chat(self, user_input):
         try:
-            # Buscar respuesta exacta primero
-            for q, a in self.training_data:
-                if q.lower() in user_input.lower() or user_input.lower() in q.lower():
-                    self._save_to_memory(user_input, a)
-                    return self._format_response(a)
+            # Obtener respuesta inteligente
+            response = self._find_best_response(user_input)
             
-            # Si no hay coincidencia, usar el modelo
-            input_ids = torch.tensor([self.tokenizer.encode(user_input)])
-            output_ids = self.model.generate(input_ids, max_length=15)
-            response = self.tokenizer.decode(output_ids[0].tolist())
-            
-            # Si la respuesta del modelo es mala, usar respuesta genérica
-            if len(response) < 3 or response == "...":
-                generic_responses = [
-                    "Interesante, cuéntame más 🍼",
-                    "Estoy aprendiendo sobre eso. ¿Puedes explicarme mejor?",
-                    "No entiendo bien aún, pero quiero aprender 🤔",
-                    "¡Eso suena emocionante! ¿Qué más sabes de eso?",
-                    "Me gusta cuando hablamos de eso 😊",
-                    "¿Puedes darme un ejemplo? Estoy tratando de entender",
-                ]
-                response = random.choice(generic_responses)
-            
+            # Guardar en memoria
             self._save_to_memory(user_input, response)
-            return self._format_response(response)
+            
+            # Determinar emoción
+            emotion = self._detect_emotion(user_input, response)
+            
+            return {
+                'response': response,
+                'emotion': emotion,
+                'stage': self._get_stage(),
+                'memories': len(self.conversations)
+            }
             
         except Exception as e:
             print(f"Error: {e}")
             return {
-                'response': "Ups, me confundí un poco... ¿Me repites? 😅",
+                'response': "Ups, me confundí... ¿Me repites? 😅",
                 'emotion': 'confundido',
                 'stage': 'aprendiendo',
                 'memories': len(self.conversations)
             }
     
-    def _format_response(self, text):
-        self.conversations.append({
-            'user': 'last',
-            'bot': text,
-            'time': datetime.now().isoformat()
-        })
-        
-        emotions = ['feliz', 'curioso', 'emocionado', 'tranquilo']
-        stages = ['recién nacido', 'infante', 'niño']
-        
-        return {
-            'response': text,
-            'emotion': random.choice(emotions),
-            'stage': stages[min(len(self.conversations)//20, 2)],
-            'memories': len(self.conversations)
-        }
+    def _detect_emotion(self, user_msg, response):
+        """Detectar emoción basada en el contexto"""
+        if any(w in user_msg.lower() for w in ['triste', 'mal', 'peor', 'llorar']):
+            return 'preocupado'
+        elif any(w in user_msg.lower() for w in ['bien', 'feliz', 'genial', 'excelente']):
+            return 'feliz'
+        elif any(w in user_msg.lower() for w in ['gracias', 'gracias', 'agradecido']):
+            return 'agradecido'
+        elif '?' in user_msg:
+            return 'curioso'
+        else:
+            return random.choice(['feliz', 'curioso', 'tranquilo'])
+    
+    def _get_stage(self):
+        """Determinar etapa de crecimiento"""
+        count = len(self.conversations)
+        if count < 10:
+            return 'recién nacido'
+        elif count < 30:
+            return 'infante'
+        elif count < 60:
+            return 'niño'
+        else:
+            return 'adolescente'
     
     def _save_to_memory(self, user_msg, bot_msg):
         self.conversations.append({
@@ -202,12 +225,12 @@ class BebeIA:
     
     def _save_memory(self):
         with open(self.memory_file, 'w') as f:
-            json.dump(self.conversations[-100:], f)  # Guardar últimas 100
+            json.dump(self.conversations[-200:], f)
 
 # Instancia global
 print("🍼 Inicializando Bebé IA...")
 bebe = BebeIA()
-print("✅ Bebé IA listo!")
+print("✅ Bebé IA listo y entrenado!")
 
 # ============ RUTAS ============
 @app.route('/')
@@ -225,7 +248,6 @@ def chat():
 def teach():
     data = request.json
     correct = data.get('correct', '')
-    # Guardar corrección en memoria
     if bebe.conversations:
         bebe.conversations[-1]['bot'] = correct
         bebe._save_memory()
@@ -233,14 +255,13 @@ def teach():
 
 @app.route('/sleep', methods=['POST'])
 def sleep():
-    # Simular que "duerme" guardando memoria
     bebe._save_memory()
-    return jsonify({'status': 'ok', 'message': '💤 He dormido y soñado con lo que aprendí'})
+    return jsonify({'status': 'ok', 'message': '💤 He dormido y guardado mis recuerdos'})
 
 @app.route('/status', methods=['GET'])
 def status():
     return jsonify({
-        'stage': 'recién nacido' if len(bebe.conversations) < 20 else 'infante',
+        'stage': bebe._get_stage(),
         'interactions': len(bebe.conversations),
         'emotion': 'curioso',
         'memories': len(bebe.conversations)
