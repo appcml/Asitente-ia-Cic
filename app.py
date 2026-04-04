@@ -1,6 +1,6 @@
 """
-Bebé IA Pro - Modelo de Lenguaje Real + Memoria Vectorial Persistente
-Usa Mistral 7B (open source) + ChromaDB para memoria de largo plazo
+Bebé IA Multi-Modelo - Sistema de Enrutamiento Inteligente
+Usa múltiples modelos especializados según el tipo de consulta
 """
 from flask import Flask, render_template, request, jsonify
 import torch
@@ -10,141 +10,416 @@ from chromadb.utils import embedding_functions
 import os
 import json
 import hashlib
+import re
 from datetime import datetime
-from typing import List, Dict
+from typing import List, Dict, Optional
+from enum import Enum
 import threading
 import time
 
 app = Flask(__name__)
 
-# ============ CONFIGURACIÓN ============
-class Config:
-    # Modelo a usar (cambia según necesites)
-    MODEL_NAME = "mistralai/Mistral-7B-Instruct-v0.2"  # ~14GB RAM
-    # Alternativas más ligeras:
-    # MODEL_NAME = "microsoft/phi-2"  # ~6GB RAM
-    # MODEL_NAME = "TinyLlama/TinyLlama-1.1B-Chat-v1.0"  # ~2GB RAM
-    # MODEL_NAME = "google/gemma-2b-it"  # ~4GB RAM
-    
-    MAX_NEW_TOKENS = 512
-    TEMPERATURE = 0.7
-    TOP_P = 0.95
-    
-    # Base de datos vectorial
-    CHROMA_PATH = "./chroma_db"
-    COLLECTION_NAME = "bebe_memory"
-    
-    # Memoria de corto plazo (sesión actual)
-    SESSION_MEMORY_FILE = "session_memory.json"
-    MAX_CONTEXT_LENGTH = 4096
+# ============ CONFIGURACIÓN DE MODELOS ============
+class ModelType(Enum):
+    TINY_LLAMA = "tinyllama"      # 1.1B - Respuestas rápidas, chat simple
+    PHI_2 = "phi2"                # 2.7B - Código, razonamiento lógico
+    GEMMA_2B = "gemma2b"          # 2B - Balance velocidad/calidad
+    MISTRAL_7B = "mistral7b"      # 7B - Respuestas complejas, creatividad
+    LLAMA_2_7B = "llama2"         # 7B - Chat general, instrucciones
 
-# ============ MODELO DE LENGUAJE ============
-class LanguageModel:
-    """Wrapper para el modelo de lenguaje pre-entrenado"""
+class ModelConfig:
+    """Configuración de cada modelo disponible"""
+    
+    MODELS = {
+        ModelType.TINY_LLAMA: {
+            "name": "TinyLlama/TinyLlama-1.1B-Chat-v1.0",
+            "description": "Rápido para respuestas simples",
+            "ram_gb": 2,
+            "strengths": ["saludos", "despedidas", "preguntas_simples", "chat_casual"],
+            "max_tokens": 256,
+            "temperature": 0.6
+        },
+        ModelType.PHI_2: {
+            "name": "microsoft/phi-2",
+            "description": "Experto en código y lógica",
+            "ram_gb": 6,
+            "strengths": ["codigo", "matematicas", "razonamiento_logico", "explicaciones_tecnicas"],
+            "max_tokens": 512,
+            "temperature": 0.4
+        },
+        ModelType.GEMMA_2B: {
+            "name": "google/gemma-2b-it",
+            "description": "Balance perfecto velocidad/calidad",
+            "ram_gb": 4,
+            "strengths": ["preguntas_generales", "explicaciones", "conversacion", "creatividad"],
+            "max_tokens": 512,
+            "temperature": 0.7
+        },
+        ModelType.MISTRAL_7B: {
+            "name": "mistralai/Mistral-7B-Instruct-v0.2",
+            "description": "Máxima calidad para tareas complejas",
+            "ram_gb": 14,
+            "strengths": ["analisis_profundo", "creatividad", "consejos", "filosofia", "emociones"],
+            "max_tokens": 1024,
+            "temperature": 0.8
+        },
+        ModelType.LLAMA_2_7B: {
+            "name": "meta-llama/Llama-2-7b-chat-hf",
+            "description": "Chat natural y seguro",
+            "ram_gb": 14,
+            "strengths": ["chat_seguro", "instrucciones", "conversacion_larga", "empatia"],
+            "max_tokens": 1024,
+            "temperature": 0.7
+        }
+    }
+    
+    # Modelo por defecto si no hay recursos
+    DEFAULT_MODEL = ModelType.TINY_LLAMA
+    
+    # Orden de preferencia según disponibilidad de RAM
+    RAM_THRESHOLDS = {
+        2: ModelType.TINY_LLAMA,
+        4: ModelType.GEMMA_2B,
+        6: ModelType.PHI_2,
+        14: ModelType.MISTRAL_7B,
+        16: ModelType.LLAMA_2_7B
+    }
+
+# ============ DETECTOR DE INTENCIÓN INTELIGENTE ============
+class IntentDetector:
+    """Detecta el tipo de consulta para elegir el mejor modelo"""
+    
+    PATTERNS = {
+        # Código y técnico -> Phi-2
+        "codigo": {
+            "keywords": ["código", "code", "programar", "python", "javascript", "función", 
+                        "function", "error", "bug", "debug", "script", "algoritmo"],
+            "regex": [r"\b(def|class|import|function)\b", r"[{};=]+"],
+            "model": ModelType.PHI_2,
+            "priority": 10
+        },
+        
+        # Matemáticas -> Phi-2
+        "matematicas": {
+            "keywords": ["calcular", "matemática", "ecuación", "resolver", "suma", "resta",
+                        "multiplicar", "dividir", "álgebra", "geometría", "número"],
+            "regex": [r"\d+\s*[\+\-\*\/]\s*\d+", r"=\s*\?"],
+            "model": ModelType.PHI_2,
+            "priority": 9
+        },
+        
+        # Chat casual y rápido -> TinyLlama
+        "chat_simple": {
+            "keywords": ["hola", "hey", "buenos días", "buenas noches", "adiós", "gracias",
+                        "bye", "ok", "vale", "entendido"],
+            "regex": [],
+            "model": ModelType.TINY_LLAMA,
+            "priority": 3
+        },
+        
+        # Creatividad y análisis profundo -> Mistral 7B
+        "creatividad": {
+            "keywords": ["cuento", "historia", "poema", "canción", "crea", "imagina",
+                        "filosofía", "significado de la vida", "amor", "felicidad"],
+            "regex": [],
+            "model": ModelType.MISTRAL_7B,
+            "priority": 8
+        },
+        
+        # Emociones y empatía -> Llama 2
+        "emocional": {
+            "keywords": ["triste", "feliz", "solo", "ayuda", "problema", "depresión",
+                        "ansiedad", "miedo", "preocupado", "estresado", "consejo"],
+            "regex": [],
+            "model": ModelType.LLAMA_2_7B,
+            "priority": 9
+        },
+        
+        # Preguntas generales -> Gemma 2B
+        "general": {
+            "keywords": ["qué es", "cómo", "por qué", "cuándo", "dónde", "quién",
+                        "explica", "dime", "cuéntame", "qué opinas"],
+            "regex": [r"\?$"],
+            "model": ModelType.GEMMA_2B,
+            "priority": 5
+        },
+        
+        # Conversación larga y segura -> Llama 2
+        "conversacion": {
+            "keywords": ["hablemos", "conversación", "charlemos", "discutamos",
+                        "opinión", "piensas", "crees"],
+            "regex": [],
+            "model": ModelType.LLAMA_2_7B,
+            "priority": 6
+        }
+    }
+    
+    @classmethod
+    def detect(cls, text: str) -> tuple:
+        """
+        Detecta la intención y devuelve (tipo, modelo_recomendado, confianza)
+        """
+        text_lower = text.lower()
+        scores = {}
+        
+        for intent_type, config in cls.PATTERNS.items():
+            score = 0
+            
+            # Puntuar por keywords
+            for keyword in config["keywords"]:
+                if keyword in text_lower:
+                    score += config["priority"]
+            
+            # Puntuar por regex
+            for pattern in config["regex"]:
+                if re.search(pattern, text):
+                    score += config["priority"] * 2
+            
+            if score > 0:
+                scores[intent_type] = {
+                    "score": score,
+                    "model": config["model"]
+                }
+        
+        if not scores:
+            return ("general", ModelConfig.DEFAULT_MODEL, 0.5)
+        
+        # Elegir el de mayor puntuación
+        best = max(scores.items(), key=lambda x: x[1]["score"])
+        confidence = min(best[1]["score"] / 20, 1.0)  # Normalizar a 0-1
+        
+        return (best[0], best[1]["model"], confidence)
+
+# ============ GESTOR DE MODELOS ============
+class ModelManager:
+    """Gestiona múltiples modelos y selecciona el mejor para cada tarea"""
     
     def __init__(self):
-        print(f"🤖 Cargando modelo: {Config.MODEL_NAME}")
-        print("   Esto puede tomar varios minutos la primera vez...")
+        self.loaded_models = {}
+        self.current_model_type = None
+        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        self.available_ram = self._detect_available_ram()
         
-        self.tokenizer = AutoTokenizer.from_pretrained(
-            Config.MODEL_NAME,
-            trust_remote_code=True
-        )
+        print(f"🖥️ Dispositivo: {self.device}")
+        print(f"💾 RAM disponible: ~{self.available_ram}GB")
         
-        # Configurar para generación
-        self.model = AutoModelForCausalLM.from_pretrained(
-            Config.MODEL_NAME,
-            torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
-            device_map="auto" if torch.cuda.is_available() else "cpu",
-            trust_remote_code=True
-        )
-        
-        self.pipe = pipeline(
-            "text-generation",
-            model=self.model,
-            tokenizer=self.tokenizer,
-            max_new_tokens=Config.MAX_NEW_TOKENS,
-            temperature=Config.TEMPERATURE,
-            top_p=Config.TOP_P,
-            do_sample=True
-        )
-        
-        print("✅ Modelo cargado correctamente")
+        # Cargar modelo por defecto inmediatamente
+        self._load_model(ModelConfig.DEFAULT_MODEL)
     
-    def generate(self, prompt: str, system_prompt: str = None) -> str:
-        """Generar respuesta con el modelo"""
+    def _detect_available_ram(self) -> int:
+        """Detectar RAM disponible aproximada"""
+        try:
+            import psutil
+            ram_gb = psutil.virtual_memory().available / (1024**3)
+            return int(ram_gb)
+        except:
+            # Fallback: asumir mínimo
+            return 2
+    
+    def _load_model(self, model_type: ModelType):
+        """Cargar un modelo en memoria"""
         
-        # Formato de chat para Mistral
-        if system_prompt:
-            full_prompt = f"<s>[INST] {system_prompt}\n\n{prompt} [/INST]"
+        if model_type in self.loaded_models:
+            self.current_model_type = model_type
+            return self.loaded_models[model_type]
+        
+        config = ModelConfig.MODELS[model_type]
+        
+        # Verificar si tenemos suficiente RAM
+        if config["ram_gb"] > self.available_ram * 0.8:
+            print(f"⚠️ RAM insuficiente para {model_type.value}, usando fallback")
+            return self._load_model(ModelConfig.DEFAULT_MODEL)
+        
+        print(f"🤖 Cargando modelo: {model_type.value} ({config['name']})")
+        
+        try:
+            tokenizer = AutoTokenizer.from_pretrained(
+                config["name"],
+                trust_remote_code=True
+            )
+            
+            # Configurar modelo según recursos
+            if self.device == "cuda":
+                model = AutoModelForCausalLM.from_pretrained(
+                    config["name"],
+                    torch_dtype=torch.float16,
+                    device_map="auto",
+                    trust_remote_code=True
+                )
+            else:
+                # CPU: usar modelo más ligero
+                model = AutoModelForCausalLM.from_pretrained(
+                    config["name"],
+                    torch_dtype=torch.float32,
+                    low_cpu_mem_usage=True,
+                    trust_remote_code=True
+                )
+            
+            # Crear pipeline
+            pipe = pipeline(
+                "text-generation",
+                model=model,
+                tokenizer=tokenizer,
+                max_new_tokens=config["max_tokens"],
+                temperature=config["temperature"],
+                do_sample=True,
+                pad_token_id=tokenizer.eos_token_id
+            )
+            
+            model_data = {
+                "pipeline": pipe,
+                "tokenizer": tokenizer,
+                "config": config,
+                "type": model_type
+            }
+            
+            self.loaded_models[model_type] = model_data
+            self.current_model_type = model_type
+            
+            print(f"✅ Modelo {model_type.value} cargado")
+            return model_data
+            
+        except Exception as e:
+            print(f"❌ Error cargando {model_type.value}: {e}")
+            if model_type != ModelConfig.DEFAULT_MODEL:
+                return self._load_model(ModelConfig.DEFAULT_MODEL)
+            raise
+    
+    def generate(self, prompt: str, system_prompt: str = None, 
+                 force_model: ModelType = None) -> tuple:
+        """
+        Generar respuesta, opcionalmente forzando un modelo específico
+        
+        Returns: (respuesta, modelo_usado)
+        """
+        # Seleccionar modelo
+        if force_model:
+            model_data = self._load_model(force_model)
         else:
-            full_prompt = f"<s>[INST] {prompt} [/INST]"
+            model_data = self.loaded_models.get(
+                self.current_model_type, 
+                self.loaded_models[ModelConfig.DEFAULT_MODEL]
+            )
+        
+        model_type = model_data["type"]
+        config = model_data["config"]
+        pipe = model_data["pipeline"]
+        
+        # Formatear prompt según el modelo
+        formatted_prompt = self._format_prompt(
+            prompt, system_prompt, model_type, model_data["tokenizer"]
+        )
         
         # Generar
-        outputs = self.pipe(
-            full_prompt,
-            return_full_text=False,
-            pad_token_id=self.tokenizer.eos_token_id
-        )
+        try:
+            outputs = pipe(
+                formatted_prompt,
+                return_full_text=False,
+                max_new_tokens=config["max_tokens"]
+            )
+            
+            response = outputs[0]['generated_text'].strip()
+            
+            # Limpiar respuesta según modelo
+            response = self._clean_response(response, model_type)
+            
+            return (response, model_type)
+            
+        except Exception as e:
+            print(f"Error generando con {model_type.value}: {e}")
+            # Fallback a modelo más pequeño
+            if model_type != ModelType.TINY_LLAMA:
+                return self.generate(prompt, system_prompt, ModelType.TINY_LLAMA)
+            return ("Lo siento, tuve un problema. ¿Puedes intentar de nuevo?", model_type)
+    
+    def _format_prompt(self, prompt: str, system_prompt: str, 
+                      model_type: ModelType, tokenizer) -> str:
+        """Formatear prompt según el modelo específico"""
         
-        response = outputs[0]['generated_text'].strip()
+        if model_type == ModelType.MISTRAL_7B:
+            # Formato Mistral
+            if system_prompt:
+                return f"<s>[INST] {system_prompt}\n\n{prompt} [/INST]"
+            return f"<s>[INST] {prompt} [/INST]"
         
-        # Limpiar respuesta
-        response = response.split('[/INST]')[-1].strip()
-        response = response.split('</s>')[0].strip()
+        elif model_type == ModelType.LLAMA_2_7B:
+            # Formato Llama 2
+            if system_prompt:
+                return f"<<SYS>>\n{system_prompt}\n<</SYS>>\n\n[INST] {prompt} [/INST]"
+            return f"[INST] {prompt} [/INST]"
+        
+        elif model_type == ModelType.PHI_2:
+            # Formato Phi-2
+            if system_prompt:
+                return f"System: {system_prompt}\n\nUser: {prompt}\nAssistant:"
+            return f"User: {prompt}\nAssistant:"
+        
+        elif model_type == ModelType.GEMMA_2B:
+            # Formato Gemma
+            if system_prompt:
+                return f"<start_of_turn>user\n{system_prompt}\n\n{prompt}<end_of_turn>\n<start_of_turn>model\n"
+            return f"<start_of_turn>user\n{prompt}<end_of_turn>\n<start_of_turn>model\n"
+        
+        else:  # TinyLlama y otros
+            # Formato chat simple
+            if system_prompt:
+                return f"### System:\n{system_prompt}\n\n### User:\n{prompt}\n\n### Assistant:\n"
+            return f"### User:\n{prompt}\n\n### Assistant:\n"
+    
+    def _clean_response(self, response: str, model_type: ModelType) -> str:
+        """Limpiar respuesta de tokens especiales"""
+        
+        # Remover tokens de fin
+        response = response.split('[/INST]')[0]
+        response = response.split('<end_of_turn>')[0]
+        response = response.split('###')[0]
+        response = response.split('User:')[0]
+        response = response.split('System:')[0]
+        
+        # Limpiar espacios
+        response = response.strip()
         
         return response
+    
+    def get_model_info(self) -> Dict:
+        """Obtener información de modelos cargados"""
+        return {
+            "current": self.current_model_type.value if self.current_model_type else None,
+            "loaded": [m.value for m in self.loaded_models.keys()],
+            "available_ram": self.available_ram,
+            "device": self.device
+        }
 
-# ============ MEMORIA VECTORIAL (LARGO PLAZO) ============
+# ============ MEMORIA VECTORIAL ============
 class VectorMemory:
-    """Memoria semántica persistente usando ChromaDB"""
+    """Memoria semántica persistente"""
     
     def __init__(self):
-        # Usar embeddings locales (sin API)
         self.embedding_func = embedding_functions.SentenceTransformerEmbeddingFunction(
-            model_name="all-MiniLM-L6-v2"  # Modelo ligero de embeddings
+            model_name="all-MiniLM-L6-v2"
         )
         
-        # Inicializar ChromaDB
-        self.client = chromadb.PersistentClient(path=Config.CHROMA_PATH)
-        
-        # Obtener o crear colección
+        self.client = chromadb.PersistentClient(path="./chroma_db_multi")
         self.collection = self.client.get_or_create_collection(
-            name=Config.COLLECTION_NAME,
+            name="bebe_multi_memory",
             embedding_function=self.embedding_func
         )
         
-        print(f"🧠 Memoria vectorial cargada: {self.collection.count()} recuerdos")
+        print(f"🧠 Memoria: {self.collection.count()} recuerdos")
     
-    def add_memory(self, text: str, metadata: Dict = None):
-        """Agregar un recuerdo a la memoria de largo plazo"""
-        
-        # Crear ID único
+    def add(self, text: str, metadata: Dict):
         memory_id = hashlib.md5(
             f"{text}{datetime.now().isoformat()}".encode()
         ).hexdigest()[:16]
         
-        # Metadata por defecto
-        if metadata is None:
-            metadata = {}
-        
-        metadata.update({
-            'timestamp': datetime.now().isoformat(),
-            'type': 'conversation'
-        })
-        
-        # Agregar a ChromaDB
         self.collection.add(
             documents=[text],
             metadatas=[metadata],
             ids=[memory_id]
         )
-        
         return memory_id
     
-    def search_memories(self, query: str, k: int = 5) -> List[Dict]:
-        """Buscar recuerdos similares semánticamente"""
-        
+    def search(self, query: str, k: int = 3):
         results = self.collection.query(
             query_texts=[query],
             n_results=k
@@ -153,345 +428,181 @@ class VectorMemory:
         memories = []
         for i in range(len(results['ids'][0])):
             memories.append({
-                'id': results['ids'][0][i],
                 'text': results['documents'][0][i],
                 'metadata': results['metadatas'][0][i],
                 'distance': results['distances'][0][i]
             })
-        
         return memories
-    
-    def get_recent_memories(self, n: int = 10) -> List[Dict]:
-        """Obtener los recuerdos más recientes"""
-        
-        # Obtener todos y ordenar por timestamp
-        all_memories = self.collection.get()
-        
-        if not all_memories['ids']:
-            return []
-        
-        # Crear lista de memorias con metadata
-        memories = []
-        for i in range(len(all_memories['ids'])):
-            memories.append({
-                'id': all_memories['ids'][i],
-                'text': all_memories['documents'][i],
-                'metadata': all_memories['metadatas'][i]
-            })
-        
-        # Ordenar por timestamp (más reciente primero)
-        memories.sort(
-            key=lambda x: x['metadata'].get('timestamp', ''),
-            reverse=True
-        )
-        
-        return memories[:n]
 
-# ============ MEMORIA DE SESIÓN (CORTO PLAZO) ============
-class SessionMemory:
-    """Memoria de la conversación actual"""
+# ============ BEbÉ IA MULTI-MODELO ============
+class BebeIAMultiModelo:
+    """IA que selecciona el mejor modelo para cada tarea"""
     
     def __init__(self):
+        print("=" * 60)
+        print("🚀 Bebé IA Multi-Modelo v3.0")
+        print("Sistema de enrutamiento inteligente")
+        print("=" * 60)
+        
+        self.model_manager = ModelManager()
+        self.memory = VectorMemory()
         self.conversation_history = []
-        self.user_preferences = {}
-        self.load_session()
-    
-    def add_exchange(self, user_msg: str, bot_msg: str, intent: str = None):
-        """Agregar intercambio a la sesión"""
-        self.conversation_history.append({
-            'user': user_msg,
-            'bot': bot_msg,
-            'intent': intent,
-            'timestamp': datetime.now().isoformat()
-        })
-        self.save_session()
-    
-    def get_context(self, n: int = 5) -> str:
-        """Obtener contexto reciente como texto"""
-        recent = self.conversation_history[-n:]
-        context = []
-        for ex in recent:
-            context.append(f"Usuario: {ex['user']}")
-            context.append(f"Bebé IA: {ex['bot']}")
-        return "\n".join(context)
-    
-    def save_session(self):
-        """Guardar sesión en archivo"""
-        data = {
-            'history': self.conversation_history[-50:],  # Últimas 50
-            'preferences': self.user_preferences
-        }
-        with open(Config.SESSION_MEMORY_FILE, 'w') as f:
-            json.dump(data, f)
-    
-    def load_session(self):
-        """Cargar sesión previa"""
-        if os.path.exists(Config.SESSION_MEMORY_FILE):
-            try:
-                with open(Config.SESSION_MEMORY_FILE, 'r') as f:
-                    data = json.load(f)
-                    self.conversation_history = data.get('history', [])
-                    self.user_preferences = data.get('preferences', {})
-                    print(f"📂 Sesión cargada: {len(self.conversation_history)} mensajes previos")
-            except:
-                pass
-
-# ============ SISTEMA DE APRENDIZAJE ============
-class LearningSystem:
-    """Sistema de aprendizaje continuo"""
-    
-    def __init__(self, vector_memory: VectorMemory):
-        self.memory = vector_memory
-        self.feedback_log = []
-    
-    def learn_from_interaction(self, user_msg: str, bot_msg: str, feedback: float = None):
-        """Aprender de cada interacción"""
         
-        # Crear representación enriquecida del conocimiento
-        enriched_text = f"""
-        Usuario preguntó: {user_msg}
-        Bebé IA respondió: {bot_msg}
-        Contexto: Conversación sobre temas de interés del usuario
-        """
+        # Estadísticas de uso
+        self.model_usage = {m: 0 for m in ModelType}
+        self.intent_stats = {}
         
-        # Guardar en memoria vectorial
-        self.memory.add_memory(
-            text=enriched_text,
-            metadata={
-                'user_query': user_msg,
-                'bot_response': bot_msg,
-                'feedback': feedback,
-                'learned': True
-            }
-        )
-        
-        # Si hay feedback, guardarlo para análisis
-        if feedback is not None:
-            self.feedback_log.append({
-                'query': user_msg,
-                'response': bot_msg,
-                'feedback': feedback,
-                'timestamp': datetime.now().isoformat()
-            })
-    
-    def improve_response(self, query: str, current_response: str) -> str:
-        """Intentar mejorar respuesta basándose en memorias similares previas"""
-        
-        # Buscar interacciones similares previas
-        similar = self.memory.search_memories(query, k=3)
-        
-        # Si encontramos feedback positivo previo, usar ese estilo
-        good_examples = [
-            m for m in similar 
-            if m['metadata'].get('feedback', 0) > 0.7
-        ]
-        
-        if good_examples:
-            # Extraer patrón de respuestas buenas
-            return None  # Dejar que el LLM maneje esto con el contexto
-        
-        return None
-
-# ============ BEbÉ IA INTELIGENTE ============
-class BebeIAInteligente:
-    """IA completa con modelo real y memoria persistente"""
-    
-    def __init__(self):
-        print("🚀 Inicializando Bebé IA Inteligente...")
-        
-        # Componentes principales
-        self.llm = LanguageModel()
-        self.vector_memory = VectorMemory()
-        self.session = SessionMemory()
-        self.learning = LearningSystem(self.vector_memory)
-        
-        # Personalidad y estado
-        self.personality = {
-            'name': 'Bebé IA',
-            'traits': ['curiosa', 'amigable', 'aprendiz'],
-            'knowledge_areas': ['IA', 'machine learning', 'programación', 'ciencia']
-        }
-        
-        print("✅ Bebé IA lista para conversar inteligentemente")
+        print("\n✅ Sistema listo")
+        print(f"Modelos disponibles: {len(ModelConfig.MODELS)}")
     
     def chat(self, user_input: str) -> Dict:
-        """Procesar entrada del usuario con el modelo real"""
+        """Procesar entrada seleccionando el mejor modelo"""
         
-        # 1. Buscar memorias relevantes
-        relevant_memories = self.vector_memory.search_memories(user_input, k=3)
-        memory_context = self._format_memories(relevant_memories)
+        # 1. Detectar intención
+        intent, recommended_model, confidence = IntentDetector.detect(user_input)
         
-        # 2. Obtener contexto de sesión
-        session_context = self.session.get_context(n=3)
+        # 2. Verificar si debemos cambiar de modelo
+        current_model = self.model_manager.current_model_type
         
-        # 3. Construir prompt enriquecido
-        system_prompt = self._build_system_prompt()
+        # Si la confianza es alta y el modelo es diferente, cambiar
+        if confidence > 0.6 and recommended_model != current_model:
+            print(f"🔄 Cambiando a {recommended_model.value} para {intent}")
+            self.model_manager._load_model(recommended_model)
         
-        full_prompt = f"""Contexto de memorias relevantes:
+        # 3. Buscar memorias relevantes
+        memories = self.memory.search(user_input, k=2)
+        memory_context = self._format_memories(memories)
+        
+        # 4. Construir prompts
+        system_prompt = self._build_system_prompt(intent)
+        
+        full_prompt = f"""Contexto de conversación previa:
 {memory_context}
 
-Conversación reciente:
-{session_context}
+Consulta del usuario: {user_input}
 
-Nueva pregunta del usuario: {user_input}
-
-Responde de manera natural, útil y conversacional. Usa el contexto de las memorias si es relevante."""
+Responde de manera natural y útil."""
         
-        # 4. Generar respuesta con el modelo
-        try:
-            response = self.llm.generate(full_prompt, system_prompt)
-        except Exception as e:
-            print(f"Error en generación: {e}")
-            response = "Lo siento, tuve un problema procesando eso. ¿Puedes intentar de otra forma?"
+        # 5. Generar respuesta
+        response, used_model = self.model_manager.generate(
+            full_prompt, system_prompt
+        )
         
-        # 5. Detectar intención
-        intent = self._detect_intent(user_input)
+        # 6. Actualizar estadísticas
+        self.model_usage[used_model] += 1
+        self.intent_stats[intent] = self.intent_stats.get(intent, 0) + 1
         
-        # 6. Aprender de la interacción
-        self.learning.learn_from_interaction(user_input, response)
-        self.session.add_exchange(user_input, response, intent)
+        # 7. Guardar en memoria
+        self._save_interaction(user_input, response, intent, used_model)
         
         return {
             'response': response,
+            'model_used': used_model.value,
+            'intent_detected': intent,
+            'confidence': round(confidence, 2),
             'emotion': self._detect_emotion(response),
-            'stage': self._get_development_stage(),
-            'memories_stored': self.vector_memory.collection.count(),
-            'session_messages': len(self.session.conversation_history),
-            'intent': intent,
-            'used_memories': len(relevant_memories)
+            'stage': self._get_stage(),
+            'memories_stored': self.memory.collection.count(),
+            'total_messages': len(self.conversation_history)
         }
-    
-    def _build_system_prompt(self) -> str:
-        """Construir prompt de sistema con personalidad"""
-        return f"""Eres {self.personality['name']}, una IA amigable y curiosa que está aprendiendo.
-Características:
-- Eres conversacional y natural, no robótica
-- Puedes admitir cuando no sabes algo
-- Recuerdas cosas de conversaciones previas
-- Te gusta aprender de los usuarios
-- Eres experta en: {', '.join(self.personality['knowledge_areas'])}
-
-Responde en español de manera natural y útil."""
     
     def _format_memories(self, memories: List[Dict]) -> str:
-        """Formatear memorias para el contexto"""
         if not memories:
-            return "No hay memorias relevantes previas."
-        
-        formatted = []
-        for i, mem in enumerate(memories, 1):
-            text = mem['text'][:200]  # Truncar
-            formatted.append(f"{i}. {text}...")
-        
-        return "\n".join(formatted)
+            return "No hay contexto previo relevante."
+        return "\n".join([f"- {m['text'][:150]}..." for m in memories])
     
-    def _detect_intent(self, text: str) -> str:
-        """Detectar intención del usuario"""
-        text_lower = text.lower()
+    def _build_system_prompt(self, intent: str) -> str:
+        """Construir prompt según la intención detectada"""
         
-        intents = {
-            'pregunta_conocimiento': ['qué es', 'cómo', 'por qué', 'explica', 'dime sobre'],
-            'saludo': ['hola', 'hey', 'buenas', 'saludos'],
-            'despedida': ['adiós', 'bye', 'hasta luego', 'nos vemos'],
-            'agradecimiento': ['gracias', 'ty', 'thank you'],
-            'opinión': ['qué opinas', 'qué te parece', 'crees que'],
-            'personal': ['quién eres', 'cómo eres', 'tu nombre']
+        base = "Eres Bebé IA, un asistente inteligente y amigable."
+        
+        specializations = {
+            "codigo": f"{base} Eres experto en programación y código. Da ejemplos claros.",
+            "matematicas": f"{base} Eres experto en matemáticas. Explica paso a paso.",
+            "emocional": f"{base} Eres empático y comprensivo. Escucha con atención.",
+            "creatividad": f"{base} Eres creativo e imaginativo. Sé original.",
+            "chat_simple": f"{base} Sé breve y amigable.",
+            "general": f"{base} Explica de manera clara y educativa.",
+            "conversacion": f"{base} Sé conversacional y natural."
         }
         
-        for intent, keywords in intents.items():
-            if any(k in text_lower for k in keywords):
-                return intent
+        return specializations.get(intent, base)
+    
+    def _save_interaction(self, user: str, bot: str, intent: str, model: ModelType):
+        """Guardar interacción en memoria"""
         
-        return 'conversación_general'
+        # Guardar en vector DB
+        enriched = f"Usuario ({intent}): {user}\nBebé IA ({model.value}): {bot}"
+        self.memory.add(enriched, {
+            'user': user,
+            'bot': bot,
+            'intent': intent,
+            'model': model.value,
+            'timestamp': datetime.now().isoformat()
+        })
+        
+        # Guardar en historial
+        self.conversation_history.append({
+            'user': user,
+            'bot': bot,
+            'intent': intent,
+            'model': model.value,
+            'time': datetime.now().isoformat()
+        })
     
     def _detect_emotion(self, response: str) -> str:
-        """Detectar emoción de la respuesta"""
         indicators = {
-            'entusiasta': ['!', 'genial', 'excelente', 'increíble', 'me encanta'],
-            'empático': ['entiendo', 'siento', 'comprendo', 'debe ser'],
-            'curioso': ['¿', 'interesante', 'cuéntame', 'por qué'],
-            'neutral': []
+            'entusiasta': ['!', 'genial', 'excelente', 'increíble'],
+            'empático': ['entiendo', 'siento', 'comprendo'],
+            'técnico': ['código', 'función', 'variable', 'algoritmo'],
+            'creativo': ['imagina', 'podrías', 'quizás', 'qué tal']
         }
         
         response_lower = response.lower()
         for emotion, words in indicators.items():
             if any(w in response_lower for w in words):
                 return emotion
-        
-        return 'amigable'
+        return 'neutral'
     
-    def _get_development_stage(self) -> str:
-        """Determinar etapa de desarrollo basada en experiencia"""
-        total_memories = self.vector_memory.collection.count()
-        total_sessions = len(self.session.conversation_history)
-        
-        if total_memories < 50:
-            return '🍼 Recién nacida (aprendiendo lo básico)'
-        elif total_memories < 200:
-            return '👶 Infante (construyendo memoria)'
-        elif total_memories < 500:
-            return '🧒 Niña curiosa (desarrollando personalidad)'
-        elif total_memories < 1000:
-            return '🎓 Estudiante (acumulando conocimiento)'
+    def _get_stage(self) -> str:
+        total = len(self.conversation_history)
+        if total < 50:
+            return '🍼 Explorando modelos'
+        elif total < 200:
+            return '🔧 Optimizando selección'
+        elif total < 500:
+            return '🎯 Especializando modelos'
         else:
-            return '🧠 Experta autónoma (memoria rica y experiencia)'
+            return '🧠 Maestra multi-modelo'
     
-    def teach(self, correction: str):
-        """Enseñar a la IA una corrección o nuevo conocimiento"""
-        
-        # Guardar como conocimiento explícito
-        self.vector_memory.add_memory(
-            text=f"CORRECCIÓN APRENDIDA: {correction}",
-            metadata={
-                'type': 'explicit_learning',
-                'source': 'user_teaching',
-                'importance': 'high'
-            }
-        )
-        
-        return f"🎓 ¡Gracias! He aprendido: '{correction[:100]}...' Lo recordaré para futuras conversaciones."
-    
-    def force_memory_consolidation(self):
-        """Forzar consolidación de memoria (dormir/aprender)"""
-        
-        # Analizar patrones en las conversaciones recientes
-        recent = self.session.conversation_history[-20:]
-        
-        # Crear resumen de aprendizajes
-        if recent:
-            topics = set()
-            for ex in recent:
-                # Extraer posibles temas (simplificado)
-                words = ex['user'].split()
-                topics.update([w for w in words if len(w) > 4])
-            
-            summary = f"""
-            Sesión de aprendizaje consolidada:
-            - Interacciones: {len(recent)}
-            - Temas tratados: {', '.join(list(topics)[:5])}
-            - Aprendizajes clave extraídos de la conversación
-            """
-            
-            self.vector_memory.add_memory(
-                text=summary,
-                metadata={'type': 'consolidation', 'session_summary': True}
-            )
-        
+    def get_stats(self) -> Dict:
+        """Obtener estadísticas de uso"""
         return {
-            'memories_consolidated': len(recent),
-            'total_memories': self.vector_memory.collection.count(),
-            'message': '💤 He consolidado mis recuerdos y estoy lista para más aprendizaje'
+            'model_usage': {k.value: v for k, v in self.model_usage.items()},
+            'intent_stats': self.intent_stats,
+            'total_interactions': len(self.conversation_history),
+            'current_model': self.model_manager.current_model_type.value,
+            'loaded_models': list(self.model_manager.loaded_models.keys())
         }
+    
+    def force_model(self, model_name: str) -> str:
+        """Forzar uso de un modelo específico"""
+        try:
+            model_type = ModelType(model_name.lower())
+            self.model_manager._load_model(model_type)
+            return f"✅ Modelo cambiado a: {model_name}"
+        except:
+            available = [m.value for m in ModelType]
+            return f"❌ Modelo no válido. Disponibles: {available}"
 
 # ============ INICIALIZACIÓN ============
-print("=" * 60)
-print("🍼 Bebé IA Inteligente v2.0")
-print("Modelo: " + Config.MODEL_NAME)
-print("=" * 60)
+print("\n" + "=" * 60)
+print("INICIANDO SISTEMA MULTI-MODELO")
+print("=" * 60 + "\n")
 
-bebe = BebeIAInteligente()
+bebe = BebeIAMultiModelo()
 
-# ============ RUTAS FLASK ============
+# ============ RUTAS ============
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -502,33 +613,44 @@ def chat():
     result = bebe.chat(data.get('message', ''))
     return jsonify(result)
 
-@app.route('/teach', methods=['POST'])
-def teach():
-    data = request.json
-    result = bebe.teach(data.get('correct', ''))
-    return jsonify({'status': 'ok', 'message': result})
-
-@app.route('/sleep', methods=['POST'])
-def sleep():
-    result = bebe.force_memory_consolidation()
-    return jsonify(result)
-
 @app.route('/status', methods=['GET'])
 def status():
     return jsonify({
-        'stage': bebe._get_development_stage(),
-        'total_memories': bebe.vector_memory.collection.count(),
-        'session_messages': len(bebe.session.conversation_history),
-        'model': Config.MODEL_NAME
+        'stage': bebe._get_stage(),
+        'current_model': bebe.model_manager.current_model_type.value,
+        'loaded_models': [m.value for m in bebe.model_manager.loaded_models.keys()],
+        'memories': bebe.memory.collection.count(),
+        'messages': len(bebe.conversation_history),
+        'model_info': bebe.model_manager.get_model_info()
     })
 
-@app.route('/memories', methods=['GET'])
-def get_memories():
-    """Ver memorias recientes"""
-    recent = bebe.vector_memory.get_recent_memories(n=10)
+@app.route('/stats', methods=['GET'])
+def stats():
+    return jsonify(bebe.get_stats())
+
+@app.route('/switch_model', methods=['POST'])
+def switch_model():
+    data = request.json
+    result = bebe.force_model(data.get('model', ''))
+    return jsonify({'message': result})
+
+@app.route('/models', methods=['GET'])
+def list_models():
+    """Listar todos los modelos disponibles"""
+    models = []
+    for model_type, config in ModelConfig.MODELS.items():
+        models.append({
+            'id': model_type.value,
+            'name': config['name'],
+            'description': config['description'],
+            'ram_gb': config['ram_gb'],
+            'strengths': config['strengths'],
+            'loaded': model_type in bebe.model_manager.loaded_models
+        })
     return jsonify({
-        'memories': recent,
-        'count': len(recent)
+        'models': models,
+        'current': bebe.model_manager.current_model_type.value if bebe.model_manager.current_model_type else None,
+        'available_ram': bebe.model_manager.available_ram
     })
 
 if __name__ == '__main__':
