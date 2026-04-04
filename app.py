@@ -1,70 +1,140 @@
 """
-Bebé IA Pro - Modelo Grande (Mistral/Llama) + Aprendizaje Automático Multi-Fuente
-Aprende sola de Wikipedia, arXiv, GitHub, y conversaciones con otros bots
+Bebé IA Pro - API HuggingFace + Aprendizaje Automático
+Funciona en Render gratuito (512MB RAM) - Sin modelos locales
 """
 from flask import Flask, render_template, request, jsonify
-import torch
-from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline
-import chromadb
-from chromadb.utils import embedding_functions
 import os
 import json
 import random
 import re
 import threading
 import time
-import requests
 from datetime import datetime
-from typing import List, Dict, Optional
+from typing import List, Dict
+import requests
 import urllib.request
-from html.parser import HTMLParser
 
 app = Flask(__name__)
 
 # ============ CONFIGURACIÓN ============
 class Config:
-    # Modelo principal (cambia según tu RAM)
-    # Opciones de modelo GRATIS (descarga desde HuggingFace)
-    MODEL_NAME = "mistralai/Mistral-7B-Instruct-v0.2"  # 14GB RAM
-    # Alternativas más ligeras:
-    # MODEL_NAME = "microsoft/phi-2"  # 6GB RAM
-    # MODEL_NAME = "TinyLlama/TinyLlama-1.1B-Chat-v1.0"  # 2GB RAM
-    # MODEL_NAME = "google/gemma-2b-it"  # 4GB RAM
+    # API de HuggingFace (gratuita, no requiere token para modelos públicos)
+    # Si tienes token, ponlo aquí para más rate limit
+    HF_API_TOKEN = os.environ.get('HF_API_TOKEN', '')
     
-    MAX_NEW_TOKENS = 512
-    TEMPERATURE = 0.7
+    # Modelos disponibles en API gratuita
+    DEFAULT_MODEL = "mistralai/Mistral-7B-Instruct-v0.2"
+    FALLBACK_MODEL = "HuggingFaceH4/zephyr-7b-beta"
+    FAST_MODEL = "google/gemma-2b-it"
     
-    # Base de datos vectorial
-    CHROMA_PATH = "./chroma_knowledge"
-    COLLECTION_NAME = "bebe_knowledge"
+    # Base de datos vectorial (usaremos JSON simple para Render)
+    KNOWLEDGE_FILE = 'knowledge_base.json'
+    MEMORY_FILE = 'conversation_memory.json'
     
-    # Fuentes de aprendizaje automático
-    AUTO_LEARN_INTERVAL = 1800  # 30 minutos entre aprendizajes automáticos
-    MAX_DAILY_ARTICLES = 20     # Límite de artículos por día
+    # Aprendizaje automático
+    AUTO_LEARN_INTERVAL = 1800  # 30 minutos
+    MAX_DAILY_ARTICLES = 15
+
+# ============ CLIENTE API HUGGINGFACE ============
+class HuggingFaceAPI:
+    """Cliente para API de HuggingFace (gratuita)"""
+    
+    def __init__(self):
+        self.headers = {
+            "Authorization": f"Bearer {Config.HF_API_TOKEN}" if Config.HF_API_TOKEN else "",
+            "Content-Type": "application/json"
+        }
+        self.current_model = Config.DEFAULT_MODEL
+        self.api_url = f"https://api-inference.huggingface.co/models/{self.current_model}"
+        
+        print(f"🤖 Usando API HuggingFace: {self.current_model}")
+        if not Config.HF_API_TOKEN:
+            print("   ⚠️ Sin token (rate limit más bajo)")
+        else:
+            print("   ✅ Con token de autenticación")
+    
+    def generate(self, prompt: str, system_prompt: str = None, max_tokens: int = 512) -> str:
+        """Generar texto usando la API"""
+        
+        # Formato de chat para Mistral/Zephyr
+        if system_prompt:
+            full_prompt = f"<s>[INST] {system_prompt}\n\n{prompt} [/INST]"
+        else:
+            full_prompt = f"<s>[INST] {prompt} [/INST]"
+        
+        payload = {
+            "inputs": full_prompt,
+            "parameters": {
+                "max_new_tokens": max_tokens,
+                "temperature": 0.7,
+                "top_p": 0.95,
+                "return_full_text": False
+            }
+        }
+        
+        try:
+            response = requests.post(
+                self.api_url,
+                headers=self.headers,
+                json=payload,
+                timeout=60
+            )
+            
+            if response.status_code == 200:
+                result = response.json()
+                if isinstance(result, list) and len(result) > 0:
+                    text = result[0].get('generated_text', '')
+                    # Limpiar
+                    text = text.split('[/INST]')[-1].strip()
+                    return text
+                return str(result)
+            
+            elif response.status_code == 503:
+                # Modelo cargándose, esperar y reintentar
+                print("   ⏳ Modelo cargándose, esperando...")
+                time.sleep(10)
+                return self.generate(prompt, system_prompt, max_tokens)
+            
+            else:
+                print(f"   ❌ Error API: {response.status_code}")
+                # Fallback a modelo más simple
+                if self.current_model != Config.FAST_MODEL:
+                    print("   🔄 Cambiando a modelo más rápido...")
+                    self.current_model = Config.FAST_MODEL
+                    self.api_url = f"https://api-inference.huggingface.co/models/{self.current_model}"
+                    return self.generate(prompt, system_prompt, max_tokens)
+                return "Lo siento, estoy teniendo problemas técnicos. ¿Puedes intentar de nuevo?"
+                
+        except Exception as e:
+            print(f"   ❌ Error: {e}")
+            return "Error de conexión. Intentando reconectar..."
+    
+    def switch_model(self, model_name: str):
+        """Cambiar de modelo"""
+        self.current_model = model_name
+        self.api_url = f"https://api-inference.huggingface.co/models/{model_name}"
+        return f"Modelo cambiado a: {model_name}"
 
 # ============ RECOLECTORES DE CONOCIMIENTO ============
 class WikipediaCollector:
-    """Recolector de Wikipedia (sin API)"""
+    """Recolector de Wikipedia (sin API key)"""
     
     def search(self, query: str, lang: str = "es") -> List[Dict]:
-        """Buscar artículos de Wikipedia"""
         try:
-            # Usar la API de búsqueda de Wikipedia (pública, no requiere key)
-            search_url = f"https://{lang}.wikipedia.org/w/api.php?action=query&list=search&srsearch={urllib.parse.quote(query)}&format=json&srlimit=3"
+            search_url = f"https://{lang}.wikipedia.org/w/api.php?action=query&list=search&srsearch={urllib.parse.quote(query)}&format=json&srlimit=2"
             
             with urllib.request.urlopen(search_url, timeout=10) as response:
                 data = json.loads(response.read())
             
             results = []
             for item in data['query']['search']:
-                # Obtener contenido del artículo
                 content = self._get_article_content(item['title'], lang)
                 if content:
                     results.append({
                         'title': item['title'],
-                        'content': content[:2000],  # Primeros 2000 chars
-                        'source': f'https://{lang}.wikipedia.org/wiki/{item["title"].replace(" ", "_")}',
-                        'type': 'wikipedia'
+                        'content': content[:1500],
+                        'source': 'wikipedia',
+                        'url': f'https://{lang}.wikipedia.org/wiki/{item["title"].replace(" ", "_")}'
                     })
             return results
         except Exception as e:
@@ -72,13 +142,10 @@ class WikipediaCollector:
             return []
     
     def _get_article_content(self, title: str, lang: str) -> str:
-        """Obtener contenido de un artículo específico"""
         try:
-            url = f"https://{lang}.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext&exlimit=1&exchars=3000&titles={urllib.parse.quote(title)}&format=json"
-            
+            url = f"https://{lang}.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext&exchars=2000&titles={urllib.parse.quote(title)}&format=json"
             with urllib.request.urlopen(url, timeout=10) as response:
                 data = json.loads(response.read())
-            
             pages = data['query']['pages']
             page = list(pages.values())[0]
             return page.get('extract', '')
@@ -86,22 +153,18 @@ class WikipediaCollector:
             return ""
 
 class ArxivCollector:
-    """Recolector de papers de arXiv (API pública)"""
+    """Recolector de arXiv"""
     
-    def search(self, query: str, max_results: int = 3) -> List[Dict]:
-        """Buscar papers científicos"""
+    def search(self, query: str, max_results: int = 2) -> List[Dict]:
         try:
-            # API pública de arXiv
-            url = f"http://export.arxiv.org/api/query?search_query=all:{urllib.parse.quote(query)}&start=0&max_results={max_results}&sortBy=relevance&sortOrder=descending"
-            
+            url = f"http://export.arxiv.org/api/query?search_query=all:{urllib.parse.quote(query)}&start=0&max_results={max_results}"
             response = requests.get(url, timeout=15)
             content = response.text
             
-            # Parsear XML (simplificado)
             entries = re.findall(r'<entry>(.*?)</entry>', content, re.DOTALL)
-            
             results = []
-            for entry in entries[:max_results]:
+            
+            for entry in entries:
                 title = re.search(r'<title>(.*?)</title>', entry, re.DOTALL)
                 summary = re.search(r'<summary>(.*?)</summary>', entry, re.DOTALL)
                 
@@ -109,8 +172,7 @@ class ArxivCollector:
                     results.append({
                         'title': self._clean_xml(title.group(1)),
                         'content': self._clean_xml(summary.group(1)),
-                        'source': 'arXiv',
-                        'type': 'scientific_paper'
+                        'source': 'arxiv'
                     })
             return results
         except Exception as e:
@@ -118,574 +180,325 @@ class ArxivCollector:
             return []
     
     def _clean_xml(self, text: str) -> str:
-        """Limpiar texto XML"""
-        text = re.sub(r'<[^>]+>', '', text)
-        return text.strip()
+        return re.sub(r'<[^>]+>', '', text).strip()
 
-class GitHubCollector:
-    """Recolector de READMEs y documentación de GitHub"""
-    
-    def search_repos(self, query: str, language: str = "python") -> List[Dict]:
-        """Buscar repositorios populares (API pública, sin auth para búsqueda básica)"""
-        try:
-            # GitHub API pública tiene límite, usamos búsqueda web simple
-            search_url = f"https://api.github.com/search/repositories?q={urllib.parse.quote(query)}+language:{language}&sort=stars&order=desc"
-            
-            # Sin API key, limitado pero funciona
-            headers = {'Accept': 'application/vnd.github.v3+json'}
-            response = requests.get(search_url, headers=headers, timeout=10)
-            
-            if response.status_code == 200:
-                data = response.json()
-                results = []
-                for repo in data.get('items', [])[:3]:
-                    # Intentar obtener README
-                    readme = self._get_readme(repo['full_name'])
-                    results.append({
-                        'title': repo['name'],
-                        'description': repo['description'] or '',
-                        'readme': readme[:1500] if readme else '',
-                        'source': repo['html_url'],
-                        'type': 'github_repo',
-                        'stars': repo['stargazers_count']
-                    })
-                return results
-            return []
-        except Exception as e:
-            print(f"Error GitHub: {e}")
-            return []
-    
-    def _get_readme(self, repo_full_name: str) -> str:
-        """Obtener README de un repo"""
-        try:
-            url = f"https://raw.githubusercontent.com/{repo_full_name}/main/README.md"
-            response = requests.get(url, timeout=10)
-            if response.status_code == 200:
-                return response.text
-            # Intentar con master
-            url = f"https://raw.githubusercontent.com/{repo_full_name}/master/README.md"
-            response = requests.get(url, timeout=10)
-            return response.text if response.status_code == 200 else ""
-        except:
-            return ""
-
-class BotConversationSimulator:
-    """Simula conversaciones con otros bots para aprender"""
-    
-    PERSONALITIES = [
-        {"name": "Profesor", "style": "explicativo, paciente, usa ejemplos"},
-        {"name": "Programador", "style": "técnico, directo, usa código"},
-        {"name": "Filósofo", "style": "profundo, cuestiona, reflexivo"},
-        {"name": "Niño", "style": "curioso, simple, muchas preguntas"},
-        {"name": "Experto", "style": "preciso, detallado, formal"}
-    ]
-    
-    def __init__(self, main_bot):
-        self.main_bot = main_bot
-    
-    def simulate_conversation(self, topic: str, rounds: int = 3) -> List[Dict]:
-        """Simular conversación entre bots sobre un tema"""
-        conversation = []
-        personas = random.sample(self.PERSONALITIES, 2)
-        
-        bot_a, bot_b = personas[0], personas[1]
-        current_topic = topic
-        
-        for i in range(rounds):
-            # Bot A pregunta/responde
-            prompt_a = f"Eres {bot_a['name']}, un asistente {bot_a['style']}. "
-            prompt_a += f"Habla sobre: {current_topic}"
-            
-            response_a = self.main_bot.generate_raw(prompt_a)
-            
-            conversation.append({
-                'speaker': bot_a['name'],
-                'message': response_a,
-                'topic': current_topic
-            })
-            
-            # Bot B responde
-            prompt_b = f"Eres {bot_b['name']}, un asistente {bot_b['style']}. "
-            prompt_b += f"Responde a esto sobre {current_topic}: {response_a[:200]}"
-            
-            response_b = self.main_bot.generate_raw(prompt_b)
-            
-            conversation.append({
-                'speaker': bot_b['name'],
-                'message': response_b,
-                'topic': current_topic
-            })
-            
-            # Evolucionar tema
-            current_topic += " " + response_b[:50]
-        
-        return conversation
-
-# ============ MODELO DE LENGUAJE GRANDE ============
-class LargeLanguageModel:
-    """Wrapper para modelos grandes (Mistral, Llama, etc.)"""
+# ============ BASE DE CONOCIMIENTO SIMPLE ============
+class SimpleKnowledgeBase:
+    """Base de conocimiento usando JSON (para Render)"""
     
     def __init__(self):
-        print(f"🤖 Cargando modelo grande: {Config.MODEL_NAME}")
-        print("   Esto puede tomar 5-10 minutos la primera vez...")
-        
-        self.tokenizer = AutoTokenizer.from_pretrained(
-            Config.MODEL_NAME,
-            trust_remote_code=True
-        )
-        
-        # Configurar modelo según hardware disponible
-        if torch.cuda.is_available():
-            print("   ✅ Usando GPU")
-            self.model = AutoModelForCausalLM.from_pretrained(
-                Config.MODEL_NAME,
-                torch_dtype=torch.float16,
-                device_map="auto",
-                trust_remote_code=True
-            )
-        else:
-            print("   ⚠️ Usando CPU (más lento)")
-            self.model = AutoModelForCausalLM.from_pretrained(
-                Config.MODEL_NAME,
-                torch_dtype=torch.float32,
-                low_cpu_mem_usage=True,
-                trust_remote_code=True
-            )
-        
-        self.pipe = pipeline(
-            "text-generation",
-            model=self.model,
-            tokenizer=self.tokenizer,
-            max_new_tokens=Config.MAX_NEW_TOKENS,
-            temperature=Config.TEMPERATURE,
-            do_sample=True,
-            pad_token_id=self.tokenizer.eos_token_id
-        )
-        
-        print("✅ Modelo cargado correctamente")
+        self.knowledge_file = Config.KNOWLEDGE_FILE
+        self.data = self._load()
+        print(f"📚 Base de conocimiento: {len(self.data['documents'])} documentos")
     
-    def generate(self, prompt: str, system_prompt: str = None) -> str:
-        """Generar respuesta con formato de chat"""
-        
-        # Formato Mistral/Llama
-        if system_prompt:
-            full_prompt = f"<s>[INST] {system_prompt}\n\n{prompt} [/INST]"
-        else:
-            full_prompt = f"<s>[INST] {prompt} [/INST]"
-        
-        outputs = self.pipe(
-            full_prompt,
-            return_full_text=False
-        )
-        
-        response = outputs[0]['generated_text'].strip()
-        # Limpiar
-        response = response.split('[/INST]')[0].strip()
-        return response
+    def _load(self) -> Dict:
+        if os.path.exists(self.knowledge_file):
+            try:
+                with open(self.knowledge_file, 'r', encoding='utf-8') as f:
+                    return json.load(f)
+            except:
+                pass
+        return {
+            'documents': [],
+            'concepts': {},
+            'last_update': None
+        }
     
-    def generate_raw(self, prompt: str) -> str:
-        """Generación sin formato (para simulaciones)"""
-        outputs = self.pipe(prompt, return_full_text=False, max_new_tokens=256)
-        return outputs[0]['generated_text'].strip()
-
-# ============ MEMORIA VECTORIAL INTELIGENTE ============
-class SmartMemory:
-    """Memoria con embeddings semánticos"""
+    def _save(self):
+        with open(self.knowledge_file, 'w', encoding='utf-8') as f:
+            json.dump(self.data, f, ensure_ascii=False, indent=2)
     
-    def __init__(self):
-        self.embedding_func = embedding_functions.SentenceTransformerEmbeddingFunction(
-            model_name="all-MiniLM-L6-v2"
-        )
+    def add(self, text: str, metadata: Dict, source: str = "unknown"):
+        """Agregar documento"""
+        doc = {
+            'id': f"{source}_{datetime.now().timestamp()}",
+            'text': text,
+            'metadata': metadata,
+            'source': source,
+            'timestamp': datetime.now().isoformat()
+        }
         
-        self.client = chromadb.PersistentClient(path=Config.CHROMA_PATH)
-        self.collection = self.client.get_or_create_collection(
-            name=Config.COLLECTION_NAME,
-            embedding_function=self.embedding_func
-        )
+        self.data['documents'].append(doc)
         
-        print(f"🧠 Memoria: {self.collection.count()} documentos")
+        # Limitar tamaño
+        if len(self.data['documents']) > 500:
+            self.data['documents'] = self.data['documents'][-400:]
+        
+        # Indexar conceptos simple
+        words = set(re.findall(r'\b\w+\b', text.lower()))
+        for word in words:
+            if len(word) > 4:
+                if word not in self.data['concepts']:
+                    self.data['concepts'][word] = []
+                self.data['concepts'][word].append(doc['id'])
+        
+        self.data['last_update'] = datetime.now().isoformat()
+        self._save()
+        return doc['id']
     
-    def add(self, text: str, metadata: Dict, source: str = "user"):
-        """Agregar conocimiento a la memoria"""
+    def search(self, query: str, k: int = 3) -> List[Dict]:
+        """Búsqueda simple por palabras clave"""
+        query_words = set(re.findall(r'\b\w+\b', query.lower()))
         
-        doc_id = f"{source}_{datetime.now().timestamp()}"
+        scores = []
+        for doc in self.data['documents']:
+            doc_words = set(re.findall(r'\b\w+\b', doc['text'].lower()))
+            matches = len(query_words & doc_words)
+            
+            # Bonus por recencia
+            try:
+                doc_time = datetime.fromisoformat(doc['timestamp'])
+                days_old = (datetime.now() - doc_time).days
+                recency_bonus = max(0, 5 - days_old)
+            except:
+                recency_bonus = 0
+            
+            score = matches + recency_bonus
+            if score > 0:
+                scores.append((score, doc))
         
-        self.collection.add(
-            documents=[text],
-            metadatas=[{
-                **metadata,
-                'source': source,
-                'timestamp': datetime.now().isoformat(),
-                'length': len(text)
-            }],
-            ids=[doc_id]
-        )
-        return doc_id
-    
-    def search(self, query: str, k: int = 5, source_filter: str = None) -> List[Dict]:
-        """Búsqueda semántica con filtros opcionales"""
-        
-        where_filter = {"source": source_filter} if source_filter else None
-        
-        results = self.collection.query(
-            query_texts=[query],
-            n_results=k,
-            where=where_filter
-        )
-        
-        documents = []
-        for i in range(len(results['ids'][0])):
-            documents.append({
-                'text': results['documents'][0][i],
-                'metadata': results['metadatas'][0][i],
-                'distance': results['distances'][0][i]
-            })
-        
-        return documents
+        scores.sort(reverse=True, key=lambda x: x[0])
+        return [doc for _, doc in scores[:k]]
     
     def get_stats(self) -> Dict:
-        """Estadísticas de la memoria"""
-        all_data = self.collection.get()
-        
         sources = {}
-        for meta in all_data.get('metadatas', []):
-            src = meta.get('source', 'unknown')
+        for doc in self.data['documents']:
+            src = doc.get('source', 'unknown')
             sources[src] = sources.get(src, 0) + 1
         
         return {
-            'total_documents': self.collection.count(),
-            'sources': sources
+            'total': len(self.data['documents']),
+            'sources': sources,
+            'concepts': len(self.data['concepts'])
         }
 
 # ============ MOTOR DE APRENDIZAJE AUTOMÁTICO ============
 class AutoLearningEngine:
-    """Motor que aprende automáticamente de múltiples fuentes"""
+    """Aprendizaje automático de múltiples fuentes"""
     
-    def __init__(self, llm: LargeLanguageModel, memory: SmartMemory):
-        self.llm = llm
-        self.memory = memory
+    def __init__(self, api: HuggingFaceAPI, knowledge: SimpleKnowledgeBase):
+        self.api = api
+        self.knowledge = knowledge
         
-        # Inicializar recolectores
         self.wikipedia = WikipediaCollector()
         self.arxiv = ArxivCollector()
-        self.github = GitHubCollector()
-        self.bot_simulator = BotConversationSimulator(llm)
         
-        # Estado de aprendizaje
-        self.learning_queue = []
-        self.daily_learned = 0
-        self.last_learning = None
-        
-        # Iniciar hilo de aprendizaje automático
         self.running = True
-        self.learning_thread = threading.Thread(target=self._auto_learning_loop, daemon=True)
-        self.learning_thread.start()
+        self.daily_count = 0
+        self.last_reset = datetime.now()
         
-        print("🔄 Motor de aprendizaje automático iniciado")
+        # Iniciar hilo de aprendizaje
+        self.thread = threading.Thread(target=self._learning_loop, daemon=True)
+        self.thread.start()
+        
+        print("🔄 Aprendizaje automático iniciado")
     
-    def _auto_learning_loop(self):
-        """Bucle de aprendizaje continuo en background"""
+    def _learning_loop(self):
+        """Bucle de aprendizaje continuo"""
         while self.running:
-            if self.daily_learned < Config.MAX_DAILY_ARTICLES:
-                self._learn_something_new()
-                self.daily_learned += 1
-            
             # Reset diario
-            if self.last_learning and (datetime.now() - self.last_learning).days >= 1:
-                self.daily_learned = 0
+            if (datetime.now() - self.last_reset).days >= 1:
+                self.daily_count = 0
+                self.last_reset = datetime.now()
+            
+            if self.daily_count < Config.MAX_DAILY_ARTICLES:
+                self._learn_something()
+                self.daily_count += 1
             
             time.sleep(Config.AUTO_LEARN_INTERVAL)
     
-    def _learn_something_new(self):
-        """Aprender algo nuevo de una fuente aleatoria"""
-        
+    def _learn_something(self):
+        """Aprender de una fuente aleatoria"""
         topics = [
-            "inteligencia artificial", "machine learning", "python programming",
-            "neural networks", "deep learning", "natural language processing",
-            "computer vision", "reinforcement learning", "data science",
-            "algorithm optimization", "quantum computing", "blockchain"
+            "inteligencia artificial", "machine learning", "python",
+            "neural networks", "deep learning", "data science",
+            "programación", "algoritmos", "matemáticas"
         ]
         
         topic = random.choice(topics)
-        source = random.choice(['wikipedia', 'arxiv', 'github', 'bots'])
+        source = random.choice(['wikipedia', 'arxiv'])
         
         print(f"🎓 Auto-aprendiendo: {topic} desde {source}")
         
         try:
             if source == 'wikipedia':
-                self._learn_from_wikipedia(topic)
+                articles = self.wikipedia.search(topic)
+                for art in articles:
+                    summary = self._summarize(art['content'])
+                    self.knowledge.add(
+                        text=f"Wikipedia: {art['title']}\n{summary}",
+                        metadata={'topic': topic, 'original': art['content'][:500]},
+                        source='wikipedia'
+                    )
+                    print(f"   ✅ {art['title'][:50]}...")
+            
             elif source == 'arxiv':
-                self._learn_from_arxiv(topic)
-            elif source == 'github':
-                self._learn_from_github(topic)
-            elif source == 'bots':
-                self._learn_from_bot_conversation(topic)
-            
-            self.last_learning = datetime.now()
-            
+                papers = self.arxiv.search(topic, max_results=1)
+                for paper in papers:
+                    simplified = self._simplify(paper['content'])
+                    self.knowledge.add(
+                        text=f"Paper: {paper['title']}\n{simplified}",
+                        metadata={'topic': topic},
+                        source='arxiv'
+                    )
+                    print(f"   ✅ Paper: {paper['title'][:50]}...")
+                    
         except Exception as e:
-            print(f"   ❌ Error aprendiendo: {e}")
-    
-    def _learn_from_wikipedia(self, topic: str):
-        """Aprender de Wikipedia"""
-        articles = self.wikipedia.search(topic)
-        for article in articles:
-            # Resumir con el modelo grande
-            summary = self._summarize(article['content'])
-            self.memory.add(
-                text=f"Wikipedia - {article['title']}: {summary}",
-                metadata={
-                    'original_title': article['title'],
-                    'original_url': article['source'],
-                    'topic': topic
-                },
-                source='wikipedia'
-            )
-            print(f"   ✅ Aprendido: {article['title']}")
-    
-    def _learn_from_arxiv(self, topic: str):
-        """Aprender de papers científicos"""
-        papers = self.arxiv.search(topic, max_results=2)
-        for paper in papers:
-            # Simplificar el paper
-            simplified = self._simplify_scientific_text(paper['content'])
-            self.memory.add(
-                text=f"Paper - {paper['title']}: {simplified}",
-                metadata={
-                    'original_title': paper['title'],
-                    'topic': topic
-                },
-                source='arxiv'
-            )
-            print(f"   ✅ Aprendido paper: {paper['title'][:60]}...")
-    
-    def _learn_from_github(self, topic: str):
-        """Aprender de repositorios de código"""
-        repos = self.github.search_repos(topic)
-        for repo in repos:
-            content = f"{repo['description']}\n\nREADME:\n{repo['readme']}"
-            analyzed = self._analyze_code_repo(content)
-            self.memory.add(
-                text=f"GitHub - {repo['title']} ({repo['stars']}⭐): {analyzed}",
-                metadata={
-                    'repo_name': repo['title'],
-                    'url': repo['source'],
-                    'stars': repo['stars']
-                },
-                source='github'
-            )
-            print(f"   ✅ Aprendido repo: {repo['title']}")
-    
-    def _learn_from_bot_conversation(self, topic: str):
-        """Aprender de conversación simulada entre bots"""
-        conversation = self.bot_simulator.simulate_conversation(topic, rounds=2)
-        
-        # Analizar y extraer conocimiento
-        full_convo = "\n".join([f"{c['speaker']}: {c['message']}" for c in conversation])
-        insights = self._extract_insights(full_convo)
-        
-        self.memory.add(
-            text=f"Simulación bots sobre {topic}: {insights}",
-            metadata={
-                'conversation': full_convo[:500],
-                'topic': topic
-            },
-            source='bot_simulation'
-        )
-        print(f"   ✅ Aprendido de simulación sobre: {topic}")
+            print(f"   ❌ Error: {e}")
     
     def _summarize(self, text: str) -> str:
-        """Resumir texto usando el modelo"""
-        prompt = f"Resume este texto en 3 oraciones clave:\n\n{text[:1500]}\n\nResumen:"
-        return self.llm.generate_raw(prompt)[:500]
+        """Resumir con la API"""
+        prompt = f"Resume este texto en 2 oraciones:\n\n{text[:1000]}\n\nResumen:"
+        return self.api.generate(prompt, max_tokens=150)
     
-    def _simplify_scientific_text(self, text: str) -> str:
+    def _simplify(self, text: str) -> str:
         """Simplificar texto científico"""
-        prompt = f"Explica este concepto científico de forma simple para un estudiante:\n\n{text[:1000]}\n\nExplicación simple:"
-        return self.llm.generate_raw(prompt)[:600]
+        prompt = f"Explica esto simplemente:\n\n{text[:800]}\n\nExplicación:"
+        return self.api.generate(prompt, max_tokens=200)
     
-    def _analyze_code_repo(self, content: str) -> str:
-        """Analizar repositorio de código"""
-        prompt = f"Analiza este README y explica qué hace el proyecto en 2 oraciones:\n\n{content[:1000]}\n\nAnálisis:"
-        return self.llm.generate_raw(prompt)[:400]
-    
-    def _extract_insights(self, conversation: str) -> str:
-        """Extraer insights de una conversación"""
-        prompt = f"Extrae las 3 ideas más importantes de esta conversación:\n\n{conversation[:1500]}\n\nIdeas clave:"
-        return self.llm.generate_raw(prompt)[:500]
-    
-    def force_learning(self, source: str, query: str) -> str:
-        """Forzar aprendizaje de una fuente específica"""
+    def force_learn(self, source: str, query: str) -> str:
+        """Forzar aprendizaje manual"""
         try:
             if source == 'wikipedia':
-                self._learn_from_wikipedia(query)
+                articles = self.wikipedia.search(query)
+                for art in articles[:2]:
+                    self.knowledge.add(
+                        text=f"{art['title']}: {art['content'][:1000]}",
+                        metadata={'query': query},
+                        source='wikipedia'
+                    )
+                return f"✅ Aprendido {len(articles)} artículos de Wikipedia sobre '{query}'"
+            
             elif source == 'arxiv':
-                self._learn_from_arxiv(query)
-            elif source == 'github':
-                self._learn_from_github(query)
-            elif source == 'bots':
-                self._learn_from_bot_conversation(query)
-            return f"✅ Aprendido de {source} sobre: {query}"
+                papers = self.arxiv.search(query, max_results=2)
+                for paper in papers:
+                    self.knowledge.add(
+                        text=f"{paper['title']}: {paper['content'][:800]}",
+                        metadata={'query': query},
+                        source='arxiv'
+                    )
+                return f"✅ Aprendido {len(papers)} papers de arXiv sobre '{query}'"
+            
+            return "Fuente no válida"
         except Exception as e:
             return f"❌ Error: {str(e)}"
     
-    def get_learning_stats(self) -> Dict:
-        """Estadísticas de aprendizaje"""
+    def get_stats(self) -> Dict:
         return {
-            'daily_learned': self.daily_learned,
+            'daily_learned': self.daily_count,
             'max_daily': Config.MAX_DAILY_ARTICLES,
-            'last_learning': self.last_learning.isoformat() if self.last_learning else None,
-            'queue_size': len(self.learning_queue),
-            'sources': ['wikipedia', 'arxiv', 'github', 'bot_simulation']
+            'next_in': Config.AUTO_LEARN_INTERVAL // 60,
+            'sources': ['wikipedia', 'arxiv']
         }
 
 # ============ BEbÉ IA COMPLETA ============
 class BebeIAPro:
-    """Bebé IA con modelo grande y aprendizaje automático"""
+    """IA completa con API HuggingFace"""
     
     def __init__(self):
-        print("=" * 70)
-        print("🚀 INICIANDO BEbÉ IA PRO")
-        print("Modelo Grande + Aprendizaje Automático Multi-Fuente")
-        print("=" * 70)
+        print("=" * 60)
+        print("🚀 BEbÉ IA PRO - API HuggingFace")
+        print("Sin modelos locales - Funciona en Render gratuito")
+        print("=" * 60)
         
-        # Componentes principales
-        self.llm = LargeLanguageModel()
-        self.memory = SmartMemory()
-        self.learner = AutoLearningEngine(self.llm, self.memory)
+        self.api = HuggingFaceAPI()
+        self.knowledge = SimpleKnowledgeBase()
+        self.learner = AutoLearningEngine(self.api, self.knowledge)
         
-        # Historial de conversación
-        self.conversation_history = []
+        self.conversations = []
         
         print("\n✅ Sistema listo")
-        print(f"   📚 Aprendiendo automáticamente cada {Config.AUTO_LEARN_INTERVAL/60} minutos")
+        print(f"   📚 {self.knowledge.get_stats()['total']} documentos")
+        print("   🔄 Auto-aprendizaje activo")
     
     def chat(self, user_input: str) -> Dict:
-        """Procesar mensaje del usuario"""
+        """Procesar mensaje"""
         
-        # 1. Buscar conocimiento relevante en memoria
-        relevant = self.memory.search(user_input, k=3)
-        knowledge_context = self._format_knowledge(relevant)
+        # Buscar conocimiento relevante
+        relevant = self.knowledge.search(user_input, k=3)
+        context = self._format_context(relevant)
         
-        # 2. Construir prompt enriquecido
-        system_prompt = """Eres Bebé IA Pro, un asistente inteligente que:
-- Ha aprendido de Wikipedia, papers científicos, GitHub y conversaciones
-- Usa conocimiento real y actualizado
-- Es conversacional, amigable y útil
-- Cita sus fuentes cuando es relevante"""
+        # Construir prompt
+        system = """Eres Bebé IA Pro, un asistente inteligente que aprende continuamente de Wikipedia y papers científicos. Usa el contexto proporcionado si es relevante."""
         
-        user_prompt = f"""Contexto de conocimiento almacenado:
-{knowledge_context}
+        prompt = f"""Contexto de conocimiento:
+{context}
 
-Pregunta del usuario: {user_input}
+Pregunta: {user_input}
 
-Responde usando el contexto si es relevante, o tu conocimiento general."""
+Responde de manera útil y natural:"""
         
-        # 3. Generar respuesta
-        response = self.llm.generate(user_prompt, system_prompt)
+        # Generar respuesta
+        response = self.api.generate(prompt, system, max_tokens=400)
         
-        # 4. Guardar conversación
+        # Guardar
         self._save_conversation(user_input, response)
         
-        # 5. Detectar si debemos aprender más sobre este tema
-        if self._should_learn_more(user_input):
+        # Verificar si necesitamos aprender más
+        if len(relevant) == 0:
             threading.Thread(
-                target=self.learner.force_learning,
+                target=self.learner.force_learn,
                 args=('wikipedia', user_input),
                 daemon=True
             ).start()
         
         return {
             'response': response,
-            'sources_used': [r['metadata'].get('source', 'unknown') for r in relevant],
+            'sources': [r['source'] for r in relevant],
             'documents_found': len(relevant),
-            'emotion': self._detect_emotion(response),
-            'stage': self._get_stage(),
-            'auto_learning': True
+            'model_used': self.api.current_model,
+            'stage': self._get_stage()
         }
     
-    def _format_knowledge(self, documents: List[Dict]) -> str:
-        """Formatear documentos para el contexto"""
-        if not documents:
-            return "No hay conocimiento específico en memoria aún."
-        
-        formatted = []
-        for doc in documents:
-            source = doc['metadata'].get('source', 'unknown')
-            text = doc['text'][:300]
-            formatted.append(f"[{source.upper()}] {text}...")
-        
-        return "\n\n".join(formatted)
-    
-    def _should_learn_more(self, query: str) -> bool:
-        """Determinar si deberíamos aprender más sobre este tema"""
-        # Si no encontramos mucho en memoria, aprender más
-        results = self.memory.search(query, k=1)
-        return len(results) == 0 or results[0]['distance'] > 0.5
+    def _format_context(self, docs: List[Dict]) -> str:
+        if not docs:
+            return "No hay contexto específico en mi base de datos."
+        return "\n\n".join([f"[{d['source']}] {d['text'][:300]}..." for d in docs])
     
     def _save_conversation(self, user: str, bot: str):
-        """Guardar interacción"""
-        self.conversation_history.append({
+        self.conversations.append({
             'user': user,
             'bot': bot,
-            'timestamp': datetime.now().isoformat()
+            'time': datetime.now().isoformat()
         })
-        
-        # También guardar en memoria vectorial
-        self.memory.add(
+        self.knowledge.add(
             text=f"User: {user}\nBot: {bot}",
             metadata={'type': 'conversation'},
-            source='user_chat'
+            source='chat'
         )
-    
-    def _detect_emotion(self, text: str) -> str:
-        indicators = {
-            'entusiasta': ['!', 'excelente', 'genial', 'increíble'],
-            'técnico': ['código', 'función', 'algoritmo', 'implementación'],
-            'empático': ['entiendo', 'siento', 'comprendo tu situación']
-        }
-        text_lower = text.lower()
-        for emotion, words in indicators.items():
-            if any(w in text_lower for w in words):
-                return emotion
-        return 'neutral'
     
     def _get_stage(self) -> str:
-        stats = self.memory.get_stats()
-        total = stats['total_documents']
-        
+        stats = self.knowledge.get_stats()
+        total = stats['total']
         if total < 50:
-            return '🍼 Bebé aprendiz (poca experiencia)'
+            return '🍼 Aprendiz'
         elif total < 200:
-            return '📚 Estudiante (acumulando conocimiento)'
+            return '📚 Estudiante'
         elif total < 500:
-            return '🔬 Investigador (bases sólidas)'
-        else:
-            return '🧠 Experto (conocimiento amplio)'
+            return '🔬 Investigador'
+        return '🧠 Experto'
     
-    def teach(self, correction: str) -> str:
-        """Enseñar manualmente"""
-        self.memory.add(
-            text=f"CORRECCIÓN MANUAL: {correction}",
-            metadata={'type': 'explicit_knowledge'},
-            source='user_teaching'
+    def teach(self, text: str) -> str:
+        self.knowledge.add(
+            text=f"ENSEÑADO: {text}",
+            metadata={'type': 'manual'},
+            source='user'
         )
-        return "🎓 ¡Aprendido! He guardado tu corrección en mi memoria permanente."
+        return "🎓 ¡Aprendido! Guardado en mi base de conocimiento."
     
     def get_status(self) -> Dict:
-        """Estado completo del sistema"""
         return {
             'stage': self._get_stage(),
-            'memory_stats': self.memory.get_stats(),
-            'learning_stats': self.learner.get_learning_stats(),
-            'total_conversations': len(self.conversation_history),
-            'model': Config.MODEL_NAME
+            'knowledge': self.knowledge.get_stats(),
+            'learning': self.learner.get_stats(),
+            'model': self.api.current_model,
+            'conversations': len(self.conversations)
         }
 
 # ============ INICIALIZACIÓN ============
 bebe = BebeIAPro()
 
-# ============ RUTAS FLASK ============
+# ============ RUTAS ============
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -703,25 +516,23 @@ def teach():
     return jsonify({'message': result})
 
 @app.route('/learn', methods=['POST'])
-def force_learn():
-    """Forzar aprendizaje de una fuente específica"""
+def learn():
     data = request.json
-    source = data.get('source', 'wikipedia')
-    query = data.get('query', '')
-    result = bebe.learner.force_learning(source, query)
+    result = bebe.learner.force_learn(
+        data.get('source', 'wikipedia'),
+        data.get('query', '')
+    )
     return jsonify({'message': result})
 
 @app.route('/status', methods=['GET'])
 def status():
     return jsonify(bebe.get_status())
 
-@app.route('/search_memory', methods=['POST'])
-def search_memory():
-    """Buscar en la memoria de la IA"""
+@app.route('/switch_model', methods=['POST'])
+def switch_model():
     data = request.json
-    query = data.get('query', '')
-    results = bebe.memory.search(query, k=5)
-    return jsonify({'results': results})
+    result = bebe.api.switch_model(data.get('model', Config.FAST_MODEL))
+    return jsonify({'message': result})
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
