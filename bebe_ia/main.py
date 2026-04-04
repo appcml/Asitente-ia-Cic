@@ -12,7 +12,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from bebe_ia.core.config import Config
 from bebe_ia.core.tokenizer import SimpleTokenizer
 from bebe_ia.core.model import BebeTransformer
-from bebe_ia.core.memory import MemorySystem
+from bebe_ia.core.memory import ContinualLearner as MemorySystem
 from bebe_ia.core.learner import ContinualLearner
 from bebe_ia.core.personality import BebePersonality
 
