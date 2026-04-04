@@ -3,15 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🧠 Bebé IA Multi-Modelo</title>
+    <title>🧠 Bebé IA Pro - Auto-Aprendizaje</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         
         body {
             font-family: 'Segoe UI', system-ui, sans-serif;
             background: linear-gradient(135deg, #0f0f23 0%, #1a1a2e 100%);
-            min-height: 100vh;
             color: #e0e0e0;
+            min-height: 100vh;
         }
         
         .container {
@@ -28,36 +28,31 @@
             text-align: center;
         }
         
-        .header h1 { font-size: 1.8em; margin-bottom: 5px; }
-        .header p { opacity: 0.9; font-size: 0.9em; }
+        .header h1 { font-size: 1.8em; }
+        .header p { opacity: 0.9; font-size: 0.85em; margin-top: 5px; }
         
-        .model-bar {
-            display: flex;
-            justify-content: center;
-            gap: 10px;
-            margin-top: 10px;
-            flex-wrap: wrap;
-        }
-        
-        .model-badge {
-            background: rgba(255,255,255,0.2);
-            padding: 5px 12px;
-            border-radius: 15px;
-            font-size: 0.75em;
-            cursor: pointer;
-            transition: all 0.3s;
-        }
-        
-        .model-badge:hover { background: rgba(255,255,255,0.3); }
-        .model-badge.active { background: #4caf50; }
-        .model-badge.loaded { border: 2px solid #ffd700; }
-        
-        .stats-bar {
+        .learning-status {
             display: flex;
             justify-content: center;
             gap: 15px;
             margin-top: 10px;
             font-size: 0.8em;
+            flex-wrap: wrap;
+        }
+        
+        .status-badge {
+            background: rgba(255,255,255,0.15);
+            padding: 5px 12px;
+            border-radius: 15px;
+        }
+        
+        .auto-learning {
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
         }
         
         .chat-area {
@@ -73,12 +68,12 @@
             animation: fadeIn 0.3s ease;
         }
         
+        .message.user { margin-left: auto; }
+        
         @keyframes fadeIn {
             from { opacity: 0; transform: translateY(10px); }
             to { opacity: 1; transform: translateY(0); }
         }
-        
-        .message.user { margin-left: auto; }
         
         .message-content {
             padding: 15px 20px;
@@ -97,26 +92,20 @@
             border: 1px solid #3a3a5c;
         }
         
-        .message-meta {
+        .sources {
+            margin-top: 10px;
             font-size: 0.75em;
             color: #888;
-            margin-top: 5px;
-            margin-left: 10px;
         }
         
-        .model-indicator {
+        .source-tag {
             display: inline-block;
+            background: #3a3a5c;
             padding: 2px 8px;
             border-radius: 10px;
-            font-size: 0.7em;
-            margin-left: 5px;
+            margin-right: 5px;
+            margin-top: 5px;
         }
-        
-        .model-tinyllama { background: #4caf50; }
-        .model-phi2 { background: #2196f3; }
-        .model-gemma2b { background: #ff9800; }
-        .model-mistral7b { background: #9c27b0; }
-        .model-llama2 { background: #f44336; }
         
         .input-area {
             padding: 20px;
@@ -174,87 +163,72 @@
         .typing {
             display: none;
             padding: 10px;
-            color: #667eea;
+            color: #4caf50;
             font-style: italic;
         }
         
         .typing.show { display: block; }
-        
-        .intent-badge {
-            display: inline-block;
-            background: #3a3a5c;
-            padding: 2px 8px;
-            border-radius: 10px;
-            font-size: 0.7em;
-            margin-left: 5px;
-            text-transform: uppercase;
-        }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <h1>🧠 Bebé IA Multi-Modelo</h1>
-            <p>Selección inteligente del mejor modelo para cada tarea</p>
+            <h1>🧠 Bebé IA Pro</h1>
+            <p>Modelo Grande + Aprendizaje Automático de Wikipedia, arXiv, GitHub</p>
             
-            <div class="model-bar" id="modelBar">
-                <!-- Se llena dinámicamente -->
-            </div>
-            
-            <div class="stats-bar">
-                <span id="currentModel">🤖 Cargando...</span>
-                <span id="totalMessages">💬 0 mensajes</span>
-                <span id="memories">🧠 0 memorias</span>
+            <div class="learning-status">
+                <span class="status-badge auto-learning" id="learningStatus">🔄 Auto-aprendiendo</span>
+                <span class="status-badge" id="memoryStats">🧠 Cargando...</span>
+                <span class="status-badge" id="stage">📚 Cargando...</span>
             </div>
         </div>
         
         <div class="chat-area" id="chatArea">
             <div class="message bot">
                 <div class="message-content">
-¡Hola! Soy Bebé IA Multi-Modelo 🧠✨
+¡Hola! Soy Bebé IA Pro 🚀
 
-🎯 **Cómo funciono:**
-• Analizo tu consulta y detecto la intención
-• Selecciono el modelo más adecuado automáticamente
-• TinyLlama (1.1B) → Saludos rápidos
-• Phi-2 (2.7B) → Código y matemáticas  
-• Gemma 2B → Preguntas generales
-• Mistral 7B → Creatividad y análisis profundo
-• Llama 2 7B → Emociones y conversación
+**¿Qué me hace especial?**
+• 🧠 **Modelo Grande**: Uso Mistral 7B (o similar) para respuestas inteligentes
+• 📚 **Aprendo Solo**: Cada 30 minutos busco nueva información en:
+  - Wikipedia (conocimiento general)
+  - arXiv (papers científicos)
+  - GitHub (código y documentación)
+  - Conversaciones simuladas entre bots
 
-💡 **Ejemplos:**
-• "Hola" → TinyLlama (rápido)
-• "Escribe una función Python" → Phi-2 (experto en código)
-• "¿Qué es el amor?" → Mistral 7B (filosofía)
-• "Me siento triste" → Llama 2 (empatía)
+**Fuentes de conocimiento activas:**
+<span class="source-tag">Wikipedia</span>
+<span class="source-tag">arXiv</span>
+<span class="source-tag">GitHub</span>
+<span class="source-tag">Bot Conversations</span>
 
-¡Pregúntame cualquier cosa!
+Pregúntame cualquier cosa. Si no sé, ¡aprenderé automáticamente!
                 </div>
-                <div class="message-meta">Bebé IA • Sistema Multi-Modelo</div>
+                <div class="sources">Sistema iniciado • Auto-learning activo</div>
             </div>
         </div>
         
-        <div class="typing" id="typing">🧠 Analizando intención y seleccionando modelo...</div>
+        <div class="typing" id="typing">🧠 Consultando modelo grande + memoria...</div>
         
         <div class="input-area">
             <div class="input-box">
-                <input type="text" id="userInput" placeholder="Escribe tu consulta (código, emociones, creatividad...)" autocomplete="off">
+                <input type="text" id="userInput" placeholder="Pregúntame algo... (aprendo de cada conversación)" autocomplete="off">
                 <button class="btn btn-send" onclick="sendMessage()">➤</button>
             </div>
             <div class="controls">
-                <button class="btn btn-control" onclick="showModels()">🤖 Ver Modelos</button>
-                <button class="btn btn-control" onclick="showStats()">📊 Estadísticas</button>
-                <button class="btn btn-control" onclick="clearChat()">🗑️ Limpiar</button>
+                <button class="btn btn-control" onclick="forceLearn('wikipedia')">📚 Aprender Wiki</button>
+                <button class="btn btn-control" onclick="forceLearn('arxiv')">📄 Aprender Paper</button>
+                <button class="btn btn-control" onclick="forceLearn('github')">💻 Aprender Repo</button>
+                <button class="btn btn-control" onclick="showStatus()">📊 Estado</button>
+                <button class="btn btn-control" onclick="showTeach()">🎓 Enseñar</button>
             </div>
         </div>
     </div>
 
     <script>
-        let currentModels = [];
-        
-        // Cargar estado inicial
+        // Cargar estado
         loadStatus();
-        loadModels();
+        setInterval(loadStatus, 30000); // Actualizar cada 30s
         
         document.getElementById('userInput').addEventListener('keypress', function(e) {
             if (e.key === 'Enter') sendMessage();
@@ -279,32 +253,38 @@
                 const data = await response.json();
                 document.getElementById('typing').classList.remove('show');
                 
-                const meta = `Bebé IA <span class="model-indicator model-${data.model_used}">${data.model_used}</span> <span class="intent-badge">${data.intent_detected}</span>`;
+                // Mostrar fuentes usadas
+                let sourcesHtml = '';
+                if (data.sources_used && data.sources_used.length > 0) {
+                    sourcesHtml = '<div class="sources">Fuentes: ' + 
+                        data.sources_used.map(s => `<span class="source-tag">${s}</span>`).join('') + 
+                        '</div>';
+                }
                 
-                addMessage(data.response, 'bot', meta);
-                updateStats(data);
+                const content = data.response + sourcesHtml;
+                addMessage(content, 'bot', `Bebé IA Pro • ${data.stage}`);
                 
             } catch (error) {
                 document.getElementById('typing').classList.remove('show');
-                addMessage('Error seleccionando modelo 😅', 'bot', 'Error');
+                addMessage('Error conectando con el modelo 😅', 'bot', 'Error');
             }
         }
         
-        function addMessage(text, sender, meta) {
+        function addMessage(content, sender, meta) {
             const chatArea = document.getElementById('chatArea');
             const messageDiv = document.createElement('div');
             messageDiv.className = `message ${sender}`;
             
             const contentDiv = document.createElement('div');
             contentDiv.className = 'message-content';
-            contentDiv.textContent = text;
+            contentDiv.innerHTML = content;
             
-            const metaDiv = document.createElement('div');
-            metaDiv.className = 'message-meta';
-            metaDiv.innerHTML = meta || (sender === 'user' ? 'Tú' : 'Bebé IA');
+            const sourcesDiv = document.createElement('div');
+            sourcesDiv.className = 'sources';
+            sourcesDiv.textContent = meta || (sender === 'user' ? 'Tú' : 'Bebé IA');
             
             messageDiv.appendChild(contentDiv);
-            messageDiv.appendChild(metaDiv);
+            messageDiv.appendChild(sourcesDiv);
             chatArea.appendChild(messageDiv);
             chatArea.scrollTop = chatArea.scrollHeight;
         }
@@ -313,82 +293,67 @@
             try {
                 const response = await fetch('/status');
                 const data = await response.json();
-                updateStats(data);
+                
+                document.getElementById('memoryStats').textContent = 
+                    `🧠 ${data.memory_stats.total_documents} documentos`;
+                document.getElementById('stage').textContent = data.stage;
+                
+                const learning = data.learning_stats;
+                if (learning.daily_learned >= learning.max_daily) {
+                    document.getElementById('learningStatus').textContent = '✅ Meta diaria alcanzada';
+                    document.getElementById('learningStatus').classList.remove('auto-learning');
+                }
             } catch (e) {}
         }
         
-        async function loadModels() {
+        async function forceLearn(source) {
+            const query = prompt(`¿Sobre qué tema quieres que aprenda de ${source}?`);
+            if (!query) return;
+            
+            addMessage(`🎓 Aprendiendo sobre "${query}" desde ${source}...`, 'bot', 'Sistema');
+            
             try {
-                const response = await fetch('/models');
+                const response = await fetch('/learn', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({source: source, query: query})
+                });
                 const data = await response.json();
-                currentModels = data.models;
-                
-                const bar = document.getElementById('modelBar');
-                bar.innerHTML = data.models.map(m => `
-                    <span class="model-badge ${m.loaded ? 'loaded' : ''} ${data.current === m.id ? 'active' : ''}" 
-                          onclick="switchModel('${m.id}')" title="${m.description}">
-                        ${m.id} ${m.loaded ? '✓' : ''}
-                    </span>
-                `).join('');
-            } catch (e) {}
-        }
-        
-        function updateStats(data) {
-            document.getElementById('currentModel').textContent = `🤖 ${data.current_model || 'Cargando...'}`;
-            document.getElementById('totalMessages').textContent = `💬 ${data.messages || 0} mensajes`;
-            document.getElementById('memories').textContent = `🧠 ${data.memories || 0} memorias`;
-        }
-        
-        async function switchModel(modelId) {
-            const response = await fetch('/switch_model', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({model: modelId})
-            });
-            const data = await response.json();
-            addMessage(data.message, 'bot', 'Sistema');
-            loadModels();
-        }
-        
-        async function showModels() {
-            let info = '🤖 **Modelos Disponibles:**\n\n';
-            currentModels.forEach(m => {
-                info += `**${m.id}** (${m.ram_gb}GB RAM)\n`;
-                info += `• ${m.description}\n`;
-                info += `• Fortalezas: ${m.strengths.join(', ')}\n`;
-                info += `• Estado: ${m.loaded ? '✅ Cargado' : '⏳ Disponible'}\n\n`;
-            });
-            addMessage(info, 'bot', 'Sistema');
-        }
-        
-        async function showStats() {
-            try {
-                const response = await fetch('/stats');
-                const data = await response.json();
-                
-                let stats = '📊 **Estadísticas de Uso:**\n\n';
-                stats += '**Uso por Modelo:**\n';
-                for (let [model, count] of Object.entries(data.model_usage)) {
-                    stats += `• ${model}: ${count} usos\n`;
-                }
-                stats += '\n**Intenciones Detectadas:**\n';
-                for (let [intent, count] of Object.entries(data.intent_stats)) {
-                    stats += `• ${intent}: ${count}\n`;
-                }
-                
-                addMessage(stats, 'bot', 'Sistema');
+                addMessage(data.message, 'bot', 'Sistema');
+                loadStatus();
             } catch (e) {
-                addMessage('Error cargando estadísticas 😅', 'bot', 'Error');
+                addMessage('Error en aprendizaje 😅', 'bot', 'Error');
             }
         }
         
-        function clearChat() {
-            document.getElementById('chatArea').innerHTML = `
-                <div class="message bot">
-                    <div class="message-content">Chat limpiado. ¿Qué modelo debería usar ahora? 🤔</div>
-                    <div class="message-meta">Bebé IA</div>
-                </div>
-            `;
+        async function showStatus() {
+            try {
+                const response = await fetch('/status');
+                const data = await response.json();
+                
+                let status = `📊 **Estado del Sistema**\n\n`;
+                status += `**Etapa:** ${data.stage}\n`;
+                status += `**Documentos:** ${data.memory_stats.total_documents}\n`;
+                status += `**Fuentes:** ${JSON.stringify(data.memory_stats.sources)}\n`;
+                status += `**Aprendidos hoy:** ${data.learning_stats.daily_learned}/${data.learning_stats.max_daily}\n`;
+                status += `**Conversaciones:** ${data.total_conversations}\n`;
+                status += `**Modelo:** ${data.model}`;
+                
+                addMessage(status, 'bot', 'Sistema');
+            } catch (e) {}
+        }
+        
+        function showTeach() {
+            const correction = prompt('¿Qué quieres enseñarme?');
+            if (correction) {
+                fetch('/teach', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({correct: correction})
+                }).then(() => {
+                    addMessage(`🎓 Aprendido: "${correction}"`, 'bot', 'Aprendizaje manual');
+                });
+            }
         }
     </script>
 </body>
