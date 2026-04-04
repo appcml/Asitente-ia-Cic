@@ -1,10 +1,144 @@
 """
+Sistema de memoria vectorial para el Bebé IA
+"""
+import torch
+import torch.nn as nn
+import numpy as np
+from datetime import datetime
+import json
+import os
+
+class MemorySystem:
+    """
+    Sistema de memoria semántica que almacena y recupera experiencias
+    """
+    def __init__(self, embed_dim, memory_path, device='cpu'):
+        self.embed_dim = embed_dim
+        self.memory_path = memory_path
+        self.device = device
+        
+        # Embedding simple para convertir texto a vectores
+        self.embedding = nn.Embedding(5000, embed_dim).to(device)
+        
+        # Almacenamiento de memorias
+        self.memories = []
+        self.vectors = []
+        
+        # Cargar memorias existentes
+        self._load()
+    
+    def _text_to_vector(self, text):
+        """Convertir texto a vector usando embeddings simples"""
+        # Tokenización simple por palabras
+        tokens = text.lower().split()
+        # Convertir a índices (hash simple)
+        indices = [hash(word) % 5000 for word in tokens[:50]]  # max 50 palabras
+        if not indices:
+            indices = [0]
+        
+        with torch.no_grad():
+            embeddings = self.embedding(torch.tensor(indices).to(self.device))
+            # Promedio de embeddings
+            vector = embeddings.mean(dim=0).cpu().numpy()
+        return vector
+    
+    def store(self, content, context="", importance=0.5):
+        """Guardar una nueva memoria"""
+        memory = {
+            'content': content,
+            'context': context,
+            'importance': importance,
+            'timestamp': datetime.now().isoformat(),
+            'access_count': 0
+        }
+        
+        vector = self._text_to_vector(content)
+        
+        self.memories.append(memory)
+        self.vectors.append(vector)
+        
+        # Limitar capacidad
+        if len(self.memories) > 10000:
+            self._forget_old()
+        
+        self._save()
+    
+    def retrieve(self, query, k=3):
+        """Recuperar las k memorias más relevantes"""
+        if not self.memories:
+            return []
+        
+        query_vector = self._text_to_vector(query)
+        
+        # Calcular similitud coseno
+        similarities = []
+        for i, vec in enumerate(self.vectors):
+            sim = np.dot(query_vector, vec) / (np.linalg.norm(query_vector) * np.linalg.norm(vec) + 1e-8)
+            # Ajustar por importancia y recencia
+            time_bonus = 0.1 * (i / len(self.memories))  # Memorias recientes tienen bonus
+            importance_bonus = self.memories[i]['importance'] * 0.2
+            final_score = sim + time_bonus + importance_bonus
+            similarities.append((final_score, i))
+        
+        # Ordenar y seleccionar top k
+        similarities.sort(reverse=True)
+        results = []
+        for score, idx in similarities[:k]:
+            memory = self.memories[idx].copy()
+            memory['similarity'] = float(score)
+            memory['access_count'] += 1
+            results.append(memory)
+        
+        return results
+    
+    def _forget_old(self):
+        """Olvidar memorias menos importantes"""
+        # Calcular score de olvido
+        scores = []
+        for i, mem in enumerate(self.memories):
+            age = len(self.memories) - i
+            importance = mem['importance']
+            access = mem['access_count']
+            forget_score = age / (importance + 0.1) / (access + 1)
+            scores.append((forget_score, i))
+        
+        # Eliminar las 1000 más olvidables
+        scores.sort(reverse=True)
+        to_remove = [idx for _, idx in scores[:1000]]
+        
+        self.memories = [m for i, m in enumerate(self.memories) if i not in to_remove]
+        self.vectors = [v for i, v in enumerate(self.vectors) if i not in to_remove]
+    
+    def _save(self):
+        """Guardar memorias a disco"""
+        if self.memory_path:
+            os.makedirs(os.path.dirname(self.memory_path), exist_ok=True)
+            data = {
+                'memories': self.memories,
+                'vectors': [v.tolist() for v in self.vectors]
+            }
+            with open(self.memory_path, 'w') as f:
+                json.dump(data, f)
+    
+    def _load(self):
+        """Cargar memorias desde disco"""
+        if self.memory_path and os.path.exists(self.memory_path):
+            try:
+                with open(self.memory_path, 'r') as f:
+                    data = json.load(f)
+                self.memories = data.get('memories', [])
+                self.vectors = [np.array(v) for v in data.get('vectors', [])]
+                print(f"🧠 {len(self.memories)} memorias cargadas")
+            except Exception as e:
+                print(f"⚠️ Error cargando memorias: {e}")
+
+
+"""
 Sistema de aprendizaje continuo
 """
 import torch
 import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
-from datetime import datetime
 
 class ConversationDataset(Dataset):
     def __init__(self, conversations, tokenizer, max_len=512):
@@ -35,6 +169,7 @@ class ContinualLearner:
         
     def add_experience(self, user_input, model_output, feedback_score=1.0):
         """Añadir nueva experiencia"""
+        from datetime import datetime
         self.conversations.append({
             'input': user_input,
             'output': model_output,
