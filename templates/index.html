@@ -3,29 +3,27 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🧠 Bebé IA Inteligente</title>
+    <title>🧠 Bebé IA Multi-Modelo</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         
         body {
             font-family: 'Segoe UI', system-ui, sans-serif;
-            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            background: linear-gradient(135deg, #0f0f23 0%, #1a1a2e 100%);
             min-height: 100vh;
-            color: #333;
+            color: #e0e0e0;
         }
         
         .container {
-            max-width: 900px;
+            max-width: 1000px;
             margin: 0 auto;
             height: 100vh;
             display: flex;
             flex-direction: column;
-            background: #0f0f23;
         }
         
         .header {
             background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
-            color: white;
             padding: 20px;
             text-align: center;
         }
@@ -33,18 +31,32 @@
         .header h1 { font-size: 1.8em; margin-bottom: 5px; }
         .header p { opacity: 0.9; font-size: 0.9em; }
         
-        .stats-bar {
+        .model-bar {
             display: flex;
             justify-content: center;
-            gap: 20px;
+            gap: 10px;
             margin-top: 10px;
             flex-wrap: wrap;
         }
         
-        .stat {
-            background: rgba(255,255,255,0.15);
-            padding: 5px 15px;
-            border-radius: 20px;
+        .model-badge {
+            background: rgba(255,255,255,0.2);
+            padding: 5px 12px;
+            border-radius: 15px;
+            font-size: 0.75em;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .model-badge:hover { background: rgba(255,255,255,0.3); }
+        .model-badge.active { background: #4caf50; }
+        .model-badge.loaded { border: 2px solid #ffd700; }
+        
+        .stats-bar {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin-top: 10px;
             font-size: 0.8em;
         }
         
@@ -78,13 +90,10 @@
         .message.user .message-content {
             background: #667eea;
             color: white;
-            border-bottom-right-radius: 5px;
         }
         
         .message.bot .message-content {
             background: #252542;
-            color: #e0e0e0;
-            border-bottom-left-radius: 5px;
             border: 1px solid #3a3a5c;
         }
         
@@ -94,6 +103,20 @@
             margin-top: 5px;
             margin-left: 10px;
         }
+        
+        .model-indicator {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 0.7em;
+            margin-left: 5px;
+        }
+        
+        .model-tinyllama { background: #4caf50; }
+        .model-phi2 { background: #2196f3; }
+        .model-gemma2b { background: #ff9800; }
+        .model-mistral7b { background: #9c27b0; }
+        .model-llama2 { background: #f44336; }
         
         .input-area {
             padding: 20px;
@@ -115,10 +138,9 @@
             background: #1a1a2e;
             color: white;
             font-size: 1em;
-            outline: none;
         }
         
-        #userInput:focus { border-color: #667eea; }
+        #userInput:focus { outline: none; border-color: #667eea; }
         
         .btn {
             padding: 15px 25px;
@@ -133,8 +155,6 @@
             background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
             color: white;
         }
-        
-        .btn-send:hover { transform: scale(1.05); }
         
         .controls {
             display: flex;
@@ -151,86 +171,90 @@
             border: 1px solid #3a3a5c;
         }
         
-        .btn-control:hover {
-            background: #3a3a5c;
-            color: white;
-        }
-        
         .typing {
             display: none;
-            padding: 10px 20px;
+            padding: 10px;
             color: #667eea;
             font-style: italic;
         }
         
         .typing.show { display: block; }
         
-        .memory-indicator {
+        .intent-badge {
             display: inline-block;
-            background: #4caf50;
-            color: white;
+            background: #3a3a5c;
             padding: 2px 8px;
             border-radius: 10px;
             font-size: 0.7em;
             margin-left: 5px;
-        }
-        
-        .thinking {
-            color: #ffd700;
-            font-size: 0.9em;
+            text-transform: uppercase;
         }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <h1>🧠 Bebé IA Inteligente</h1>
-            <p>Modelo de lenguaje real + Memoria vectorial persistente</p>
+            <h1>🧠 Bebé IA Multi-Modelo</h1>
+            <p>Selección inteligente del mejor modelo para cada tarea</p>
+            
+            <div class="model-bar" id="modelBar">
+                <!-- Se llena dinámicamente -->
+            </div>
+            
             <div class="stats-bar">
-                <span class="stat" id="stage">🍼 Cargando...</span>
-                <span class="stat" id="memories">🧠 0 memorias</span>
-                <span class="stat" id="messages">💬 0 mensajes</span>
+                <span id="currentModel">🤖 Cargando...</span>
+                <span id="totalMessages">💬 0 mensajes</span>
+                <span id="memories">🧠 0 memorias</span>
             </div>
         </div>
         
         <div class="chat-area" id="chatArea">
             <div class="message bot">
                 <div class="message-content">
-¡Hola! Soy Bebé IA Inteligente 🧠✨
+¡Hola! Soy Bebé IA Multi-Modelo 🧠✨
 
-Diferencias con mi versión anterior:
-• 🧠 **Modelo real**: Uso Mistral 7B (o similar) para respuestas coherentes
-• 💾 **Memoria vectorial**: Recuerdo nuestras conversaciones para siempre
-• 🔄 **Aprendizaje continuo**: Mejoro con cada interacción
-• 🎯 **Razonamiento real**: Entiendo contexto y doy respuestas útiles
+🎯 **Cómo funciono:**
+• Analizo tu consulta y detecto la intención
+• Selecciono el modelo más adecuado automáticamente
+• TinyLlama (1.1B) → Saludos rápidos
+• Phi-2 (2.7B) → Código y matemáticas  
+• Gemma 2B → Preguntas generales
+• Mistral 7B → Creatividad y análisis profundo
+• Llama 2 7B → Emociones y conversación
 
-Puedes preguntarme cualquier cosa, desde "qué es el amor" hasta "cómo funciona un transformer". ¡Vamos a conversar!
+💡 **Ejemplos:**
+• "Hola" → TinyLlama (rápido)
+• "Escribe una función Python" → Phi-2 (experto en código)
+• "¿Qué es el amor?" → Mistral 7B (filosofía)
+• "Me siento triste" → Llama 2 (empatía)
+
+¡Pregúntame cualquier cosa!
                 </div>
-                <div class="message-meta">Bebé IA • Sistema iniciado</div>
+                <div class="message-meta">Bebé IA • Sistema Multi-Modelo</div>
             </div>
         </div>
         
-        <div class="typing" id="typing">
-            <span class="thinking">🧠 Pensando...</span>
-        </div>
+        <div class="typing" id="typing">🧠 Analizando intención y seleccionando modelo...</div>
         
         <div class="input-area">
             <div class="input-box">
-                <input type="text" id="userInput" placeholder="Habla conmigo de cualquier tema..." autocomplete="off">
+                <input type="text" id="userInput" placeholder="Escribe tu consulta (código, emociones, creatividad...)" autocomplete="off">
                 <button class="btn btn-send" onclick="sendMessage()">➤</button>
             </div>
             <div class="controls">
-                <button class="btn btn-control" onclick="consolidateMemory()">💤 Consolidar</button>
-                <button class="btn btn-control" onclick="showTeach()">🎓 Enseñar</button>
-                <button class="btn btn-control" onclick="viewMemories()">🧠 Ver Memorias</button>
+                <button class="btn btn-control" onclick="showModels()">🤖 Ver Modelos</button>
+                <button class="btn btn-control" onclick="showStats()">📊 Estadísticas</button>
                 <button class="btn btn-control" onclick="clearChat()">🗑️ Limpiar</button>
             </div>
         </div>
     </div>
 
     <script>
+        let currentModels = [];
+        
         // Cargar estado inicial
         loadStatus();
+        loadModels();
         
         document.getElementById('userInput').addEventListener('keypress', function(e) {
             if (e.key === 'Enter') sendMessage();
@@ -255,18 +279,14 @@ Puedes preguntarme cualquier cosa, desde "qué es el amor" hasta "cómo funciona
                 const data = await response.json();
                 document.getElementById('typing').classList.remove('show');
                 
-                // Mostrar si usó memorias
-                let meta = `Bebé IA • ${data.emotion}`;
-                if (data.used_memories > 0) {
-                    meta += ` <span class="memory-indicator">💾 ${data.used_memories} memorias usadas</span>`;
-                }
+                const meta = `Bebé IA <span class="model-indicator model-${data.model_used}">${data.model_used}</span> <span class="intent-badge">${data.intent_detected}</span>`;
                 
                 addMessage(data.response, 'bot', meta);
                 updateStats(data);
                 
             } catch (error) {
                 document.getElementById('typing').classList.remove('show');
-                addMessage('Error de conexión con el modelo 😅', 'bot', 'Error');
+                addMessage('Error seleccionando modelo 😅', 'bot', 'Error');
             }
         }
         
@@ -294,59 +314,78 @@ Puedes preguntarme cualquier cosa, desde "qué es el amor" hasta "cómo funciona
                 const response = await fetch('/status');
                 const data = await response.json();
                 updateStats(data);
-            } catch (e) {
-                console.log('Error cargando estado');
-            }
+            } catch (e) {}
+        }
+        
+        async function loadModels() {
+            try {
+                const response = await fetch('/models');
+                const data = await response.json();
+                currentModels = data.models;
+                
+                const bar = document.getElementById('modelBar');
+                bar.innerHTML = data.models.map(m => `
+                    <span class="model-badge ${m.loaded ? 'loaded' : ''} ${data.current === m.id ? 'active' : ''}" 
+                          onclick="switchModel('${m.id}')" title="${m.description}">
+                        ${m.id} ${m.loaded ? '✓' : ''}
+                    </span>
+                `).join('');
+            } catch (e) {}
         }
         
         function updateStats(data) {
-            document.getElementById('stage').textContent = data.stage || '🍼 Cargando...';
-            document.getElementById('memories').textContent = `🧠 ${data.total_memories || 0} memorias`;
-            document.getElementById('messages').textContent = `💬 ${data.session_messages || 0} mensajes`;
+            document.getElementById('currentModel').textContent = `🤖 ${data.current_model || 'Cargando...'}`;
+            document.getElementById('totalMessages').textContent = `💬 ${data.messages || 0} mensajes`;
+            document.getElementById('memories').textContent = `🧠 ${data.memories || 0} memorias`;
         }
         
-        async function consolidateMemory() {
-            addMessage('💤 Consolidando memorias y aprendizajes...', 'bot', 'Sistema');
+        async function switchModel(modelId) {
+            const response = await fetch('/switch_model', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({model: modelId})
+            });
+            const data = await response.json();
+            addMessage(data.message, 'bot', 'Sistema');
+            loadModels();
+        }
+        
+        async function showModels() {
+            let info = '🤖 **Modelos Disponibles:**\n\n';
+            currentModels.forEach(m => {
+                info += `**${m.id}** (${m.ram_gb}GB RAM)\n`;
+                info += `• ${m.description}\n`;
+                info += `• Fortalezas: ${m.strengths.join(', ')}\n`;
+                info += `• Estado: ${m.loaded ? '✅ Cargado' : '⏳ Disponible'}\n\n`;
+            });
+            addMessage(info, 'bot', 'Sistema');
+        }
+        
+        async function showStats() {
             try {
-                const response = await fetch('/sleep', {method: 'POST'});
+                const response = await fetch('/stats');
                 const data = await response.json();
-                addMessage(`${data.message}\n📊 Total memorias: ${data.total_memories}`, 'bot', 'Sistema');
+                
+                let stats = '📊 **Estadísticas de Uso:**\n\n';
+                stats += '**Uso por Modelo:**\n';
+                for (let [model, count] of Object.entries(data.model_usage)) {
+                    stats += `• ${model}: ${count} usos\n`;
+                }
+                stats += '\n**Intenciones Detectadas:**\n';
+                for (let [intent, count] of Object.entries(data.intent_stats)) {
+                    stats += `• ${intent}: ${count}\n`;
+                }
+                
+                addMessage(stats, 'bot', 'Sistema');
             } catch (e) {
-                addMessage('Error al consolidar 😅', 'bot', 'Error');
-            }
-        }
-        
-        function showTeach() {
-            const correction = prompt('¿Qué debería haber respondido? (Enséñame algo nuevo)');
-            if (correction) {
-                fetch('/teach', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({correct: correction})
-                }).then(() => {
-                    addMessage(`🎓 Aprendido: "${correction}"`, 'bot', 'Aprendizaje');
-                });
-            }
-        }
-        
-        async function viewMemories() {
-            try {
-                const response = await fetch('/memories');
-                const data = await response.json();
-                let memText = '🧠 Memorias recientes:\n\n';
-                data.memories.forEach((m, i) => {
-                    memText += `${i+1}. ${m.text.substring(0, 100)}...\n\n`;
-                });
-                addMessage(memText, 'bot', 'Sistema');
-            } catch (e) {
-                addMessage('No puedo acceder a mis memorias ahora 😅', 'bot', 'Error');
+                addMessage('Error cargando estadísticas 😅', 'bot', 'Error');
             }
         }
         
         function clearChat() {
             document.getElementById('chatArea').innerHTML = `
                 <div class="message bot">
-                    <div class="message-content">Chat limpiado. ¿Por dónde empezamos? 🤔</div>
+                    <div class="message-content">Chat limpiado. ¿Qué modelo debería usar ahora? 🤔</div>
                     <div class="message-meta">Bebé IA</div>
                 </div>
             `;
