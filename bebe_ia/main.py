@@ -12,8 +12,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from bebe_ia.core.config import Config
 from bebe_ia.core.tokenizer import SimpleTokenizer
 from bebe_ia.core.model import BebeTransformer
-from bebe_ia.core.memory import ContinualLearner as MemorySystem
-from bebe_ia.core.learner import ContinualLearner
+from bebe_ia.core.memory import MemorySystem, ContinualLearner
 from bebe_ia.core.personality import BebePersonality
 
 class BebeIA:
@@ -25,7 +24,7 @@ class BebeIA:
         
         self.tokenizer = SimpleTokenizer(self.config.VOCAB_SIZE)
         self.model = None
-        self.memory = MemorySystem(self.config.EMBED_DIM, self.config.MEMORY_PATH)
+        self.memory = None  # Se inicializa después
         self.personality = BebePersonality()
         self.learner = None
         
@@ -57,6 +56,13 @@ class BebeIA:
             d_ff=self.config.HIDDEN_DIM,
             max_len=self.config.MAX_SEQ_LEN
         ).to(self.device)
+        
+        # Inicializar memoria AHORA que tenemos el modelo
+        self.memory = MemorySystem(
+            embed_dim=self.config.EMBED_DIM,
+            memory_path=self.config.MEMORY_PATH,
+            device=self.device
+        )
         
         if os.path.exists(self.config.MODEL_PATH):
             print("🧠 Cargando cerebro previo...")
@@ -182,7 +188,7 @@ Bebé:"""
             'emocion': self.personality.express_emotion(),
             'curiosidad': f"{self.personality.traits['curiosidad']:.2f}",
             'confianza': f"{self.personality.traits['confianza']:.2f}",
-            'memorias': len(self.memory.memories)
+            'memorias': len(self.memory.memories) if self.memory else 0
         }
 
 def main():
