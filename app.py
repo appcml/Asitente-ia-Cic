@@ -492,4 +492,124 @@ Fuentes principales: Wikipedia, arXiv, PyTorch docs, TensorFlow docs"""
             return f"""Interesante... 🤔 
 
 Mientras pienso en eso, ¿sabías que tengo información sobre:
-• Machine Learning y
+• Machine Learning y Deep Learning
+• Redes neuronales (CNN, RNN, Transformers)
+• Frameworks (PyTorch, TensorFlow, HuggingFace)
+• NLP y Computer Vision
+• Técnicas de entrenamiento
+
+Di "**qué es [tema]**" y te explico con información actualizada!"""
+
+    def teach(self, correct_info):
+        """Agregar conocimiento manualmente"""
+        # Crear artículo artificial con la corrección
+        article = {
+            'id': len(self.collector.knowledge_base['articles']) + 1,
+            'source': 'user_teaching',
+            'category': 'manual',
+            'content': correct_info,
+            'extracted_at': datetime.now().isoformat(),
+            'concepts': self.collector._extract_concepts(correct_info)
+        }
+        
+        self.collector.knowledge_base['articles'].append(article)
+        for concept in article['concepts']:
+            self.collector.knowledge_base['concepts'][concept].append(article['id'])
+        
+        self.collector._save_knowledge()
+        
+        return f"¡Gracias! Aprendí: '{correct_info[:100]}...' 🎓 Agregado a mi base de conocimiento."
+    
+    def _save_conversation(self, user_msg, bot_msg, intent):
+        self.conversations.append({
+            'user': user_msg,
+            'bot': bot_msg,
+            'intent': intent,
+            'timestamp': datetime.now().isoformat()
+        })
+        with open(self.memory_file, 'w') as f:
+            json.dump(self.conversations[-200:], f)
+    
+    def _load_json(self, path, default):
+        if os.path.exists(path):
+            try:
+                with open(path, 'r') as f:
+                    return json.load(f)
+            except:
+                pass
+        return default
+    
+    def _detect_emotion(self, intent):
+        emotions = {
+            'conocimiento': 'sabio 📚',
+            'presentación': 'amigable 😊',
+            'estado': 'técnico 🔧',
+            'actualización': 'trabajando 🕷️',
+            'conversación': 'curioso 🤔'
+        }
+        return emotions.get(intent, 'neutral')
+    
+    def _get_stage(self):
+        articles = len(self.collector.knowledge_base['articles'])
+        if articles < 20:
+            return 'lector principiante 📖'
+        elif articles < 50:
+            return 'estudiante autónomo 🎓'
+        elif articles < 100:
+            return 'investigador 🔬'
+        else:
+            return 'experto autosuficiente 🧠'
+
+# ============ INICIALIZACIÓN ============
+print("🚀 Iniciando Bebé IA Autónoma...")
+bebe = BebeIAAutonoma()
+
+# ============ RUTAS ============
+@app.route('/')
+def index():
+    return render_template('index.html')
+
+@app.route('/chat', methods=['POST'])
+def chat():
+    data = request.json
+    result = bebe.chat(data.get('message', ''))
+    return jsonify(result)
+
+@app.route('/teach', methods=['POST'])
+def teach():
+    data = request.json
+    result = bebe.teach(data.get('correct', ''))
+    return jsonify({'status': 'ok', 'message': result})
+
+@app.route('/sleep', methods=['POST'])
+def sleep():
+    bebe.collector._save_knowledge()
+    return jsonify({
+        'status': 'ok',
+        'message': f'💤 Guardé {len(bebe.collector.knowledge_base["articles"])} artículos y {len(bebe.conversations)} conversaciones'
+    })
+
+@app.route('/status', methods=['GET'])
+def status():
+    return jsonify({
+        'stage': bebe._get_stage(),
+        'articles': len(bebe.collector.knowledge_base['articles']),
+        'concepts': len(bebe.collector.knowledge_base['concepts']),
+        'conversations': len(bebe.conversations),
+        'last_update': bebe.collector.knowledge_base.get('last_update', 'Nunca')
+    })
+
+@app.route('/knowledge', methods=['GET'])
+def knowledge():
+    """Ver base de conocimiento completa"""
+    kb = bebe.collector.knowledge_base
+    return jsonify({
+        'total_articles': len(kb['articles']),
+        'concepts': list(kb['concepts'].keys())[:20],
+        'recent_articles': kb['articles'][-5:] if kb['articles'] else [],
+        'stats': kb.get('stats', {})
+    })
+
+if __name__ == '__main__':
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port)
