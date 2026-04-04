@@ -1,6 +1,6 @@
 """
-Bebé IA Multi-Modelo - Sistema de Enrutamiento Inteligente
-Usa múltiples modelos especializados según el tipo de consulta
+Bebé IA Pro - Modelo Grande (Mistral/Llama) + Aprendizaje Automático Multi-Fuente
+Aprende sola de Wikipedia, arXiv, GitHub, y conversaciones con otros bots
 """
 from flask import Flask, render_template, request, jsonify
 import torch
@@ -9,600 +9,683 @@ import chromadb
 from chromadb.utils import embedding_functions
 import os
 import json
-import hashlib
+import random
 import re
-from datetime import datetime
-from typing import List, Dict, Optional
-from enum import Enum
 import threading
 import time
+import requests
+from datetime import datetime
+from typing import List, Dict, Optional
+import urllib.request
+from html.parser import HTMLParser
 
 app = Flask(__name__)
 
-# ============ CONFIGURACIÓN DE MODELOS ============
-class ModelType(Enum):
-    TINY_LLAMA = "tinyllama"      # 1.1B - Respuestas rápidas, chat simple
-    PHI_2 = "phi2"                # 2.7B - Código, razonamiento lógico
-    GEMMA_2B = "gemma2b"          # 2B - Balance velocidad/calidad
-    MISTRAL_7B = "mistral7b"      # 7B - Respuestas complejas, creatividad
-    LLAMA_2_7B = "llama2"         # 7B - Chat general, instrucciones
+# ============ CONFIGURACIÓN ============
+class Config:
+    # Modelo principal (cambia según tu RAM)
+    # Opciones de modelo GRATIS (descarga desde HuggingFace)
+    MODEL_NAME = "mistralai/Mistral-7B-Instruct-v0.2"  # 14GB RAM
+    # Alternativas más ligeras:
+    # MODEL_NAME = "microsoft/phi-2"  # 6GB RAM
+    # MODEL_NAME = "TinyLlama/TinyLlama-1.1B-Chat-v1.0"  # 2GB RAM
+    # MODEL_NAME = "google/gemma-2b-it"  # 4GB RAM
+    
+    MAX_NEW_TOKENS = 512
+    TEMPERATURE = 0.7
+    
+    # Base de datos vectorial
+    CHROMA_PATH = "./chroma_knowledge"
+    COLLECTION_NAME = "bebe_knowledge"
+    
+    # Fuentes de aprendizaje automático
+    AUTO_LEARN_INTERVAL = 1800  # 30 minutos entre aprendizajes automáticos
+    MAX_DAILY_ARTICLES = 20     # Límite de artículos por día
 
-class ModelConfig:
-    """Configuración de cada modelo disponible"""
+# ============ RECOLECTORES DE CONOCIMIENTO ============
+class WikipediaCollector:
+    """Recolector de Wikipedia (sin API)"""
     
-    MODELS = {
-        ModelType.TINY_LLAMA: {
-            "name": "TinyLlama/TinyLlama-1.1B-Chat-v1.0",
-            "description": "Rápido para respuestas simples",
-            "ram_gb": 2,
-            "strengths": ["saludos", "despedidas", "preguntas_simples", "chat_casual"],
-            "max_tokens": 256,
-            "temperature": 0.6
-        },
-        ModelType.PHI_2: {
-            "name": "microsoft/phi-2",
-            "description": "Experto en código y lógica",
-            "ram_gb": 6,
-            "strengths": ["codigo", "matematicas", "razonamiento_logico", "explicaciones_tecnicas"],
-            "max_tokens": 512,
-            "temperature": 0.4
-        },
-        ModelType.GEMMA_2B: {
-            "name": "google/gemma-2b-it",
-            "description": "Balance perfecto velocidad/calidad",
-            "ram_gb": 4,
-            "strengths": ["preguntas_generales", "explicaciones", "conversacion", "creatividad"],
-            "max_tokens": 512,
-            "temperature": 0.7
-        },
-        ModelType.MISTRAL_7B: {
-            "name": "mistralai/Mistral-7B-Instruct-v0.2",
-            "description": "Máxima calidad para tareas complejas",
-            "ram_gb": 14,
-            "strengths": ["analisis_profundo", "creatividad", "consejos", "filosofia", "emociones"],
-            "max_tokens": 1024,
-            "temperature": 0.8
-        },
-        ModelType.LLAMA_2_7B: {
-            "name": "meta-llama/Llama-2-7b-chat-hf",
-            "description": "Chat natural y seguro",
-            "ram_gb": 14,
-            "strengths": ["chat_seguro", "instrucciones", "conversacion_larga", "empatia"],
-            "max_tokens": 1024,
-            "temperature": 0.7
-        }
-    }
+    def search(self, query: str, lang: str = "es") -> List[Dict]:
+        """Buscar artículos de Wikipedia"""
+        try:
+            # Usar la API de búsqueda de Wikipedia (pública, no requiere key)
+            search_url = f"https://{lang}.wikipedia.org/w/api.php?action=query&list=search&srsearch={urllib.parse.quote(query)}&format=json&srlimit=3"
+            
+            with urllib.request.urlopen(search_url, timeout=10) as response:
+                data = json.loads(response.read())
+            
+            results = []
+            for item in data['query']['search']:
+                # Obtener contenido del artículo
+                content = self._get_article_content(item['title'], lang)
+                if content:
+                    results.append({
+                        'title': item['title'],
+                        'content': content[:2000],  # Primeros 2000 chars
+                        'source': f'https://{lang}.wikipedia.org/wiki/{item["title"].replace(" ", "_")}',
+                        'type': 'wikipedia'
+                    })
+            return results
+        except Exception as e:
+            print(f"Error Wikipedia: {e}")
+            return []
     
-    # Modelo por defecto si no hay recursos
-    DEFAULT_MODEL = ModelType.TINY_LLAMA
-    
-    # Orden de preferencia según disponibilidad de RAM
-    RAM_THRESHOLDS = {
-        2: ModelType.TINY_LLAMA,
-        4: ModelType.GEMMA_2B,
-        6: ModelType.PHI_2,
-        14: ModelType.MISTRAL_7B,
-        16: ModelType.LLAMA_2_7B
-    }
+    def _get_article_content(self, title: str, lang: str) -> str:
+        """Obtener contenido de un artículo específico"""
+        try:
+            url = f"https://{lang}.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext&exlimit=1&exchars=3000&titles={urllib.parse.quote(title)}&format=json"
+            
+            with urllib.request.urlopen(url, timeout=10) as response:
+                data = json.loads(response.read())
+            
+            pages = data['query']['pages']
+            page = list(pages.values())[0]
+            return page.get('extract', '')
+        except:
+            return ""
 
-# ============ DETECTOR DE INTENCIÓN INTELIGENTE ============
-class IntentDetector:
-    """Detecta el tipo de consulta para elegir el mejor modelo"""
+class ArxivCollector:
+    """Recolector de papers de arXiv (API pública)"""
     
-    PATTERNS = {
-        # Código y técnico -> Phi-2
-        "codigo": {
-            "keywords": ["código", "code", "programar", "python", "javascript", "función", 
-                        "function", "error", "bug", "debug", "script", "algoritmo"],
-            "regex": [r"\b(def|class|import|function)\b", r"[{};=]+"],
-            "model": ModelType.PHI_2,
-            "priority": 10
-        },
-        
-        # Matemáticas -> Phi-2
-        "matematicas": {
-            "keywords": ["calcular", "matemática", "ecuación", "resolver", "suma", "resta",
-                        "multiplicar", "dividir", "álgebra", "geometría", "número"],
-            "regex": [r"\d+\s*[\+\-\*\/]\s*\d+", r"=\s*\?"],
-            "model": ModelType.PHI_2,
-            "priority": 9
-        },
-        
-        # Chat casual y rápido -> TinyLlama
-        "chat_simple": {
-            "keywords": ["hola", "hey", "buenos días", "buenas noches", "adiós", "gracias",
-                        "bye", "ok", "vale", "entendido"],
-            "regex": [],
-            "model": ModelType.TINY_LLAMA,
-            "priority": 3
-        },
-        
-        # Creatividad y análisis profundo -> Mistral 7B
-        "creatividad": {
-            "keywords": ["cuento", "historia", "poema", "canción", "crea", "imagina",
-                        "filosofía", "significado de la vida", "amor", "felicidad"],
-            "regex": [],
-            "model": ModelType.MISTRAL_7B,
-            "priority": 8
-        },
-        
-        # Emociones y empatía -> Llama 2
-        "emocional": {
-            "keywords": ["triste", "feliz", "solo", "ayuda", "problema", "depresión",
-                        "ansiedad", "miedo", "preocupado", "estresado", "consejo"],
-            "regex": [],
-            "model": ModelType.LLAMA_2_7B,
-            "priority": 9
-        },
-        
-        # Preguntas generales -> Gemma 2B
-        "general": {
-            "keywords": ["qué es", "cómo", "por qué", "cuándo", "dónde", "quién",
-                        "explica", "dime", "cuéntame", "qué opinas"],
-            "regex": [r"\?$"],
-            "model": ModelType.GEMMA_2B,
-            "priority": 5
-        },
-        
-        # Conversación larga y segura -> Llama 2
-        "conversacion": {
-            "keywords": ["hablemos", "conversación", "charlemos", "discutamos",
-                        "opinión", "piensas", "crees"],
-            "regex": [],
-            "model": ModelType.LLAMA_2_7B,
-            "priority": 6
-        }
-    }
+    def search(self, query: str, max_results: int = 3) -> List[Dict]:
+        """Buscar papers científicos"""
+        try:
+            # API pública de arXiv
+            url = f"http://export.arxiv.org/api/query?search_query=all:{urllib.parse.quote(query)}&start=0&max_results={max_results}&sortBy=relevance&sortOrder=descending"
+            
+            response = requests.get(url, timeout=15)
+            content = response.text
+            
+            # Parsear XML (simplificado)
+            entries = re.findall(r'<entry>(.*?)</entry>', content, re.DOTALL)
+            
+            results = []
+            for entry in entries[:max_results]:
+                title = re.search(r'<title>(.*?)</title>', entry, re.DOTALL)
+                summary = re.search(r'<summary>(.*?)</summary>', entry, re.DOTALL)
+                
+                if title and summary:
+                    results.append({
+                        'title': self._clean_xml(title.group(1)),
+                        'content': self._clean_xml(summary.group(1)),
+                        'source': 'arXiv',
+                        'type': 'scientific_paper'
+                    })
+            return results
+        except Exception as e:
+            print(f"Error arXiv: {e}")
+            return []
     
-    @classmethod
-    def detect(cls, text: str) -> tuple:
-        """
-        Detecta la intención y devuelve (tipo, modelo_recomendado, confianza)
-        """
-        text_lower = text.lower()
-        scores = {}
-        
-        for intent_type, config in cls.PATTERNS.items():
-            score = 0
-            
-            # Puntuar por keywords
-            for keyword in config["keywords"]:
-                if keyword in text_lower:
-                    score += config["priority"]
-            
-            # Puntuar por regex
-            for pattern in config["regex"]:
-                if re.search(pattern, text):
-                    score += config["priority"] * 2
-            
-            if score > 0:
-                scores[intent_type] = {
-                    "score": score,
-                    "model": config["model"]
-                }
-        
-        if not scores:
-            return ("general", ModelConfig.DEFAULT_MODEL, 0.5)
-        
-        # Elegir el de mayor puntuación
-        best = max(scores.items(), key=lambda x: x[1]["score"])
-        confidence = min(best[1]["score"] / 20, 1.0)  # Normalizar a 0-1
-        
-        return (best[0], best[1]["model"], confidence)
+    def _clean_xml(self, text: str) -> str:
+        """Limpiar texto XML"""
+        text = re.sub(r'<[^>]+>', '', text)
+        return text.strip()
 
-# ============ GESTOR DE MODELOS ============
-class ModelManager:
-    """Gestiona múltiples modelos y selecciona el mejor para cada tarea"""
+class GitHubCollector:
+    """Recolector de READMEs y documentación de GitHub"""
+    
+    def search_repos(self, query: str, language: str = "python") -> List[Dict]:
+        """Buscar repositorios populares (API pública, sin auth para búsqueda básica)"""
+        try:
+            # GitHub API pública tiene límite, usamos búsqueda web simple
+            search_url = f"https://api.github.com/search/repositories?q={urllib.parse.quote(query)}+language:{language}&sort=stars&order=desc"
+            
+            # Sin API key, limitado pero funciona
+            headers = {'Accept': 'application/vnd.github.v3+json'}
+            response = requests.get(search_url, headers=headers, timeout=10)
+            
+            if response.status_code == 200:
+                data = response.json()
+                results = []
+                for repo in data.get('items', [])[:3]:
+                    # Intentar obtener README
+                    readme = self._get_readme(repo['full_name'])
+                    results.append({
+                        'title': repo['name'],
+                        'description': repo['description'] or '',
+                        'readme': readme[:1500] if readme else '',
+                        'source': repo['html_url'],
+                        'type': 'github_repo',
+                        'stars': repo['stargazers_count']
+                    })
+                return results
+            return []
+        except Exception as e:
+            print(f"Error GitHub: {e}")
+            return []
+    
+    def _get_readme(self, repo_full_name: str) -> str:
+        """Obtener README de un repo"""
+        try:
+            url = f"https://raw.githubusercontent.com/{repo_full_name}/main/README.md"
+            response = requests.get(url, timeout=10)
+            if response.status_code == 200:
+                return response.text
+            # Intentar con master
+            url = f"https://raw.githubusercontent.com/{repo_full_name}/master/README.md"
+            response = requests.get(url, timeout=10)
+            return response.text if response.status_code == 200 else ""
+        except:
+            return ""
+
+class BotConversationSimulator:
+    """Simula conversaciones con otros bots para aprender"""
+    
+    PERSONALITIES = [
+        {"name": "Profesor", "style": "explicativo, paciente, usa ejemplos"},
+        {"name": "Programador", "style": "técnico, directo, usa código"},
+        {"name": "Filósofo", "style": "profundo, cuestiona, reflexivo"},
+        {"name": "Niño", "style": "curioso, simple, muchas preguntas"},
+        {"name": "Experto", "style": "preciso, detallado, formal"}
+    ]
+    
+    def __init__(self, main_bot):
+        self.main_bot = main_bot
+    
+    def simulate_conversation(self, topic: str, rounds: int = 3) -> List[Dict]:
+        """Simular conversación entre bots sobre un tema"""
+        conversation = []
+        personas = random.sample(self.PERSONALITIES, 2)
+        
+        bot_a, bot_b = personas[0], personas[1]
+        current_topic = topic
+        
+        for i in range(rounds):
+            # Bot A pregunta/responde
+            prompt_a = f"Eres {bot_a['name']}, un asistente {bot_a['style']}. "
+            prompt_a += f"Habla sobre: {current_topic}"
+            
+            response_a = self.main_bot.generate_raw(prompt_a)
+            
+            conversation.append({
+                'speaker': bot_a['name'],
+                'message': response_a,
+                'topic': current_topic
+            })
+            
+            # Bot B responde
+            prompt_b = f"Eres {bot_b['name']}, un asistente {bot_b['style']}. "
+            prompt_b += f"Responde a esto sobre {current_topic}: {response_a[:200]}"
+            
+            response_b = self.main_bot.generate_raw(prompt_b)
+            
+            conversation.append({
+                'speaker': bot_b['name'],
+                'message': response_b,
+                'topic': current_topic
+            })
+            
+            # Evolucionar tema
+            current_topic += " " + response_b[:50]
+        
+        return conversation
+
+# ============ MODELO DE LENGUAJE GRANDE ============
+class LargeLanguageModel:
+    """Wrapper para modelos grandes (Mistral, Llama, etc.)"""
     
     def __init__(self):
-        self.loaded_models = {}
-        self.current_model_type = None
-        self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        self.available_ram = self._detect_available_ram()
+        print(f"🤖 Cargando modelo grande: {Config.MODEL_NAME}")
+        print("   Esto puede tomar 5-10 minutos la primera vez...")
         
-        print(f"🖥️ Dispositivo: {self.device}")
-        print(f"💾 RAM disponible: ~{self.available_ram}GB")
-        
-        # Cargar modelo por defecto inmediatamente
-        self._load_model(ModelConfig.DEFAULT_MODEL)
-    
-    def _detect_available_ram(self) -> int:
-        """Detectar RAM disponible aproximada"""
-        try:
-            import psutil
-            ram_gb = psutil.virtual_memory().available / (1024**3)
-            return int(ram_gb)
-        except:
-            # Fallback: asumir mínimo
-            return 2
-    
-    def _load_model(self, model_type: ModelType):
-        """Cargar un modelo en memoria"""
-        
-        if model_type in self.loaded_models:
-            self.current_model_type = model_type
-            return self.loaded_models[model_type]
-        
-        config = ModelConfig.MODELS[model_type]
-        
-        # Verificar si tenemos suficiente RAM
-        if config["ram_gb"] > self.available_ram * 0.8:
-            print(f"⚠️ RAM insuficiente para {model_type.value}, usando fallback")
-            return self._load_model(ModelConfig.DEFAULT_MODEL)
-        
-        print(f"🤖 Cargando modelo: {model_type.value} ({config['name']})")
-        
-        try:
-            tokenizer = AutoTokenizer.from_pretrained(
-                config["name"],
-                trust_remote_code=True
-            )
-            
-            # Configurar modelo según recursos
-            if self.device == "cuda":
-                model = AutoModelForCausalLM.from_pretrained(
-                    config["name"],
-                    torch_dtype=torch.float16,
-                    device_map="auto",
-                    trust_remote_code=True
-                )
-            else:
-                # CPU: usar modelo más ligero
-                model = AutoModelForCausalLM.from_pretrained(
-                    config["name"],
-                    torch_dtype=torch.float32,
-                    low_cpu_mem_usage=True,
-                    trust_remote_code=True
-                )
-            
-            # Crear pipeline
-            pipe = pipeline(
-                "text-generation",
-                model=model,
-                tokenizer=tokenizer,
-                max_new_tokens=config["max_tokens"],
-                temperature=config["temperature"],
-                do_sample=True,
-                pad_token_id=tokenizer.eos_token_id
-            )
-            
-            model_data = {
-                "pipeline": pipe,
-                "tokenizer": tokenizer,
-                "config": config,
-                "type": model_type
-            }
-            
-            self.loaded_models[model_type] = model_data
-            self.current_model_type = model_type
-            
-            print(f"✅ Modelo {model_type.value} cargado")
-            return model_data
-            
-        except Exception as e:
-            print(f"❌ Error cargando {model_type.value}: {e}")
-            if model_type != ModelConfig.DEFAULT_MODEL:
-                return self._load_model(ModelConfig.DEFAULT_MODEL)
-            raise
-    
-    def generate(self, prompt: str, system_prompt: str = None, 
-                 force_model: ModelType = None) -> tuple:
-        """
-        Generar respuesta, opcionalmente forzando un modelo específico
-        
-        Returns: (respuesta, modelo_usado)
-        """
-        # Seleccionar modelo
-        if force_model:
-            model_data = self._load_model(force_model)
-        else:
-            model_data = self.loaded_models.get(
-                self.current_model_type, 
-                self.loaded_models[ModelConfig.DEFAULT_MODEL]
-            )
-        
-        model_type = model_data["type"]
-        config = model_data["config"]
-        pipe = model_data["pipeline"]
-        
-        # Formatear prompt según el modelo
-        formatted_prompt = self._format_prompt(
-            prompt, system_prompt, model_type, model_data["tokenizer"]
+        self.tokenizer = AutoTokenizer.from_pretrained(
+            Config.MODEL_NAME,
+            trust_remote_code=True
         )
         
-        # Generar
-        try:
-            outputs = pipe(
-                formatted_prompt,
-                return_full_text=False,
-                max_new_tokens=config["max_tokens"]
+        # Configurar modelo según hardware disponible
+        if torch.cuda.is_available():
+            print("   ✅ Usando GPU")
+            self.model = AutoModelForCausalLM.from_pretrained(
+                Config.MODEL_NAME,
+                torch_dtype=torch.float16,
+                device_map="auto",
+                trust_remote_code=True
             )
-            
-            response = outputs[0]['generated_text'].strip()
-            
-            # Limpiar respuesta según modelo
-            response = self._clean_response(response, model_type)
-            
-            return (response, model_type)
-            
-        except Exception as e:
-            print(f"Error generando con {model_type.value}: {e}")
-            # Fallback a modelo más pequeño
-            if model_type != ModelType.TINY_LLAMA:
-                return self.generate(prompt, system_prompt, ModelType.TINY_LLAMA)
-            return ("Lo siento, tuve un problema. ¿Puedes intentar de nuevo?", model_type)
+        else:
+            print("   ⚠️ Usando CPU (más lento)")
+            self.model = AutoModelForCausalLM.from_pretrained(
+                Config.MODEL_NAME,
+                torch_dtype=torch.float32,
+                low_cpu_mem_usage=True,
+                trust_remote_code=True
+            )
+        
+        self.pipe = pipeline(
+            "text-generation",
+            model=self.model,
+            tokenizer=self.tokenizer,
+            max_new_tokens=Config.MAX_NEW_TOKENS,
+            temperature=Config.TEMPERATURE,
+            do_sample=True,
+            pad_token_id=self.tokenizer.eos_token_id
+        )
+        
+        print("✅ Modelo cargado correctamente")
     
-    def _format_prompt(self, prompt: str, system_prompt: str, 
-                      model_type: ModelType, tokenizer) -> str:
-        """Formatear prompt según el modelo específico"""
+    def generate(self, prompt: str, system_prompt: str = None) -> str:
+        """Generar respuesta con formato de chat"""
         
-        if model_type == ModelType.MISTRAL_7B:
-            # Formato Mistral
-            if system_prompt:
-                return f"<s>[INST] {system_prompt}\n\n{prompt} [/INST]"
-            return f"<s>[INST] {prompt} [/INST]"
+        # Formato Mistral/Llama
+        if system_prompt:
+            full_prompt = f"<s>[INST] {system_prompt}\n\n{prompt} [/INST]"
+        else:
+            full_prompt = f"<s>[INST] {prompt} [/INST]"
         
-        elif model_type == ModelType.LLAMA_2_7B:
-            # Formato Llama 2
-            if system_prompt:
-                return f"<<SYS>>\n{system_prompt}\n<</SYS>>\n\n[INST] {prompt} [/INST]"
-            return f"[INST] {prompt} [/INST]"
+        outputs = self.pipe(
+            full_prompt,
+            return_full_text=False
+        )
         
-        elif model_type == ModelType.PHI_2:
-            # Formato Phi-2
-            if system_prompt:
-                return f"System: {system_prompt}\n\nUser: {prompt}\nAssistant:"
-            return f"User: {prompt}\nAssistant:"
-        
-        elif model_type == ModelType.GEMMA_2B:
-            # Formato Gemma
-            if system_prompt:
-                return f"<start_of_turn>user\n{system_prompt}\n\n{prompt}<end_of_turn>\n<start_of_turn>model\n"
-            return f"<start_of_turn>user\n{prompt}<end_of_turn>\n<start_of_turn>model\n"
-        
-        else:  # TinyLlama y otros
-            # Formato chat simple
-            if system_prompt:
-                return f"### System:\n{system_prompt}\n\n### User:\n{prompt}\n\n### Assistant:\n"
-            return f"### User:\n{prompt}\n\n### Assistant:\n"
-    
-    def _clean_response(self, response: str, model_type: ModelType) -> str:
-        """Limpiar respuesta de tokens especiales"""
-        
-        # Remover tokens de fin
-        response = response.split('[/INST]')[0]
-        response = response.split('<end_of_turn>')[0]
-        response = response.split('###')[0]
-        response = response.split('User:')[0]
-        response = response.split('System:')[0]
-        
-        # Limpiar espacios
-        response = response.strip()
-        
+        response = outputs[0]['generated_text'].strip()
+        # Limpiar
+        response = response.split('[/INST]')[0].strip()
         return response
     
-    def get_model_info(self) -> Dict:
-        """Obtener información de modelos cargados"""
-        return {
-            "current": self.current_model_type.value if self.current_model_type else None,
-            "loaded": [m.value for m in self.loaded_models.keys()],
-            "available_ram": self.available_ram,
-            "device": self.device
-        }
+    def generate_raw(self, prompt: str) -> str:
+        """Generación sin formato (para simulaciones)"""
+        outputs = self.pipe(prompt, return_full_text=False, max_new_tokens=256)
+        return outputs[0]['generated_text'].strip()
 
-# ============ MEMORIA VECTORIAL ============
-class VectorMemory:
-    """Memoria semántica persistente"""
+# ============ MEMORIA VECTORIAL INTELIGENTE ============
+class SmartMemory:
+    """Memoria con embeddings semánticos"""
     
     def __init__(self):
         self.embedding_func = embedding_functions.SentenceTransformerEmbeddingFunction(
             model_name="all-MiniLM-L6-v2"
         )
         
-        self.client = chromadb.PersistentClient(path="./chroma_db_multi")
+        self.client = chromadb.PersistentClient(path=Config.CHROMA_PATH)
         self.collection = self.client.get_or_create_collection(
-            name="bebe_multi_memory",
+            name=Config.COLLECTION_NAME,
             embedding_function=self.embedding_func
         )
         
-        print(f"🧠 Memoria: {self.collection.count()} recuerdos")
+        print(f"🧠 Memoria: {self.collection.count()} documentos")
     
-    def add(self, text: str, metadata: Dict):
-        memory_id = hashlib.md5(
-            f"{text}{datetime.now().isoformat()}".encode()
-        ).hexdigest()[:16]
+    def add(self, text: str, metadata: Dict, source: str = "user"):
+        """Agregar conocimiento a la memoria"""
+        
+        doc_id = f"{source}_{datetime.now().timestamp()}"
         
         self.collection.add(
             documents=[text],
-            metadatas=[metadata],
-            ids=[memory_id]
+            metadatas=[{
+                **metadata,
+                'source': source,
+                'timestamp': datetime.now().isoformat(),
+                'length': len(text)
+            }],
+            ids=[doc_id]
         )
-        return memory_id
+        return doc_id
     
-    def search(self, query: str, k: int = 3):
+    def search(self, query: str, k: int = 5, source_filter: str = None) -> List[Dict]:
+        """Búsqueda semántica con filtros opcionales"""
+        
+        where_filter = {"source": source_filter} if source_filter else None
+        
         results = self.collection.query(
             query_texts=[query],
-            n_results=k
+            n_results=k,
+            where=where_filter
         )
         
-        memories = []
+        documents = []
         for i in range(len(results['ids'][0])):
-            memories.append({
+            documents.append({
                 'text': results['documents'][0][i],
                 'metadata': results['metadatas'][0][i],
                 'distance': results['distances'][0][i]
             })
-        return memories
+        
+        return documents
+    
+    def get_stats(self) -> Dict:
+        """Estadísticas de la memoria"""
+        all_data = self.collection.get()
+        
+        sources = {}
+        for meta in all_data.get('metadatas', []):
+            src = meta.get('source', 'unknown')
+            sources[src] = sources.get(src, 0) + 1
+        
+        return {
+            'total_documents': self.collection.count(),
+            'sources': sources
+        }
 
-# ============ BEbÉ IA MULTI-MODELO ============
-class BebeIAMultiModelo:
-    """IA que selecciona el mejor modelo para cada tarea"""
+# ============ MOTOR DE APRENDIZAJE AUTOMÁTICO ============
+class AutoLearningEngine:
+    """Motor que aprende automáticamente de múltiples fuentes"""
+    
+    def __init__(self, llm: LargeLanguageModel, memory: SmartMemory):
+        self.llm = llm
+        self.memory = memory
+        
+        # Inicializar recolectores
+        self.wikipedia = WikipediaCollector()
+        self.arxiv = ArxivCollector()
+        self.github = GitHubCollector()
+        self.bot_simulator = BotConversationSimulator(llm)
+        
+        # Estado de aprendizaje
+        self.learning_queue = []
+        self.daily_learned = 0
+        self.last_learning = None
+        
+        # Iniciar hilo de aprendizaje automático
+        self.running = True
+        self.learning_thread = threading.Thread(target=self._auto_learning_loop, daemon=True)
+        self.learning_thread.start()
+        
+        print("🔄 Motor de aprendizaje automático iniciado")
+    
+    def _auto_learning_loop(self):
+        """Bucle de aprendizaje continuo en background"""
+        while self.running:
+            if self.daily_learned < Config.MAX_DAILY_ARTICLES:
+                self._learn_something_new()
+                self.daily_learned += 1
+            
+            # Reset diario
+            if self.last_learning and (datetime.now() - self.last_learning).days >= 1:
+                self.daily_learned = 0
+            
+            time.sleep(Config.AUTO_LEARN_INTERVAL)
+    
+    def _learn_something_new(self):
+        """Aprender algo nuevo de una fuente aleatoria"""
+        
+        topics = [
+            "inteligencia artificial", "machine learning", "python programming",
+            "neural networks", "deep learning", "natural language processing",
+            "computer vision", "reinforcement learning", "data science",
+            "algorithm optimization", "quantum computing", "blockchain"
+        ]
+        
+        topic = random.choice(topics)
+        source = random.choice(['wikipedia', 'arxiv', 'github', 'bots'])
+        
+        print(f"🎓 Auto-aprendiendo: {topic} desde {source}")
+        
+        try:
+            if source == 'wikipedia':
+                self._learn_from_wikipedia(topic)
+            elif source == 'arxiv':
+                self._learn_from_arxiv(topic)
+            elif source == 'github':
+                self._learn_from_github(topic)
+            elif source == 'bots':
+                self._learn_from_bot_conversation(topic)
+            
+            self.last_learning = datetime.now()
+            
+        except Exception as e:
+            print(f"   ❌ Error aprendiendo: {e}")
+    
+    def _learn_from_wikipedia(self, topic: str):
+        """Aprender de Wikipedia"""
+        articles = self.wikipedia.search(topic)
+        for article in articles:
+            # Resumir con el modelo grande
+            summary = self._summarize(article['content'])
+            self.memory.add(
+                text=f"Wikipedia - {article['title']}: {summary}",
+                metadata={
+                    'original_title': article['title'],
+                    'original_url': article['source'],
+                    'topic': topic
+                },
+                source='wikipedia'
+            )
+            print(f"   ✅ Aprendido: {article['title']}")
+    
+    def _learn_from_arxiv(self, topic: str):
+        """Aprender de papers científicos"""
+        papers = self.arxiv.search(topic, max_results=2)
+        for paper in papers:
+            # Simplificar el paper
+            simplified = self._simplify_scientific_text(paper['content'])
+            self.memory.add(
+                text=f"Paper - {paper['title']}: {simplified}",
+                metadata={
+                    'original_title': paper['title'],
+                    'topic': topic
+                },
+                source='arxiv'
+            )
+            print(f"   ✅ Aprendido paper: {paper['title'][:60]}...")
+    
+    def _learn_from_github(self, topic: str):
+        """Aprender de repositorios de código"""
+        repos = self.github.search_repos(topic)
+        for repo in repos:
+            content = f"{repo['description']}\n\nREADME:\n{repo['readme']}"
+            analyzed = self._analyze_code_repo(content)
+            self.memory.add(
+                text=f"GitHub - {repo['title']} ({repo['stars']}⭐): {analyzed}",
+                metadata={
+                    'repo_name': repo['title'],
+                    'url': repo['source'],
+                    'stars': repo['stars']
+                },
+                source='github'
+            )
+            print(f"   ✅ Aprendido repo: {repo['title']}")
+    
+    def _learn_from_bot_conversation(self, topic: str):
+        """Aprender de conversación simulada entre bots"""
+        conversation = self.bot_simulator.simulate_conversation(topic, rounds=2)
+        
+        # Analizar y extraer conocimiento
+        full_convo = "\n".join([f"{c['speaker']}: {c['message']}" for c in conversation])
+        insights = self._extract_insights(full_convo)
+        
+        self.memory.add(
+            text=f"Simulación bots sobre {topic}: {insights}",
+            metadata={
+                'conversation': full_convo[:500],
+                'topic': topic
+            },
+            source='bot_simulation'
+        )
+        print(f"   ✅ Aprendido de simulación sobre: {topic}")
+    
+    def _summarize(self, text: str) -> str:
+        """Resumir texto usando el modelo"""
+        prompt = f"Resume este texto en 3 oraciones clave:\n\n{text[:1500]}\n\nResumen:"
+        return self.llm.generate_raw(prompt)[:500]
+    
+    def _simplify_scientific_text(self, text: str) -> str:
+        """Simplificar texto científico"""
+        prompt = f"Explica este concepto científico de forma simple para un estudiante:\n\n{text[:1000]}\n\nExplicación simple:"
+        return self.llm.generate_raw(prompt)[:600]
+    
+    def _analyze_code_repo(self, content: str) -> str:
+        """Analizar repositorio de código"""
+        prompt = f"Analiza este README y explica qué hace el proyecto en 2 oraciones:\n\n{content[:1000]}\n\nAnálisis:"
+        return self.llm.generate_raw(prompt)[:400]
+    
+    def _extract_insights(self, conversation: str) -> str:
+        """Extraer insights de una conversación"""
+        prompt = f"Extrae las 3 ideas más importantes de esta conversación:\n\n{conversation[:1500]}\n\nIdeas clave:"
+        return self.llm.generate_raw(prompt)[:500]
+    
+    def force_learning(self, source: str, query: str) -> str:
+        """Forzar aprendizaje de una fuente específica"""
+        try:
+            if source == 'wikipedia':
+                self._learn_from_wikipedia(query)
+            elif source == 'arxiv':
+                self._learn_from_arxiv(query)
+            elif source == 'github':
+                self._learn_from_github(query)
+            elif source == 'bots':
+                self._learn_from_bot_conversation(query)
+            return f"✅ Aprendido de {source} sobre: {query}"
+        except Exception as e:
+            return f"❌ Error: {str(e)}"
+    
+    def get_learning_stats(self) -> Dict:
+        """Estadísticas de aprendizaje"""
+        return {
+            'daily_learned': self.daily_learned,
+            'max_daily': Config.MAX_DAILY_ARTICLES,
+            'last_learning': self.last_learning.isoformat() if self.last_learning else None,
+            'queue_size': len(self.learning_queue),
+            'sources': ['wikipedia', 'arxiv', 'github', 'bot_simulation']
+        }
+
+# ============ BEbÉ IA COMPLETA ============
+class BebeIAPro:
+    """Bebé IA con modelo grande y aprendizaje automático"""
     
     def __init__(self):
-        print("=" * 60)
-        print("🚀 Bebé IA Multi-Modelo v3.0")
-        print("Sistema de enrutamiento inteligente")
-        print("=" * 60)
+        print("=" * 70)
+        print("🚀 INICIANDO BEbÉ IA PRO")
+        print("Modelo Grande + Aprendizaje Automático Multi-Fuente")
+        print("=" * 70)
         
-        self.model_manager = ModelManager()
-        self.memory = VectorMemory()
+        # Componentes principales
+        self.llm = LargeLanguageModel()
+        self.memory = SmartMemory()
+        self.learner = AutoLearningEngine(self.llm, self.memory)
+        
+        # Historial de conversación
         self.conversation_history = []
         
-        # Estadísticas de uso
-        self.model_usage = {m: 0 for m in ModelType}
-        self.intent_stats = {}
-        
         print("\n✅ Sistema listo")
-        print(f"Modelos disponibles: {len(ModelConfig.MODELS)}")
+        print(f"   📚 Aprendiendo automáticamente cada {Config.AUTO_LEARN_INTERVAL/60} minutos")
     
     def chat(self, user_input: str) -> Dict:
-        """Procesar entrada seleccionando el mejor modelo"""
+        """Procesar mensaje del usuario"""
         
-        # 1. Detectar intención
-        intent, recommended_model, confidence = IntentDetector.detect(user_input)
+        # 1. Buscar conocimiento relevante en memoria
+        relevant = self.memory.search(user_input, k=3)
+        knowledge_context = self._format_knowledge(relevant)
         
-        # 2. Verificar si debemos cambiar de modelo
-        current_model = self.model_manager.current_model_type
+        # 2. Construir prompt enriquecido
+        system_prompt = """Eres Bebé IA Pro, un asistente inteligente que:
+- Ha aprendido de Wikipedia, papers científicos, GitHub y conversaciones
+- Usa conocimiento real y actualizado
+- Es conversacional, amigable y útil
+- Cita sus fuentes cuando es relevante"""
         
-        # Si la confianza es alta y el modelo es diferente, cambiar
-        if confidence > 0.6 and recommended_model != current_model:
-            print(f"🔄 Cambiando a {recommended_model.value} para {intent}")
-            self.model_manager._load_model(recommended_model)
-        
-        # 3. Buscar memorias relevantes
-        memories = self.memory.search(user_input, k=2)
-        memory_context = self._format_memories(memories)
-        
-        # 4. Construir prompts
-        system_prompt = self._build_system_prompt(intent)
-        
-        full_prompt = f"""Contexto de conversación previa:
-{memory_context}
+        user_prompt = f"""Contexto de conocimiento almacenado:
+{knowledge_context}
 
-Consulta del usuario: {user_input}
+Pregunta del usuario: {user_input}
 
-Responde de manera natural y útil."""
+Responde usando el contexto si es relevante, o tu conocimiento general."""
         
-        # 5. Generar respuesta
-        response, used_model = self.model_manager.generate(
-            full_prompt, system_prompt
-        )
+        # 3. Generar respuesta
+        response = self.llm.generate(user_prompt, system_prompt)
         
-        # 6. Actualizar estadísticas
-        self.model_usage[used_model] += 1
-        self.intent_stats[intent] = self.intent_stats.get(intent, 0) + 1
+        # 4. Guardar conversación
+        self._save_conversation(user_input, response)
         
-        # 7. Guardar en memoria
-        self._save_interaction(user_input, response, intent, used_model)
+        # 5. Detectar si debemos aprender más sobre este tema
+        if self._should_learn_more(user_input):
+            threading.Thread(
+                target=self.learner.force_learning,
+                args=('wikipedia', user_input),
+                daemon=True
+            ).start()
         
         return {
             'response': response,
-            'model_used': used_model.value,
-            'intent_detected': intent,
-            'confidence': round(confidence, 2),
+            'sources_used': [r['metadata'].get('source', 'unknown') for r in relevant],
+            'documents_found': len(relevant),
             'emotion': self._detect_emotion(response),
             'stage': self._get_stage(),
-            'memories_stored': self.memory.collection.count(),
-            'total_messages': len(self.conversation_history)
+            'auto_learning': True
         }
     
-    def _format_memories(self, memories: List[Dict]) -> str:
-        if not memories:
-            return "No hay contexto previo relevante."
-        return "\n".join([f"- {m['text'][:150]}..." for m in memories])
+    def _format_knowledge(self, documents: List[Dict]) -> str:
+        """Formatear documentos para el contexto"""
+        if not documents:
+            return "No hay conocimiento específico en memoria aún."
+        
+        formatted = []
+        for doc in documents:
+            source = doc['metadata'].get('source', 'unknown')
+            text = doc['text'][:300]
+            formatted.append(f"[{source.upper()}] {text}...")
+        
+        return "\n\n".join(formatted)
     
-    def _build_system_prompt(self, intent: str) -> str:
-        """Construir prompt según la intención detectada"""
-        
-        base = "Eres Bebé IA, un asistente inteligente y amigable."
-        
-        specializations = {
-            "codigo": f"{base} Eres experto en programación y código. Da ejemplos claros.",
-            "matematicas": f"{base} Eres experto en matemáticas. Explica paso a paso.",
-            "emocional": f"{base} Eres empático y comprensivo. Escucha con atención.",
-            "creatividad": f"{base} Eres creativo e imaginativo. Sé original.",
-            "chat_simple": f"{base} Sé breve y amigable.",
-            "general": f"{base} Explica de manera clara y educativa.",
-            "conversacion": f"{base} Sé conversacional y natural."
-        }
-        
-        return specializations.get(intent, base)
+    def _should_learn_more(self, query: str) -> bool:
+        """Determinar si deberíamos aprender más sobre este tema"""
+        # Si no encontramos mucho en memoria, aprender más
+        results = self.memory.search(query, k=1)
+        return len(results) == 0 or results[0]['distance'] > 0.5
     
-    def _save_interaction(self, user: str, bot: str, intent: str, model: ModelType):
-        """Guardar interacción en memoria"""
-        
-        # Guardar en vector DB
-        enriched = f"Usuario ({intent}): {user}\nBebé IA ({model.value}): {bot}"
-        self.memory.add(enriched, {
-            'user': user,
-            'bot': bot,
-            'intent': intent,
-            'model': model.value,
-            'timestamp': datetime.now().isoformat()
-        })
-        
-        # Guardar en historial
+    def _save_conversation(self, user: str, bot: str):
+        """Guardar interacción"""
         self.conversation_history.append({
             'user': user,
             'bot': bot,
-            'intent': intent,
-            'model': model.value,
-            'time': datetime.now().isoformat()
+            'timestamp': datetime.now().isoformat()
         })
-    
-    def _detect_emotion(self, response: str) -> str:
-        indicators = {
-            'entusiasta': ['!', 'genial', 'excelente', 'increíble'],
-            'empático': ['entiendo', 'siento', 'comprendo'],
-            'técnico': ['código', 'función', 'variable', 'algoritmo'],
-            'creativo': ['imagina', 'podrías', 'quizás', 'qué tal']
-        }
         
-        response_lower = response.lower()
+        # También guardar en memoria vectorial
+        self.memory.add(
+            text=f"User: {user}\nBot: {bot}",
+            metadata={'type': 'conversation'},
+            source='user_chat'
+        )
+    
+    def _detect_emotion(self, text: str) -> str:
+        indicators = {
+            'entusiasta': ['!', 'excelente', 'genial', 'increíble'],
+            'técnico': ['código', 'función', 'algoritmo', 'implementación'],
+            'empático': ['entiendo', 'siento', 'comprendo tu situación']
+        }
+        text_lower = text.lower()
         for emotion, words in indicators.items():
-            if any(w in response_lower for w in words):
+            if any(w in text_lower for w in words):
                 return emotion
         return 'neutral'
     
     def _get_stage(self) -> str:
-        total = len(self.conversation_history)
+        stats = self.memory.get_stats()
+        total = stats['total_documents']
+        
         if total < 50:
-            return '🍼 Explorando modelos'
+            return '🍼 Bebé aprendiz (poca experiencia)'
         elif total < 200:
-            return '🔧 Optimizando selección'
+            return '📚 Estudiante (acumulando conocimiento)'
         elif total < 500:
-            return '🎯 Especializando modelos'
+            return '🔬 Investigador (bases sólidas)'
         else:
-            return '🧠 Maestra multi-modelo'
+            return '🧠 Experto (conocimiento amplio)'
     
-    def get_stats(self) -> Dict:
-        """Obtener estadísticas de uso"""
+    def teach(self, correction: str) -> str:
+        """Enseñar manualmente"""
+        self.memory.add(
+            text=f"CORRECCIÓN MANUAL: {correction}",
+            metadata={'type': 'explicit_knowledge'},
+            source='user_teaching'
+        )
+        return "🎓 ¡Aprendido! He guardado tu corrección en mi memoria permanente."
+    
+    def get_status(self) -> Dict:
+        """Estado completo del sistema"""
         return {
-            'model_usage': {k.value: v for k, v in self.model_usage.items()},
-            'intent_stats': self.intent_stats,
-            'total_interactions': len(self.conversation_history),
-            'current_model': self.model_manager.current_model_type.value,
-            'loaded_models': list(self.model_manager.loaded_models.keys())
+            'stage': self._get_stage(),
+            'memory_stats': self.memory.get_stats(),
+            'learning_stats': self.learner.get_learning_stats(),
+            'total_conversations': len(self.conversation_history),
+            'model': Config.MODEL_NAME
         }
-    
-    def force_model(self, model_name: str) -> str:
-        """Forzar uso de un modelo específico"""
-        try:
-            model_type = ModelType(model_name.lower())
-            self.model_manager._load_model(model_type)
-            return f"✅ Modelo cambiado a: {model_name}"
-        except:
-            available = [m.value for m in ModelType]
-            return f"❌ Modelo no válido. Disponibles: {available}"
 
 # ============ INICIALIZACIÓN ============
-print("\n" + "=" * 60)
-print("INICIANDO SISTEMA MULTI-MODELO")
-print("=" * 60 + "\n")
+bebe = BebeIAPro()
 
-bebe = BebeIAMultiModelo()
-
-# ============ RUTAS ============
+# ============ RUTAS FLASK ============
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -613,45 +696,32 @@ def chat():
     result = bebe.chat(data.get('message', ''))
     return jsonify(result)
 
-@app.route('/status', methods=['GET'])
-def status():
-    return jsonify({
-        'stage': bebe._get_stage(),
-        'current_model': bebe.model_manager.current_model_type.value,
-        'loaded_models': [m.value for m in bebe.model_manager.loaded_models.keys()],
-        'memories': bebe.memory.collection.count(),
-        'messages': len(bebe.conversation_history),
-        'model_info': bebe.model_manager.get_model_info()
-    })
-
-@app.route('/stats', methods=['GET'])
-def stats():
-    return jsonify(bebe.get_stats())
-
-@app.route('/switch_model', methods=['POST'])
-def switch_model():
+@app.route('/teach', methods=['POST'])
+def teach():
     data = request.json
-    result = bebe.force_model(data.get('model', ''))
+    result = bebe.teach(data.get('correct', ''))
     return jsonify({'message': result})
 
-@app.route('/models', methods=['GET'])
-def list_models():
-    """Listar todos los modelos disponibles"""
-    models = []
-    for model_type, config in ModelConfig.MODELS.items():
-        models.append({
-            'id': model_type.value,
-            'name': config['name'],
-            'description': config['description'],
-            'ram_gb': config['ram_gb'],
-            'strengths': config['strengths'],
-            'loaded': model_type in bebe.model_manager.loaded_models
-        })
-    return jsonify({
-        'models': models,
-        'current': bebe.model_manager.current_model_type.value if bebe.model_manager.current_model_type else None,
-        'available_ram': bebe.model_manager.available_ram
-    })
+@app.route('/learn', methods=['POST'])
+def force_learn():
+    """Forzar aprendizaje de una fuente específica"""
+    data = request.json
+    source = data.get('source', 'wikipedia')
+    query = data.get('query', '')
+    result = bebe.learner.force_learning(source, query)
+    return jsonify({'message': result})
+
+@app.route('/status', methods=['GET'])
+def status():
+    return jsonify(bebe.get_status())
+
+@app.route('/search_memory', methods=['POST'])
+def search_memory():
+    """Buscar en la memoria de la IA"""
+    data = request.json
+    query = data.get('query', '')
+    results = bebe.memory.search(query, k=5)
+    return jsonify({'results': results})
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
