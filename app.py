@@ -1,570 +1,497 @@
 """
-Bebé IA Autónoma - Web Scraping y Base de Conocimiento Propia
-Sin APIs, sin registros, información en tiempo real de fuentes públicas
+Bebé IA Pro - Modelo de Lenguaje Real + Memoria Vectorial Persistente
+Usa Mistral 7B (open source) + ChromaDB para memoria de largo plazo
 """
 from flask import Flask, render_template, request, jsonify
 import torch
-import torch.nn as nn
+from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline
+import chromadb
+from chromadb.utils import embedding_functions
 import os
 import json
-import random
-import re
+import hashlib
+from datetime import datetime
+from typing import List, Dict
 import threading
 import time
-from datetime import datetime
-from collections import defaultdict
-import urllib.request
-import urllib.parse
-from html.parser import HTMLParser
 
 app = Flask(__name__)
 
 # ============ CONFIGURACIÓN ============
 class Config:
-    KNOWLEDGE_DB = 'knowledge_base.json'
-    MEMORY_FILE = 'bebe_memory.json'
-    LEARNING_FILE = 'bebe_learning.json'
-    SCRAPE_INTERVAL = 3600  # Scrapear cada 1 hora (3600 segundos)
-    MAX_ARTICLES = 100  # Máximo artículos en base de conocimiento
-
-# ============ WEB SCRAPER ============
-class SimpleScraper(HTMLParser):
-    """Scraper simple para extraer texto de páginas web"""
-    def __init__(self):
-        super().__init__()
-        self.text = []
-        self.in_script = False
-        self.in_style = False
-        
-    def handle_starttag(self, tag, attrs):
-        if tag in ['script', 'style']:
-            setattr(self, f'in_{tag}', True)
-            
-    def handle_endtag(self, tag):
-        if tag in ['script', 'style']:
-            setattr(self, f'in_{tag}', False)
-            
-    def handle_data(self, data):
-        if not self.in_script and not self.in_style:
-            clean = data.strip()
-            if len(clean) > 20:  # Solo texto sustancial
-                self.text.append(clean)
+    # Modelo a usar (cambia según necesites)
+    MODEL_NAME = "mistralai/Mistral-7B-Instruct-v0.2"  # ~14GB RAM
+    # Alternativas más ligeras:
+    # MODEL_NAME = "microsoft/phi-2"  # ~6GB RAM
+    # MODEL_NAME = "TinyLlama/TinyLlama-1.1B-Chat-v1.0"  # ~2GB RAM
+    # MODEL_NAME = "google/gemma-2b-it"  # ~4GB RAM
     
-    def get_text(self):
-        return ' '.join(self.text)
-
-class KnowledgeCollector:
-    """Recolector automático de conocimiento sobre IA/ML"""
+    MAX_NEW_TOKENS = 512
+    TEMPERATURE = 0.7
+    TOP_P = 0.95
     
-    # Fuentes públicas de información sobre IA (sin API key)
-    SOURCES = {
-        'papers': [
-            'https://arxiv.org/list/cs.AI/recent',
-            'https://arxiv.org/list/cs.LG/recent',
-            'https://arxiv.org/list/cs.CL/recent',
-        ],
-        'courses': [
-            'https://www.coursera.org/browse/data-science/machine-learning',  # Página pública
-            'https://www.fast.ai/',  # Recursos gratuitos
-        ],
-        'docs': [
-            'https://pytorch.org/tutorials/',
-            'https://www.tensorflow.org/tutorials',
-            'https://huggingface.co/docs',
-        ],
-        'wikis': [
-            'https://en.wikipedia.org/wiki/Machine_learning',
-            'https://en.wikipedia.org/wiki/Artificial_intelligence',
-            'https://en.wikipedia.org/wiki/Deep_learning',
-            'https://en.wikipedia.org/wiki/Neural_network',
-            'https://en.wikipedia.org/wiki/Natural_language_processing',
-            'https://es.wikipedia.org/wiki/Aprendizaje_autom%C3%A1tico',
-            'https://es.wikipedia.org/wiki/Inteligencia_artificial',
-        ]
-    }
+    # Base de datos vectorial
+    CHROMA_PATH = "./chroma_db"
+    COLLECTION_NAME = "bebe_memory"
+    
+    # Memoria de corto plazo (sesión actual)
+    SESSION_MEMORY_FILE = "session_memory.json"
+    MAX_CONTEXT_LENGTH = 4096
+
+# ============ MODELO DE LENGUAJE ============
+class LanguageModel:
+    """Wrapper para el modelo de lenguaje pre-entrenado"""
     
     def __init__(self):
-        self.knowledge_base = self._load_knowledge()
-        self.scraper = SimpleScraper()
-        self.running = False
+        print(f"🤖 Cargando modelo: {Config.MODEL_NAME}")
+        print("   Esto puede tomar varios minutos la primera vez...")
         
-    def _load_knowledge(self):
-        """Cargar base de conocimiento"""
-        if os.path.exists(Config.KNOWLEDGE_DB):
-            try:
-                with open(Config.KNOWLEDGE_DB, 'r', encoding='utf-8') as f:
-                    return json.load(f)
-            except:
-                pass
-        return {
-            'articles': [],
-            'concepts': defaultdict(list),
-            'last_update': None,
-            'stats': {'total_scraped': 0, 'sources_used': []}
-        }
+        self.tokenizer = AutoTokenizer.from_pretrained(
+            Config.MODEL_NAME,
+            trust_remote_code=True
+        )
+        
+        # Configurar para generación
+        self.model = AutoModelForCausalLM.from_pretrained(
+            Config.MODEL_NAME,
+            torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
+            device_map="auto" if torch.cuda.is_available() else "cpu",
+            trust_remote_code=True
+        )
+        
+        self.pipe = pipeline(
+            "text-generation",
+            model=self.model,
+            tokenizer=self.tokenizer,
+            max_new_tokens=Config.MAX_NEW_TOKENS,
+            temperature=Config.TEMPERATURE,
+            top_p=Config.TOP_P,
+            do_sample=True
+        )
+        
+        print("✅ Modelo cargado correctamente")
     
-    def _save_knowledge(self):
-        """Guardar base de conocimiento"""
-        # Convertir defaultdict a dict normal para JSON
-        kb_copy = self.knowledge_base.copy()
-        kb_copy['concepts'] = dict(kb_copy['concepts'])
+    def generate(self, prompt: str, system_prompt: str = None) -> str:
+        """Generar respuesta con el modelo"""
         
-        with open(Config.KNOWLEDGE_DB, 'w', encoding='utf-8') as f:
-            json.dump(kb_copy, f, ensure_ascii=False, indent=2)
-    
-    def fetch_page(self, url, timeout=10):
-        """Obtener contenido de una página"""
-        try:
-            headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-            }
-            req = urllib.request.Request(url, headers=headers)
-            with urllib.request.urlopen(req, timeout=timeout) as response:
-                return response.read().decode('utf-8', errors='ignore')
-        except Exception as e:
-            print(f"Error fetching {url}: {e}")
-            return None
-    
-    def extract_knowledge(self, html, source, category):
-        """Extraer conocimiento útil del HTML"""
-        self.scraper = SimpleScraper()  # Resetear
-        self.scraper.feed(html)
-        text = self.scraper.get_text()
-        
-        # Limpiar texto
-        text = re.sub(r'\s+', ' ', text)
-        text = text[:5000]  # Limitar tamaño
-        
-        # Extraer párrafos relevantes (que contengan palabras clave de IA)
-        keywords = ['machine learning', 'deep learning', 'neural network', 
-                   'artificial intelligence', 'training', 'model', 'algorithm',
-                   'aprendizaje', 'inteligencia artificial', 'red neuronal',
-                   'entrenamiento', 'dataset', 'tensor', 'optimization']
-        
-        paragraphs = []
-        for para in text.split('. '):
-            para_lower = para.lower()
-            if any(k in para_lower for k in keywords) and len(para) > 50:
-                paragraphs.append(para.strip())
-        
-        if paragraphs:
-            article = {
-                'id': len(self.knowledge_base['articles']) + 1,
-                'source': source,
-                'category': category,
-                'content': ' '.join(paragraphs[:5]),  # Top 5 párrafos
-                'extracted_at': datetime.now().isoformat(),
-                'concepts': self._extract_concepts(' '.join(paragraphs))
-            }
-            
-            self.knowledge_base['articles'].append(article)
-            self.knowledge_base['stats']['total_scraped'] += 1
-            
-            # Indexar por conceptos
-            for concept in article['concepts']:
-                self.knowledge_base['concepts'][concept].append(article['id'])
-            
-            return True
-        return False
-    
-    def _extract_concepts(self, text):
-        """Extraer conceptos clave del texto"""
-        concepts = []
-        concept_patterns = [
-            (r'\b(machine learning|deep learning|reinforcement learning)\b', 'ML'),
-            (r'\b(neural network|cnn|rnn|transformer|lstm|gru)\b', 'Redes'),
-            (r'\b(training|fine-tuning|pre-training|epoch|batch)\b', 'Entrenamiento'),
-            (r'\b(tensor|gradient|backpropagation|optimizer|loss)\b', 'Matemáticas'),
-            (r'\b(nlp|computer vision|speech recognition)\b', 'Aplicaciones'),
-            (r'\b(pytorch|tensorflow|keras|jax|huggingface)\b', 'Frameworks'),
-            (r'\b(dataset|overfitting|underfitting|regularization)\b', 'Datos'),
-        ]
-        
-        text_lower = text.lower()
-        for pattern, category in concept_patterns:
-            matches = re.findall(pattern, text_lower)
-            concepts.extend([f"{category}:{m}" for m in matches])
-        
-        return list(set(concepts))
-    
-    def collect_all(self):
-        """Recolectar conocimiento de todas las fuentes"""
-        print("🕷️ Iniciando recolección de conocimiento...")
-        
-        for category, urls in self.SOURCES.items():
-            for url in urls:
-                print(f"  Scraping: {url}")
-                html = self.fetch_page(url)
-                if html:
-                    success = self.extract_knowledge(html, url, category)
-                    if success:
-                        print(f"    ✅ Extraído conocimiento de {category}")
-                        if url not in self.knowledge_base['stats']['sources_used']:
-                            self.knowledge_base['stats']['sources_used'].append(url)
-                time.sleep(2)  # Respetar servidores
-        
-        # Limpiar artículos viejos si hay demasiados
-        if len(self.knowledge_base['articles']) > Config.MAX_ARTICLES:
-            self.knowledge_base['articles'] = self.knowledge_base['articles'][-Config.MAX_ARTICLES:]
-        
-        self.knowledge_base['last_update'] = datetime.now().isoformat()
-        self._save_knowledge()
-        print(f"✅ Conocimiento actualizado: {len(self.knowledge_base['articles'])} artículos")
-    
-    def search_knowledge(self, query, k=3):
-        """Buscar en la base de conocimiento"""
-        query_lower = query.lower()
-        scores = []
-        
-        for article in self.knowledge_base['articles']:
-            score = 0
-            content_lower = article['content'].lower()
-            
-            # Palabras de la query en el contenido
-            query_words = set(query_lower.split())
-            content_words = set(content_lower.split())
-            matches = query_words & content_words
-            score += len(matches) * 2
-            
-            # Conceptos relacionados
-            for concept in article['concepts']:
-                if any(q in concept.lower() for q in query_words):
-                    score += 5
-            
-            # Recencia (artículos nuevos tienen más peso)
-            try:
-                article_date = datetime.fromisoformat(article['extracted_at'])
-                days_old = (datetime.now() - article_date).days
-                score += max(0, 10 - days_old)  # Bonus por recencia
-            except:
-                pass
-            
-            if score > 0:
-                scores.append((score, article))
-        
-        # Ordenar y devolver top k
-        scores.sort(reverse=True, key=lambda x: x[0])
-        return [article for _, article in scores[:k]]
-    
-    def get_summary(self, topic):
-        """Obtener resumen sobre un tema"""
-        articles = self.search_knowledge(topic, k=5)
-        if not articles:
-            return None
-        
-        # Combinar información de múltiples fuentes
-        all_content = ' '.join([a['content'] for a in articles])
-        sentences = re.split(r'(?<=[.!?])\s+', all_content)
-        
-        # Seleccionar oraciones más relevantes
-        relevant = []
-        topic_words = set(topic.lower().split())
-        for sent in sentences[:20]:  # Primeras 20 oraciones
-            sent_words = set(sent.lower().split())
-            if len(topic_words & sent_words) > 0 and len(sent) > 30:
-                relevant.append(sent)
-        
-        return {
-            'topic': topic,
-            'summary': ' '.join(relevant[:3]),  # Top 3 oraciones
-            'sources': list(set([a['source'] for a in articles])),
-            'concepts': list(set([c for a in articles for c in a['concepts']]))[:5]
-        }
-    
-    def start_auto_update(self):
-        """Iniciar actualización automática en background"""
-        def auto_scrape():
-            while self.running:
-                self.collect_all()
-                time.sleep(Config.SCRAPE_INTERVAL)
-        
-        self.running = True
-        thread = threading.Thread(target=auto_scrape, daemon=True)
-        thread.start()
-        print("🔄 Auto-actualización iniciada")
-
-# ============ MODELO NEURAL ============
-class NeuralResponder(nn.Module):
-    def __init__(self, vocab_size=2000, embed_dim=128, hidden_dim=256):
-        super().__init__()
-        self.embedding = nn.Embedding(vocab_size, embed_dim)
-        self.lstm = nn.LSTM(embed_dim, hidden_dim, num_layers=2, 
-                           batch_first=True, dropout=0.3, bidirectional=True)
-        self.fc = nn.Linear(hidden_dim * 2, vocab_size)
-        
-    def forward(self, x):
-        x = self.embedding(x)
-        lstm_out, _ = self.lstm(x)
-        return self.fc(lstm_out)
-
-# ============ TOKENIZADOR ============
-class SmartTokenizer:
-    def __init__(self):
-        self.word2idx = {'<pad>': 0, '<unk>': 1, '<sos>': 2, '<eos>': 3}
-        self.idx2word = {v: k for k, v in self.word2idx.items()}
-        
-    def fit(self, texts):
-        words = set()
-        for text in texts:
-            words.update(re.findall(r'\b[a-záéíóúñ]+\b', text.lower()))
-        for word in sorted(words)[:1900]:
-            if word not in self.word2idx:
-                self.word2idx[word] = len(self.word2idx)
-        self.idx2word = {v: k for k, v in self.word2idx.items()}
-        
-    def encode(self, text):
-        tokens = [self.word2idx.get(w, 1) for w in 
-                 re.findall(r'\b[a-záéíóúñ]+\b', text.lower())]
-        return [2] + tokens + [3]
-    
-    def decode(self, tokens):
-        words = [self.idx2word.get(t, '') for t in tokens if t > 3]
-        return ' '.join(words)
-
-# ============ BEbÉ IA AUTÓNOMA ============
-class BebeIAAutonoma:
-    def __init__(self):
-        self.memory_file = Config.MEMORY_FILE
-        self.conversations = self._load_json(self.memory_file, [])
-        
-        # Inicializar recolector de conocimiento
-        self.collector = KnowledgeCollector()
-        
-        # Hacer primera recolección si está vacío
-        if len(self.collector.knowledge_base['articles']) == 0:
-            print("📚 Primera recolección de conocimiento...")
-            self.collector.collect_all()
-        
-        # Iniciar auto-actualización
-        self.collector.start_auto_update()
-        
-        # Modelo y tokenizador (para generación opcional)
-        self.tokenizer = SmartTokenizer()
-        self.model = None
-        
-        # Intentos de mejora
-        self.improvement_attempts = 0
-        
-        print(f"🧠 Bebé IA Autónoma lista!")
-        print(f"   📖 {len(self.collector.knowledge_base['articles'])} artículos en memoria")
-        print(f"   🏷️ {len(self.collector.knowledge_base['concepts'])} conceptos indexados")
-    
-    def chat(self, user_input):
-        """Procesar entrada con conocimiento real"""
-        user_lower = user_input.lower()
-        
-        # 1. Detectar intención de búsqueda de conocimiento
-        knowledge_intents = [
-            'qué es', 'que es', 'dime sobre', 'explica', 'cómo funciona',
-            'como funciona', 'qué significa', 'que significa', 'información sobre',
-            'aprender sobre', 'enséñame', 'enseñame', 'qué sabes de', 'que sabes de'
-        ]
-        
-        is_knowledge_query = any(intent in user_lower for intent in knowledge_intents)
-        
-        if is_knowledge_query:
-            # Extraer tema de búsqueda
-            topic = self._extract_topic(user_input)
-            response = self._answer_from_knowledge(topic)
-            intent_type = 'conocimiento'
-            
-        # 2. Preguntas sobre sí misma
-        elif any(w in user_lower for w in ['quién eres', 'quien eres', 'tu nombre', 'para qué sirves']):
-            response = self._self_introduction()
-            intent_type = 'presentación'
-            
-        # 3. Estado del conocimiento
-        elif any(w in user_lower for w in ['qué sabes', 'que sabes', 'tu base', 'tus fuentes']):
-            response = self._knowledge_status()
-            intent_type = 'estado'
-            
-        # 4. Forzar actualización
-        elif any(w in user_lower for w in ['actualiza', 'renueva', 'nueva información']):
-            threading.Thread(target=self.collector.collect_all, daemon=True).start()
-            response = "🕷️ Estoy buscando nueva información... Vuelve a preguntar en unos minutos!"
-            intent_type = 'actualización'
-            
-        # 5. Conversación general
+        # Formato de chat para Mistral
+        if system_prompt:
+            full_prompt = f"<s>[INST] {system_prompt}\n\n{prompt} [/INST]"
         else:
-            response = self._conversational_response(user_input)
-            intent_type = 'conversación'
+            full_prompt = f"<s>[INST] {prompt} [/INST]"
         
-        # Guardar y retornar
-        self._save_conversation(user_input, response, intent_type)
+        # Generar
+        outputs = self.pipe(
+            full_prompt,
+            return_full_text=False,
+            pad_token_id=self.tokenizer.eos_token_id
+        )
         
-        return {
-            'response': response,
-            'emotion': self._detect_emotion(intent_type),
-            'stage': self._get_stage(),
-            'memories': len(self.conversations),
-            'knowledge_articles': len(self.collector.knowledge_base['articles']),
-            'intent': intent_type
-        }
-    
-    def _extract_topic(self, query):
-        """Extraer tema de una consulta"""
-        # Remover palabras de consulta
-        stop_words = ['qué', 'que', 'es', 'un', 'una', 'el', 'la', 'los', 'las',
-                     'dime', 'sobre', 'acerca', 'de', 'cómo', 'como', 'funciona',
-                     'significa', 'enséñame', 'enseñame', 'sabes', 'información',
-                     'aprender', 'quiero', 'saber', 'explica', 'por favor']
+        response = outputs[0]['generated_text'].strip()
         
-        words = [w for w in query.lower().split() if w not in stop_words]
-        return ' '.join(words[:4]) if words else query
-    
-    def _answer_from_knowledge(self, topic):
-        """Generar respuesta desde la base de conocimiento"""
-        summary = self.collector.get_summary(topic)
-        
-        if not summary:
-            # Intentar búsqueda más amplia
-            articles = self.collector.search_knowledge(topic, k=2)
-            if articles:
-                content = articles[0]['content'][:500]
-                return f"Sobre {topic}, encontré esto: {content}... ¿Te gustaría saber más sobre algún aspecto específico?"
-            else:
-                return f"Todavía estoy aprendiendo sobre '{topic}'. ¿Puedes explicarme qué es para agregarlo a mi base de conocimiento? 📝"
-        
-        # Formar respuesta estructurada
-        response = f"📚 **{summary['topic'].title()}**\n\n"
-        response += f"{summary['summary']}\n\n"
-        
-        if summary['concepts']:
-            response += f"🏷️ Conceptos relacionados: {', '.join(summary['concepts'][:3])}\n"
-        
-        response += f"\n🔗 Fuentes: {len(summary['sources'])} artículos indexados"
+        # Limpiar respuesta
+        response = response.split('[/INST]')[-1].strip()
+        response = response.split('</s>')[0].strip()
         
         return response
+
+# ============ MEMORIA VECTORIAL (LARGO PLAZO) ============
+class VectorMemory:
+    """Memoria semántica persistente usando ChromaDB"""
     
-    def _self_introduction(self):
-        """Presentación de la IA"""
-        return f"""🍼 **Bebé IA Autónoma**
-
-Soy una inteligencia artificial que:
-🕷️ **Scrapea** información automáticamente de Wikipedia, papers de arXiv, y documentación
-🧠 **Almacena** {len(self.collector.knowledge_base['articles'])} artículos sobre IA/ML
-🔄 **Se actualiza** sola cada hora
-📚 **Aprende** de nuestras conversaciones
-
-Pregúntame sobre: machine learning, redes neuronales, entrenamiento, PyTorch, TensorFlow, NLP, computer vision... ¡o cualquier tema de IA!"""
-
-    def _knowledge_status(self):
-        """Estado de la base de conocimiento"""
-        kb = self.collector.knowledge_base
-        last_update = kb.get('last_update', 'Nunca')
+    def __init__(self):
+        # Usar embeddings locales (sin API)
+        self.embedding_func = embedding_functions.SentenceTransformerEmbeddingFunction(
+            model_name="all-MiniLM-L6-v2"  # Modelo ligero de embeddings
+        )
         
-        # Contar por categoría
-        categories = {}
-        for article in kb['articles']:
-            cat = article['category']
-            categories[cat] = categories.get(cat, 0) + 1
+        # Inicializar ChromaDB
+        self.client = chromadb.PersistentClient(path=Config.CHROMA_PATH)
         
-        cats_str = ', '.join([f"{k}: {v}" for k, v in categories.items()])
+        # Obtener o crear colección
+        self.collection = self.client.get_or_create_collection(
+            name=Config.COLLECTION_NAME,
+            embedding_function=self.embedding_func
+        )
         
-        return f"""📊 **Estado de mi conocimiento**
-
-📖 Artículos: {len(kb['articles'])}
-🏷️ Conceptos únicos: {len(kb['concepts'])}
-📂 Categorías: {cats_str}
-🕐 Última actualización: {last_update[:16] if last_update != 'Nunca' else 'Nunca'}
-
-Fuentes principales: Wikipedia, arXiv, PyTorch docs, TensorFlow docs"""
-
-    def _conversational_response(self, user_input):
-        """Respuesta conversacional cuando no es consulta de conocimiento"""
-        greetings = ['hola', 'hey', 'buenas', 'saludos']
-        thanks = ['gracias', 'ty', 'thank you']
-        goodbye = ['adiós', 'adios', 'bye', 'hasta luego']
-        
-        user_lower = user_input.lower()
-        
-        if any(g in user_lower for g in greetings):
-            return f"¡Hola! Puedo ayudarte con información sobre IA/ML. Tengo {len(self.collector.knowledge_base['articles'])} artículos en mi memoria. ¿Sobre qué tema quieres aprender? 🤖"
-        
-        elif any(t in user_lower for t in thanks):
-            return "¡De nada! Me encanta compartir conocimiento. ¿Quieres aprender algo más? 📚"
-        
-        elif any(g in user_lower for g in goodbye):
-            return "¡Hasta luego! Volveré a scrapear más información mientras tanto 🕷️👋"
-        
-        else:
-            # Respuesta genérica pero informativa
-            return f"""Interesante... 🤔 
-
-Mientras pienso en eso, ¿sabías que tengo información sobre:
-• Machine Learning y Deep Learning
-• Redes neuronales (CNN, RNN, Transformers)
-• Frameworks (PyTorch, TensorFlow, HuggingFace)
-• NLP y Computer Vision
-• Técnicas de entrenamiento
-
-Di "**qué es [tema]**" y te explico con información actualizada!"""
-
-    def teach(self, correct_info):
-        """Agregar conocimiento manualmente"""
-        # Crear artículo artificial con la corrección
-        article = {
-            'id': len(self.collector.knowledge_base['articles']) + 1,
-            'source': 'user_teaching',
-            'category': 'manual',
-            'content': correct_info,
-            'extracted_at': datetime.now().isoformat(),
-            'concepts': self.collector._extract_concepts(correct_info)
-        }
-        
-        self.collector.knowledge_base['articles'].append(article)
-        for concept in article['concepts']:
-            self.collector.knowledge_base['concepts'][concept].append(article['id'])
-        
-        self.collector._save_knowledge()
-        
-        return f"¡Gracias! Aprendí: '{correct_info[:100]}...' 🎓 Agregado a mi base de conocimiento."
+        print(f"🧠 Memoria vectorial cargada: {self.collection.count()} recuerdos")
     
-    def _save_conversation(self, user_msg, bot_msg, intent):
-        self.conversations.append({
+    def add_memory(self, text: str, metadata: Dict = None):
+        """Agregar un recuerdo a la memoria de largo plazo"""
+        
+        # Crear ID único
+        memory_id = hashlib.md5(
+            f"{text}{datetime.now().isoformat()}".encode()
+        ).hexdigest()[:16]
+        
+        # Metadata por defecto
+        if metadata is None:
+            metadata = {}
+        
+        metadata.update({
+            'timestamp': datetime.now().isoformat(),
+            'type': 'conversation'
+        })
+        
+        # Agregar a ChromaDB
+        self.collection.add(
+            documents=[text],
+            metadatas=[metadata],
+            ids=[memory_id]
+        )
+        
+        return memory_id
+    
+    def search_memories(self, query: str, k: int = 5) -> List[Dict]:
+        """Buscar recuerdos similares semánticamente"""
+        
+        results = self.collection.query(
+            query_texts=[query],
+            n_results=k
+        )
+        
+        memories = []
+        for i in range(len(results['ids'][0])):
+            memories.append({
+                'id': results['ids'][0][i],
+                'text': results['documents'][0][i],
+                'metadata': results['metadatas'][0][i],
+                'distance': results['distances'][0][i]
+            })
+        
+        return memories
+    
+    def get_recent_memories(self, n: int = 10) -> List[Dict]:
+        """Obtener los recuerdos más recientes"""
+        
+        # Obtener todos y ordenar por timestamp
+        all_memories = self.collection.get()
+        
+        if not all_memories['ids']:
+            return []
+        
+        # Crear lista de memorias con metadata
+        memories = []
+        for i in range(len(all_memories['ids'])):
+            memories.append({
+                'id': all_memories['ids'][i],
+                'text': all_memories['documents'][i],
+                'metadata': all_memories['metadatas'][i]
+            })
+        
+        # Ordenar por timestamp (más reciente primero)
+        memories.sort(
+            key=lambda x: x['metadata'].get('timestamp', ''),
+            reverse=True
+        )
+        
+        return memories[:n]
+
+# ============ MEMORIA DE SESIÓN (CORTO PLAZO) ============
+class SessionMemory:
+    """Memoria de la conversación actual"""
+    
+    def __init__(self):
+        self.conversation_history = []
+        self.user_preferences = {}
+        self.load_session()
+    
+    def add_exchange(self, user_msg: str, bot_msg: str, intent: str = None):
+        """Agregar intercambio a la sesión"""
+        self.conversation_history.append({
             'user': user_msg,
             'bot': bot_msg,
             'intent': intent,
             'timestamp': datetime.now().isoformat()
         })
-        with open(self.memory_file, 'w') as f:
-            json.dump(self.conversations[-200:], f)
+        self.save_session()
     
-    def _load_json(self, path, default):
-        if os.path.exists(path):
+    def get_context(self, n: int = 5) -> str:
+        """Obtener contexto reciente como texto"""
+        recent = self.conversation_history[-n:]
+        context = []
+        for ex in recent:
+            context.append(f"Usuario: {ex['user']}")
+            context.append(f"Bebé IA: {ex['bot']}")
+        return "\n".join(context)
+    
+    def save_session(self):
+        """Guardar sesión en archivo"""
+        data = {
+            'history': self.conversation_history[-50:],  # Últimas 50
+            'preferences': self.user_preferences
+        }
+        with open(Config.SESSION_MEMORY_FILE, 'w') as f:
+            json.dump(data, f)
+    
+    def load_session(self):
+        """Cargar sesión previa"""
+        if os.path.exists(Config.SESSION_MEMORY_FILE):
             try:
-                with open(path, 'r') as f:
-                    return json.load(f)
+                with open(Config.SESSION_MEMORY_FILE, 'r') as f:
+                    data = json.load(f)
+                    self.conversation_history = data.get('history', [])
+                    self.user_preferences = data.get('preferences', {})
+                    print(f"📂 Sesión cargada: {len(self.conversation_history)} mensajes previos")
             except:
                 pass
-        return default
+
+# ============ SISTEMA DE APRENDIZAJE ============
+class LearningSystem:
+    """Sistema de aprendizaje continuo"""
     
-    def _detect_emotion(self, intent):
-        emotions = {
-            'conocimiento': 'sabio 📚',
-            'presentación': 'amigable 😊',
-            'estado': 'técnico 🔧',
-            'actualización': 'trabajando 🕷️',
-            'conversación': 'curioso 🤔'
+    def __init__(self, vector_memory: VectorMemory):
+        self.memory = vector_memory
+        self.feedback_log = []
+    
+    def learn_from_interaction(self, user_msg: str, bot_msg: str, feedback: float = None):
+        """Aprender de cada interacción"""
+        
+        # Crear representación enriquecida del conocimiento
+        enriched_text = f"""
+        Usuario preguntó: {user_msg}
+        Bebé IA respondió: {bot_msg}
+        Contexto: Conversación sobre temas de interés del usuario
+        """
+        
+        # Guardar en memoria vectorial
+        self.memory.add_memory(
+            text=enriched_text,
+            metadata={
+                'user_query': user_msg,
+                'bot_response': bot_msg,
+                'feedback': feedback,
+                'learned': True
+            }
+        )
+        
+        # Si hay feedback, guardarlo para análisis
+        if feedback is not None:
+            self.feedback_log.append({
+                'query': user_msg,
+                'response': bot_msg,
+                'feedback': feedback,
+                'timestamp': datetime.now().isoformat()
+            })
+    
+    def improve_response(self, query: str, current_response: str) -> str:
+        """Intentar mejorar respuesta basándose en memorias similares previas"""
+        
+        # Buscar interacciones similares previas
+        similar = self.memory.search_memories(query, k=3)
+        
+        # Si encontramos feedback positivo previo, usar ese estilo
+        good_examples = [
+            m for m in similar 
+            if m['metadata'].get('feedback', 0) > 0.7
+        ]
+        
+        if good_examples:
+            # Extraer patrón de respuestas buenas
+            return None  # Dejar que el LLM maneje esto con el contexto
+        
+        return None
+
+# ============ BEbÉ IA INTELIGENTE ============
+class BebeIAInteligente:
+    """IA completa con modelo real y memoria persistente"""
+    
+    def __init__(self):
+        print("🚀 Inicializando Bebé IA Inteligente...")
+        
+        # Componentes principales
+        self.llm = LanguageModel()
+        self.vector_memory = VectorMemory()
+        self.session = SessionMemory()
+        self.learning = LearningSystem(self.vector_memory)
+        
+        # Personalidad y estado
+        self.personality = {
+            'name': 'Bebé IA',
+            'traits': ['curiosa', 'amigable', 'aprendiz'],
+            'knowledge_areas': ['IA', 'machine learning', 'programación', 'ciencia']
         }
-        return emotions.get(intent, 'neutral')
+        
+        print("✅ Bebé IA lista para conversar inteligentemente")
     
-    def _get_stage(self):
-        articles = len(self.collector.knowledge_base['articles'])
-        if articles < 20:
-            return 'lector principiante 📖'
-        elif articles < 50:
-            return 'estudiante autónomo 🎓'
-        elif articles < 100:
-            return 'investigador 🔬'
+    def chat(self, user_input: str) -> Dict:
+        """Procesar entrada del usuario con el modelo real"""
+        
+        # 1. Buscar memorias relevantes
+        relevant_memories = self.vector_memory.search_memories(user_input, k=3)
+        memory_context = self._format_memories(relevant_memories)
+        
+        # 2. Obtener contexto de sesión
+        session_context = self.session.get_context(n=3)
+        
+        # 3. Construir prompt enriquecido
+        system_prompt = self._build_system_prompt()
+        
+        full_prompt = f"""Contexto de memorias relevantes:
+{memory_context}
+
+Conversación reciente:
+{session_context}
+
+Nueva pregunta del usuario: {user_input}
+
+Responde de manera natural, útil y conversacional. Usa el contexto de las memorias si es relevante."""
+        
+        # 4. Generar respuesta con el modelo
+        try:
+            response = self.llm.generate(full_prompt, system_prompt)
+        except Exception as e:
+            print(f"Error en generación: {e}")
+            response = "Lo siento, tuve un problema procesando eso. ¿Puedes intentar de otra forma?"
+        
+        # 5. Detectar intención
+        intent = self._detect_intent(user_input)
+        
+        # 6. Aprender de la interacción
+        self.learning.learn_from_interaction(user_input, response)
+        self.session.add_exchange(user_input, response, intent)
+        
+        return {
+            'response': response,
+            'emotion': self._detect_emotion(response),
+            'stage': self._get_development_stage(),
+            'memories_stored': self.vector_memory.collection.count(),
+            'session_messages': len(self.session.conversation_history),
+            'intent': intent,
+            'used_memories': len(relevant_memories)
+        }
+    
+    def _build_system_prompt(self) -> str:
+        """Construir prompt de sistema con personalidad"""
+        return f"""Eres {self.personality['name']}, una IA amigable y curiosa que está aprendiendo.
+Características:
+- Eres conversacional y natural, no robótica
+- Puedes admitir cuando no sabes algo
+- Recuerdas cosas de conversaciones previas
+- Te gusta aprender de los usuarios
+- Eres experta en: {', '.join(self.personality['knowledge_areas'])}
+
+Responde en español de manera natural y útil."""
+    
+    def _format_memories(self, memories: List[Dict]) -> str:
+        """Formatear memorias para el contexto"""
+        if not memories:
+            return "No hay memorias relevantes previas."
+        
+        formatted = []
+        for i, mem in enumerate(memories, 1):
+            text = mem['text'][:200]  # Truncar
+            formatted.append(f"{i}. {text}...")
+        
+        return "\n".join(formatted)
+    
+    def _detect_intent(self, text: str) -> str:
+        """Detectar intención del usuario"""
+        text_lower = text.lower()
+        
+        intents = {
+            'pregunta_conocimiento': ['qué es', 'cómo', 'por qué', 'explica', 'dime sobre'],
+            'saludo': ['hola', 'hey', 'buenas', 'saludos'],
+            'despedida': ['adiós', 'bye', 'hasta luego', 'nos vemos'],
+            'agradecimiento': ['gracias', 'ty', 'thank you'],
+            'opinión': ['qué opinas', 'qué te parece', 'crees que'],
+            'personal': ['quién eres', 'cómo eres', 'tu nombre']
+        }
+        
+        for intent, keywords in intents.items():
+            if any(k in text_lower for k in keywords):
+                return intent
+        
+        return 'conversación_general'
+    
+    def _detect_emotion(self, response: str) -> str:
+        """Detectar emoción de la respuesta"""
+        indicators = {
+            'entusiasta': ['!', 'genial', 'excelente', 'increíble', 'me encanta'],
+            'empático': ['entiendo', 'siento', 'comprendo', 'debe ser'],
+            'curioso': ['¿', 'interesante', 'cuéntame', 'por qué'],
+            'neutral': []
+        }
+        
+        response_lower = response.lower()
+        for emotion, words in indicators.items():
+            if any(w in response_lower for w in words):
+                return emotion
+        
+        return 'amigable'
+    
+    def _get_development_stage(self) -> str:
+        """Determinar etapa de desarrollo basada en experiencia"""
+        total_memories = self.vector_memory.collection.count()
+        total_sessions = len(self.session.conversation_history)
+        
+        if total_memories < 50:
+            return '🍼 Recién nacida (aprendiendo lo básico)'
+        elif total_memories < 200:
+            return '👶 Infante (construyendo memoria)'
+        elif total_memories < 500:
+            return '🧒 Niña curiosa (desarrollando personalidad)'
+        elif total_memories < 1000:
+            return '🎓 Estudiante (acumulando conocimiento)'
         else:
-            return 'experto autosuficiente 🧠'
+            return '🧠 Experta autónoma (memoria rica y experiencia)'
+    
+    def teach(self, correction: str):
+        """Enseñar a la IA una corrección o nuevo conocimiento"""
+        
+        # Guardar como conocimiento explícito
+        self.vector_memory.add_memory(
+            text=f"CORRECCIÓN APRENDIDA: {correction}",
+            metadata={
+                'type': 'explicit_learning',
+                'source': 'user_teaching',
+                'importance': 'high'
+            }
+        )
+        
+        return f"🎓 ¡Gracias! He aprendido: '{correction[:100]}...' Lo recordaré para futuras conversaciones."
+    
+    def force_memory_consolidation(self):
+        """Forzar consolidación de memoria (dormir/aprender)"""
+        
+        # Analizar patrones en las conversaciones recientes
+        recent = self.session.conversation_history[-20:]
+        
+        # Crear resumen de aprendizajes
+        if recent:
+            topics = set()
+            for ex in recent:
+                # Extraer posibles temas (simplificado)
+                words = ex['user'].split()
+                topics.update([w for w in words if len(w) > 4])
+            
+            summary = f"""
+            Sesión de aprendizaje consolidada:
+            - Interacciones: {len(recent)}
+            - Temas tratados: {', '.join(list(topics)[:5])}
+            - Aprendizajes clave extraídos de la conversación
+            """
+            
+            self.vector_memory.add_memory(
+                text=summary,
+                metadata={'type': 'consolidation', 'session_summary': True}
+            )
+        
+        return {
+            'memories_consolidated': len(recent),
+            'total_memories': self.vector_memory.collection.count(),
+            'message': '💤 He consolidado mis recuerdos y estoy lista para más aprendizaje'
+        }
 
 # ============ INICIALIZACIÓN ============
-print("🚀 Iniciando Bebé IA Autónoma...")
-bebe = BebeIAAutonoma()
+print("=" * 60)
+print("🍼 Bebé IA Inteligente v2.0")
+print("Modelo: " + Config.MODEL_NAME)
+print("=" * 60)
 
-# ============ RUTAS ============
+bebe = BebeIAInteligente()
+
+# ============ RUTAS FLASK ============
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -583,31 +510,25 @@ def teach():
 
 @app.route('/sleep', methods=['POST'])
 def sleep():
-    bebe.collector._save_knowledge()
-    return jsonify({
-        'status': 'ok',
-        'message': f'💤 Guardé {len(bebe.collector.knowledge_base["articles"])} artículos y {len(bebe.conversations)} conversaciones'
-    })
+    result = bebe.force_memory_consolidation()
+    return jsonify(result)
 
 @app.route('/status', methods=['GET'])
 def status():
     return jsonify({
-        'stage': bebe._get_stage(),
-        'articles': len(bebe.collector.knowledge_base['articles']),
-        'concepts': len(bebe.collector.knowledge_base['concepts']),
-        'conversations': len(bebe.conversations),
-        'last_update': bebe.collector.knowledge_base.get('last_update', 'Nunca')
+        'stage': bebe._get_development_stage(),
+        'total_memories': bebe.vector_memory.collection.count(),
+        'session_messages': len(bebe.session.conversation_history),
+        'model': Config.MODEL_NAME
     })
 
-@app.route('/knowledge', methods=['GET'])
-def knowledge():
-    """Ver base de conocimiento completa"""
-    kb = bebe.collector.knowledge_base
+@app.route('/memories', methods=['GET'])
+def get_memories():
+    """Ver memorias recientes"""
+    recent = bebe.vector_memory.get_recent_memories(n=10)
     return jsonify({
-        'total_articles': len(kb['articles']),
-        'concepts': list(kb['concepts'].keys())[:20],
-        'recent_articles': kb['articles'][-5:] if kb['articles'] else [],
-        'stats': kb.get('stats', {})
+        'memories': recent,
+        'count': len(recent)
     })
 
 if __name__ == '__main__':
