@@ -1,9 +1,10 @@
 """
-Bebé IA Pro - VERSIÓN HÍBRIDA (API + Offline)
-✅ Intenta usar HuggingFace API primero
-✅ Fallback automático a modo offline si falla
+Bebé IA Pro - VERSIÓN 100% OFFLINE (Estable)
+✅ Funciona sin APIs externas
 ✅ Respuestas dinámicas para fecha/hora
 ✅ Botones todos funcionales
+✅ Persistencia en PostgreSQL/SQLite
+✅ Aprendizaje automático de Wikipedia
 """
 from flask import Flask, render_template, request, jsonify, session
 from flask_sqlalchemy import SQLAlchemy
@@ -17,7 +18,6 @@ import urllib.request
 import urllib.parse
 from datetime import datetime
 from werkzeug.utils import secure_filename
-import requests
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'bebe-ia-secret-key-2024')
@@ -27,10 +27,6 @@ app.config['UPLOAD_FOLDER'] = 'uploads'
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
 
 db = SQLAlchemy(app)
-
-# Configuración de HuggingFace
-HF_API_TOKEN = os.environ.get('HF_API_TOKEN', '')
-HF_MODEL = "google/gemma-2b-it"  # Modelo gratuito y rápido
 
 # Crear carpeta uploads
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
@@ -126,108 +122,34 @@ KNOWLEDGE_BASE = {
     }
 }
 
-# ============ IA HÍBRIDA (API + Offline) ============
+# ============ IA LOCAL INTELIGENTE ============
 class BebeIA:
     def __init__(self):
         self.learning_active = True
         self.daily_learned = 0
         self.last_reset = datetime.now()
-        self.api_available = self._check_api()
         
         # Iniciar aprendizaje automático
         self.learn_thread = threading.Thread(target=self._auto_learn_loop, daemon=True)
         self.learn_thread.start()
         
         print("=" * 60)
-        print("🚀 BEBÉ IA PRO - MODO HÍBRIDO")
+        print("🚀 BEBÉ IA PRO - MODO ESTABLE OFFLINE")
         print(f"📚 {Memory.query.count()} memorias en base de datos")
-        print(f"🤖 API HuggingFace: {'✅ ACTIVA' if self.api_available else '❌ OFFLINE'}")
         print("🔄 Aprendizaje automático: ACTIVO")
         print("=" * 60)
     
-    def _check_api(self) -> bool:
-        """Verificar si HuggingFace API está disponible"""
-        if not HF_API_TOKEN:
-            return False
-        try:
-            # Test rápido de conexión
-            response = requests.get(
-                "https://api-inference.huggingface.co/status",
-                timeout=5
-            )
-            return response.status_code == 200
-        except:
-            return False
-    
     def chat(self, user_input: str, mode: str = 'balanced') -> dict:
-        """Procesar mensaje del usuario - Híbrido API/Offline"""
+        """Procesar mensaje del usuario"""
         
         input_lower = user_input.lower().strip()
         
-        # 1. PRIORIDAD: Preguntas de fecha/hora (siempre offline)
+        # 1. PRIORIDAD: Preguntas de fecha/hora (dinámico)
         if self._is_date_time_question(input_lower):
             response = self._get_dynamic_date_response(input_lower)
-            return self._format_response(response, 'system_time', 0, 'high', mode)
+            return self._save_and_respond(user_input, response, 'system_time', 0, 'high', mode)
         
-        # 2. Intentar usar HuggingFace API si está disponible
-        if self.api_available and HF_API_TOKEN:
-            try:
-                api_response = self._call_huggingface_api(user_input, mode)
-                if api_response:
-                    return self._format_response(
-                        api_response, 
-                        'huggingface', 
-                        0, 
-                        'high', 
-                        mode,
-                        model_used=HF_MODEL
-                    )
-            except Exception as e:
-                print(f"⚠️ API falló, usando offline: {e}")
-        
-        # 3. FALLBACK: Modo Offline Inteligente
-        return self._offline_response(user_input, mode)
-    
-    def _call_huggingface_api(self, message: str, mode: str) -> str:
-        """Llamar a HuggingFace API"""
-        headers = {"Authorization": f"Bearer {HF_API_TOKEN}"}
-        
-        # Ajustar prompt según modo
-        if mode == 'fast':
-            prompt = f"<start_of_turn>user\n{message}\nResponde brevemente.<end_of_turn>\n<start_of_turn>model\n"
-        elif mode == 'complete':
-            prompt = f"<start_of_turn>user\n{message}\nResponde con detalle.<end_of_turn>\n<start_of_turn>model\n"
-        else:
-            prompt = f"<start_of_turn>user\n{message}<end_of_turn>\n<start_of_turn>model\n"
-        
-        payload = {
-            "inputs": prompt,
-            "parameters": {
-                "max_new_tokens": 150 if mode == 'fast' else 400,
-                "temperature": 0.7,
-                "return_full_text": False
-            }
-        }
-        
-        response = requests.post(
-            f"https://api-inference.huggingface.co/models/{HF_MODEL}",
-            headers=headers,
-            json=payload,
-            timeout=30
-        )
-        
-        if response.status_code == 200:
-            result = response.json()
-            if isinstance(result, list) and len(result) > 0:
-                return result[0].get('generated_text', '').strip()
-        
-        return None
-    
-    def _offline_response(self, user_input: str, mode: str) -> dict:
-        """Generar respuesta offline cuando la API falla"""
-        input_lower = user_input.lower().strip()
-        
-        # Buscar en base de conocimiento
+        # 2. Buscar coincidencia en base de conocimiento
         best_topic = None
         best_score = 0
         
@@ -248,7 +170,7 @@ class BebeIA:
                 best_score = score
                 best_topic = topic
         
-        # Buscar en memorias
+        # 3. Buscar en memorias de la base de datos
         memories = Memory.query.all()
         relevant_memories = []
         
@@ -263,7 +185,7 @@ class BebeIA:
         
         db.session.commit()
         
-        # Generar respuesta
+        # 4. Generar respuesta
         if best_score >= 2 and best_topic:
             responses = KNOWLEDGE_BASE[best_topic]['respuestas']
             response = random.choice(responses)
@@ -288,20 +210,20 @@ class BebeIA:
         elif mode == 'complete' and best_topic:
             response += f"\n\n¿Te gustaría que investigue más sobre {best_topic.replace('_', ' ')}?"
         
-        return self._format_response(response, source, len(relevant_memories), confidence, mode)
+        return self._save_and_respond(user_input, response, source, len(relevant_memories), confidence, mode)
     
-    def _format_response(self, response: str, source: str, memories_found: int, 
-                        confidence: str, mode: str, model_used: str = 'bebe_ia_local') -> dict:
-        """Formatear respuesta estándar"""
+    def _save_and_respond(self, user_input: str, response: str, source: str, 
+                         memories_found: int, confidence: str, mode: str) -> dict:
+        """Guardar conversación y formatear respuesta"""
         
         # Guardar conversación
-        conv = Conversation(user_message=response, bot_response=response)
+        conv = Conversation(user_message=user_input, bot_response=response)
         db.session.add(conv)
         db.session.commit()
         
         return {
             'response': response,
-            'model_used': model_used,
+            'model_used': 'bebe_ia_local_v3',
             'mode': mode,
             'sources_used': [source],
             'memories_found': memories_found,
@@ -454,8 +376,7 @@ class BebeIA:
             'total_conversations': Conversation.query.count(),
             'daily_learned': self.daily_learned,
             'learning_active': self.learning_active,
-            'api_status': 'online' if self.api_available else 'offline',
-            'mode': 'hybrid',
+            'mode': 'offline_stable',
             'status': 'Funcionando correctamente'
         }
 
@@ -486,13 +407,12 @@ def chat():
         
     except Exception as e:
         print(f"Error en chat: {e}")
-        # Último fallback
         return jsonify({
-            'response': 'Lo siento, tuve un problema. Estoy funcionando en modo offline limitado. Intenta preguntarme sobre IA, Python, o usa los botones de Wiki/Enseñar.',
-            'model_used': 'emergency_fallback',
-            'sources_used': ['emergency'],
+            'response': 'Lo siento, tuve un problema interno. Intenta de nuevo.',
+            'model_used': 'error',
+            'sources_used': ['error'],
             'error': str(e)
-        }), 200  # Return 200 para no romper el frontend
+        }), 500
 
 @app.route('/learn', methods=['POST'])
 def learn():
@@ -564,7 +484,7 @@ def get_history():
         return jsonify([{
             'id': c.id,
             'user': c.user_message,
-            'bot': arregla esto, el error persiste, mira el error exacto en los logs de render
+            'bot': c.bot_response,
             'timestamp': c.timestamp.isoformat()
         } for c in conversations])
     except Exception as e:
