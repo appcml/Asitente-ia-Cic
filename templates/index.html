@@ -3,569 +3,1148 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🚀 Bebé IA Pro - Estable</title>
+    <title>Cic_IA - Asistente Inteligente</title>
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --sidebar-width: 260px;
+            --header-height: 60px;
+            --primary: #10a37f;
+            --primary-hover: #0d8c6d;
+            --bg-dark: #202123;
+            --bg-darker: #171717;
+            --bg-chat: #343541;
+            --text-primary: #ececf1;
+            --text-secondary: #8e8ea0;
+            --border: #4d4d4f;
+        }
+
         body {
             font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
-            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-            color: #e0e0e0;
-            min-height: 100vh;
+            background: var(--bg-dark);
+            color: var(--text-primary);
+            height: 100vh;
+            overflow: hidden;
         }
-        
-        .container {
-            max-width: 1000px;
-            margin: 0 auto;
+
+        /* ============ SIDEBAR ============ */
+        .sidebar {
+            position: fixed;
+            left: 0;
+            top: 0;
+            width: var(--sidebar-width);
+            height: 100vh;
+            background: var(--bg-darker);
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            z-index: 100;
+            transition: transform 0.3s;
+        }
+
+        .sidebar-header {
+            padding: 15px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .new-chat-btn {
+            width: 100%;
+            padding: 12px;
+            background: transparent;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text-primary);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            transition: all 0.2s;
+        }
+
+        .new-chat-btn:hover {
+            background: var(--bg-dark);
+        }
+
+        .sidebar-nav {
+            flex: 1;
+            overflow-y: auto;
+            padding: 10px;
+        }
+
+        .nav-section {
+            margin-bottom: 20px;
+        }
+
+        .nav-title {
+            font-size: 12px;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            padding: 10px;
+            letter-spacing: 0.5px;
+        }
+
+        .nav-item {
+            padding: 10px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            transition: all 0.2s;
+            margin-bottom: 2px;
+        }
+
+        .nav-item:hover, .nav-item.active {
+            background: var(--bg-dark);
+        }
+
+        .nav-item i {
+            width: 20px;
+            text-align: center;
+        }
+
+        .sidebar-footer {
+            padding: 15px;
+            border-top: 1px solid var(--border);
+        }
+
+        .dev-mode-btn {
+            width: 100%;
+            padding: 10px;
+            background: var(--bg-dark);
+            border: 1px dashed var(--primary);
+            border-radius: 6px;
+            color: var(--primary);
+            cursor: pointer;
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .dev-mode-btn:hover {
+            background: rgba(16, 163, 127, 0.1);
+        }
+
+        /* ============ MAIN CONTENT ============ */
+        .main-content {
+            margin-left: var(--sidebar-width);
             height: 100vh;
             display: flex;
             flex-direction: column;
         }
-        
+
+        /* ============ HEADER ============ */
         .header {
-            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
-            padding: 20px;
-            text-align: center;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-        }
-        
-        .header h1 { 
-            font-size: 1.8em; 
-            margin-bottom: 5px;
-        }
-        
-        .header p { 
-            font-size: 0.9em; 
-            opacity: 0.9; 
-        }
-        
-        .stats {
+            height: var(--header-height);
+            background: var(--bg-dark);
+            border-bottom: 1px solid var(--border);
             display: flex;
-            justify-content: center;
-            gap: 15px;
-            margin-top: 15px;
-            font-size: 0.85em;
-            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 20px;
         }
-        
-        .stat {
-            background: rgba(255,255,255,0.15);
-            padding: 8px 16px;
-            border-radius: 20px;
-            backdrop-filter: blur(10px);
+
+        .header-title {
+            font-size: 18px;
+            font-weight: 600;
         }
-        
+
+        .header-actions {
+            display: flex;
+            gap: 10px;
+        }
+
         .mode-selector {
             display: flex;
-            justify-content: center;
-            gap: 10px;
-            margin-top: 15px;
+            background: var(--bg-darker);
+            border-radius: 6px;
+            padding: 3px;
         }
-        
+
         .mode-btn {
-            padding: 8px 20px;
-            border: 2px solid rgba(255,255,255,0.3);
-            border-radius: 25px;
+            padding: 6px 12px;
+            border: none;
             background: transparent;
-            color: white;
+            color: var(--text-secondary);
             cursor: pointer;
-            font-size: 0.85em;
-            transition: all 0.3s;
+            border-radius: 4px;
+            font-size: 13px;
+            transition: all 0.2s;
         }
-        
-        .mode-btn:hover {
-            background: rgba(255,255,255,0.1);
-        }
-        
+
         .mode-btn.active {
-            background: white;
-            color: #667eea;
-            border-color: white;
+            background: var(--primary);
+            color: white;
         }
-        
-        .chat-area {
+
+        /* ============ CHAT AREA ============ */
+        .chat-container {
             flex: 1;
             overflow-y: auto;
-            padding: 20px;
-            background: #1a1a2e;
+            background: var(--bg-chat);
         }
-        
+
+        .welcome-screen {
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 40px;
+        }
+
+        .welcome-title {
+            font-size: 32px;
+            margin-bottom: 10px;
+            background: linear-gradient(90deg, #10a37f, #20c997);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .welcome-subtitle {
+            color: var(--text-secondary);
+            margin-bottom: 40px;
+        }
+
+        .capabilities {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+            max-width: 800px;
+            width: 100%;
+        }
+
+        .capability-card {
+            background: var(--bg-dark);
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+        }
+
+        .capability-card h4 {
+            margin-bottom: 8px;
+            color: var(--primary);
+        }
+
+        .capability-card p {
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+
+        .messages {
+            padding: 20px;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
         .message {
+            display: flex;
+            gap: 15px;
             margin-bottom: 20px;
-            max-width: 85%;
             animation: fadeIn 0.3s ease;
         }
-        
-        .message.user { 
-            margin-left: auto; 
-        }
-        
+
         @keyframes fadeIn {
             from { opacity: 0; transform: translateY(10px); }
             to { opacity: 1; transform: translateY(0); }
         }
-        
-        .message-content {
-            padding: 15px 20px;
-            border-radius: 20px;
-            line-height: 1.6;
-            white-space: pre-wrap;
-            word-wrap: break-word;
-        }
-        
-        .message.user .message-content {
-            background: #667eea;
-            color: white;
-        }
-        
-        .message.bot .message-content {
-            background: #252542;
-            border: 1px solid #3a3a5c;
-        }
-        
-        .message-meta {
-            margin-top: 8px;
-            font-size: 0.75em;
-            color: #888;
+
+        .message-avatar {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
             display: flex;
-            gap: 10px;
             align-items: center;
-            flex-wrap: wrap;
+            justify-content: center;
+            font-size: 14px;
+            flex-shrink: 0;
         }
-        
-        .source-tag {
-            display: inline-block;
-            background: #3a3a5c;
-            padding: 3px 10px;
-            border-radius: 12px;
-            font-size: 0.85em;
+
+        .message.user .message-avatar {
+            background: #5436da;
         }
-        
-        .model-badge {
-            background: #4caf50;
-            color: white;
-            padding: 3px 10px;
-            border-radius: 12px;
-            font-size: 0.85em;
+
+        .message.bot .message-avatar {
+            background: var(--primary);
         }
-        
-        .input-area {
-            padding: 20px;
-            background: #0f0f23;
-            border-top: 1px solid #2a2a4a;
-        }
-        
-        .input-box {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 15px;
-        }
-        
-        #userInput {
+
+        .message-content {
             flex: 1;
-            padding: 15px 20px;
-            border: 2px solid #3a3a5c;
-            border-radius: 25px;
-            background: #1a1a2e;
-            color: white;
-            font-size: 1em;
-            outline: none;
-            transition: border-color 0.3s;
+            line-height: 1.6;
         }
-        
-        #userInput:focus {
-            border-color: #667eea;
+
+        .message-meta {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-top: 5px;
         }
-        
-        .btn {
-            padding: 15px 25px;
+
+        /* ============ INPUT AREA ============ */
+        .input-container {
+            background: var(--bg-dark);
+            padding: 20px;
+            border-top: 1px solid var(--border);
+        }
+
+        .input-wrapper {
+            max-width: 800px;
+            margin: 0 auto;
+            position: relative;
+        }
+
+        .input-box {
+            background: var(--bg-chat);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .input-box:focus-within {
+            border-color: var(--primary);
+        }
+
+        #messageInput {
+            background: transparent;
             border: none;
-            border-radius: 25px;
+            color: var(--text-primary);
+            font-size: 16px;
+            resize: none;
+            min-height: 24px;
+            max-height: 200px;
+            outline: none;
+        }
+
+        .input-actions {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .input-left {
+            display: flex;
+            gap: 8px;
+        }
+
+        .icon-btn {
+            width: 32px;
+            height: 32px;
+            border-radius: 6px;
+            border: none;
+            background: transparent;
+            color: var(--text-secondary);
             cursor: pointer;
-            font-size: 0.95em;
-            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+
+        .icon-btn:hover {
+            background: var(--bg-dark);
+            color: var(--text-primary);
+        }
+
+        .send-btn {
+            width: 32px;
+            height: 32px;
+            border-radius: 6px;
+            border: none;
+            background: var(--primary);
+            color: white;
+            cursor: pointer;
             display: flex;
             align-items: center;
             justify-content: center;
         }
-        
-        .btn-send {
-            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            min-width: 60px;
-        }
-        
-        .btn-send:hover {
-            transform: scale(1.05);
-        }
-        
-        .btn-send:disabled {
+
+        .send-btn:disabled {
             opacity: 0.5;
             cursor: not-allowed;
-            transform: none;
         }
-        
-        .controls {
+
+        /* File attachment */
+        .file-preview {
             display: flex;
-            gap: 10px;
-            justify-content: center;
-            flex-wrap: wrap;
-        }
-        
-        .btn-control {
-            background: #252542;
-            color: #ccc;
-            padding: 10px 20px;
-            font-size: 0.9em;
-            border: 1px solid #3a3a5c;
-            border-radius: 20px;
-        }
-        
-        .btn-control:hover {
-            background: #3a3a5c;
-            color: white;
-        }
-        
-        .typing {
-            display: none;
-            padding: 15px 20px;
-            color: #4caf50;
-            font-style: italic;
             align-items: center;
             gap: 10px;
+            padding: 8px 12px;
+            background: var(--bg-dark);
+            border-radius: 6px;
+            margin-bottom: 10px;
         }
-        
+
+        .file-preview button {
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+        }
+
+        /* Typing indicator */
+        .typing {
+            display: none;
+            align-items: center;
+            gap: 5px;
+            padding: 10px 0;
+        }
+
         .typing.show {
             display: flex;
         }
-        
-        .typing::before {
-            content: "🧠";
-            animation: pulse 1.5s infinite;
+
+        .typing-dot {
+            width: 8px;
+            height: 8px;
+            background: var(--primary);
+            border-radius: 50%;
+            animation: typing 1.4s infinite;
         }
-        
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.5; }
+
+        .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+        .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+
+        @keyframes typing {
+            0%, 60%, 100% { transform: translateY(0); }
+            30% { transform: translateY(-10px); }
         }
-        
-        .error-message {
-            background: #f44336;
-            color: white;
-            padding: 10px 15px;
-            border-radius: 10px;
-            margin-bottom: 10px;
+
+        /* ============ DEV PANEL ============ */
+        .dev-panel {
             display: none;
+            position: fixed;
+            top: 0;
+            right: 0;
+            width: 400px;
+            height: 100vh;
+            background: var(--bg-darker);
+            border-left: 1px solid var(--border);
+            z-index: 200;
+            overflow-y: auto;
         }
-        
-        .error-message.show {
+
+        .dev-panel.show {
             display: block;
         }
-        
-        @media (max-width: 600px) {
-            .header h1 { font-size: 1.4em; }
-            .message { max-width: 95%; }
-            .controls { gap: 5px; }
-            .btn-control { padding: 8px 15px; font-size: 0.8em; }
+
+        .dev-header {
+            padding: 20px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .dev-content {
+            padding: 20px;
+        }
+
+        .dev-section {
+            margin-bottom: 25px;
+        }
+
+        .dev-section h4 {
+            color: var(--primary);
+            margin-bottom: 10px;
+            font-size: 14px;
+            text-transform: uppercase;
+        }
+
+        .stat-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+
+        .stat-box {
+            background: var(--bg-dark);
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: var(--primary);
+        }
+
+        .stat-label {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-top: 5px;
+        }
+
+        .log-entry {
+            background: var(--bg-dark);
+            padding: 10px;
+            border-radius: 6px;
+            margin-bottom: 8px;
+            font-family: monospace;
+            font-size: 12px;
+        }
+
+        .danger-btn {
+            width: 100%;
+            padding: 12px;
+            background: #dc3545;
+            border: none;
+            border-radius: 6px;
+            color: white;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+
+        .danger-btn:hover {
+            background: #c82333;
+        }
+
+        /* Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.8);
+            z-index: 300;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal.show {
+            display: flex;
+        }
+
+        .modal-content {
+            background: var(--bg-dark);
+            padding: 30px;
+            border-radius: 12px;
+            width: 90%;
+            max-width: 400px;
+        }
+
+        .modal-content h3 {
+            margin-bottom: 20px;
+        }
+
+        .modal-content input {
+            width: 100%;
+            padding: 12px;
+            background: var(--bg-chat);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text-primary);
+            margin-bottom: 15px;
+        }
+
+        .modal-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .modal-actions button {
+            flex: 1;
+            padding: 12px;
+            border-radius: 6px;
+            border: none;
+            cursor: pointer;
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+        }
+
+        .btn-secondary {
+            background: var(--bg-chat);
+            color: var(--text-primary);
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .sidebar {
+                transform: translateX(-100%);
+            }
+            .sidebar.open {
+                transform: translateX(0);
+            }
+            .main-content {
+                margin-left: 0;
+            }
+            .dev-panel {
+                width: 100%;
+            }
+        }
+
+        /* Hidden file input */
+        #fileInput {
+            display: none;
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="header">
-            <h1>🚀 Bebé IA Pro</h1>
-            <p>Modo Estable Offline - Aprendizaje Automático</p>
-            
-            <div class="stats">
-                <span class="stat" id="statStage">🍼 Cargando...</span>
-                <span class="stat" id="statMemories">📚 0 memorias</span>
-                <span class="stat" id="statLearning">🔄 Auto: ON</span>
-            </div>
-            
-            <div class="mode-selector">
-                <button class="mode-btn" onclick="setMode('fast')" id="mode-fast">⚡ Rápido</button>
-                <button class="mode-btn active" onclick="setMode('balanced')" id="mode-balanced">⚖️ Balanceado</button>
-                <button class="mode-btn" onclick="setMode('complete')" id="mode-complete">📚 Completo</button>
-            </div>
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <button class="new-chat-btn" onclick="newChat()">
+                <span>+</span>
+                <span>Nuevo chat</span>
+            </button>
         </div>
         
-        <div class="chat-area" id="chatArea">
-            <div class="message bot">
-                <div class="message-content">
-¡Hola! Soy Bebé IA Pro 🚀
-
-**Versión Estable Offline:**
-• ✅ Funciona 100% sin APIs externas (no más "problemas técnicos")
-• 🧠 Respuestas instantáneas desde mi base de conocimiento
-• 📚 Aprendo automáticamente de Wikipedia cada 15 minutos
-• 💾 Todo se guarda en base de datos PostgreSQL
-
-**Modos de respuesta:**
-• ⚡ **Rápido**: Respuestas cortas y directas
-• ⚖️ **Balanceado**: Respuestas naturales (recomendado)
-• 📚 **Completo**: Respuestas detalladas con oferta de investigación
-
-**Botones disponibles:**
-• 📖 **Wiki**: Aprender de Wikipedia sobre un tema
-• 📄 **Paper**: Investigación académica (usa Wikipedia)
-• 📊 **Estado**: Ver estadísticas del sistema
-• 🎓 **Enseñar**: Tú me enseñas algo nuevo
-
-¡Pregúntame sobre IA, Python, Machine Learning, o cualquier tema!
+        <nav class="sidebar-nav">
+            <div class="nav-section">
+                <div class="nav-title">Historial</div>
+                <div id="chatHistory">
+                    <!-- Se llena dinámicamente -->
                 </div>
-                <div class="message-meta">Bebé IA • Sistema listo</div>
-            </div>
-        </div>
-        
-        <div class="error-message" id="errorMessage"></div>
-        
-        <div class="typing" id="typing">Pensando...</div>
-        
-        <div class="input-area">
-            <div class="input-box">
-                <input type="text" id="userInput" placeholder="Escribe tu mensaje aquí..." autocomplete="off">
-                <button class="btn btn-send" id="sendBtn" onclick="sendMessage()">➤</button>
             </div>
             
-            <div class="controls">
-                <button class="btn btn-control" onclick="forceLearn('wikipedia')">📖 Wiki</button>
-                <button class="btn btn-control" onclick="forceLearn('arxiv')">📄 Paper</button>
-                <button class="btn btn-control" onclick="showStatus()">📊 Estado</button>
-                <button class="btn btn-control" onclick="showTeach()">🎓 Enseñar</button>
-                <button class="btn btn-control" onclick="showMemories()">🧠 Memorias</button>
+            <div class="nav-section">
+                <div class="nav-title">Herramientas</div>
+                <div class="nav-item" onclick="openWiki()">
+                    <span>📚</span>
+                    <span>Aprender (Wiki)</span>
+                </div>
+                <div class="nav-item" onclick="openTeach()">
+                    <span>🎓</span>
+                    <span>Enseñar</span>
+                </div>
+                <div class="nav-item" onclick="showMemories()">
+                    <span>🧠</span>
+                    <span>Memorias</span>
+                </div>
+                <div class="nav-item" onclick="showStats()">
+                    <span>📊</span>
+                    <span>Estadísticas</span>
+                </div>
+            </div>
+        </nav>
+        
+        <div class="sidebar-footer">
+            <button class="dev-mode-btn" onclick="openDevLogin()">
+                <span>🔒</span>
+                <span>Modo Desarrollador</span>
+            </button>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <header class="header">
+            <div class="header-title">Cic_IA</div>
+            <div class="header-actions">
+                <div class="mode-selector">
+                    <button class="mode-btn" data-mode="fast" onclick="setMode('fast')">Rápido</button>
+                    <button class="mode-btn active" data-mode="balanced" onclick="setMode('balanced')">Balanceado</button>
+                    <button class="mode-btn" data-mode="complete" onclick="setMode('complete')">Completo</button>
+                </div>
+            </div>
+        </header>
+
+        <div class="chat-container" id="chatContainer">
+            <!-- Welcome Screen -->
+            <div class="welcome-screen" id="welcomeScreen">
+                <h1 class="welcome-title">Cic_IA</h1>
+                <p class="welcome-subtitle">Tu asistente inteligente con memoria y aprendizaje continuo</p>
+                
+                <div class="capabilities">
+                    <div class="capability-card">
+                        <h4>💬 Chat Inteligente</h4>
+                        <p>Conversaciones naturales con contexto y memoria</p>
+                    </div>
+                    <div class="capability-card">
+                        <h4>📎 Archivos</h4>
+                        <p>Adjunta documentos, imágenes y código para analizar</p>
+                    </div>
+                    <div class="capability-card">
+                        <h4>🧠 Aprendizaje</h4>
+                        <p>Aprende de Wikipedia y de tus enseñanzas</p>
+                    </div>
+                    <div class="capability-card">
+                        <h4>🔒 Privado</h4>
+                        <p>Tus datos se almacenan de forma segura</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Messages -->
+            <div class="messages" id="messages" style="display: none;"></div>
+            
+            <!-- Typing -->
+            <div class="typing" id="typing">
+                <div class="typing-dot"></div>
+                <div class="typing-dot"></div>
+                <div class="typing-dot"></div>
+            </div>
+        </div>
+
+        <!-- Input -->
+        <div class="input-container">
+            <div class="input-wrapper">
+                <div id="filePreview" style="display: none;" class="file-preview">
+                    <span>📎 <span id="fileName"></span></span>
+                    <button onclick="removeFile()">✕</button>
+                </div>
+                
+                <div class="input-box">
+                    <textarea id="messageInput" placeholder="Escribe tu mensaje..." rows="1" onkeypress="handleKeyPress(event)"></textarea>
+                    
+                    <div class="input-actions">
+                        <div class="input-left">
+                            <button class="icon-btn" onclick="document.getElementById('fileInput').click()" title="Adjuntar archivo">
+                                📎
+                            </button>
+                            <input type="file" id="fileInput" onchange="handleFileSelect(event)" accept=".txt,.pdf,.png,.jpg,.jpeg,.gif,.doc,.docx,.py,.js,.html,.css,.json">
+                        </div>
+                        
+                        <button class="send-btn" id="sendBtn" onclick="sendMessage()">
+                            ➤
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Dev Panel -->
+    <aside class="dev-panel" id="devPanel">
+        <div class="dev-header">
+            <h3>🔧 Modo Desarrollador</h3>
+            <button class="icon-btn" onclick="closeDevPanel()">✕</button>
+        </div>
+        
+        <div class="dev-content">
+            <div class="dev-section">
+                <h4>Estadísticas</h4>
+                <div class="stat-grid">
+                    <div class="stat-box">
+                        <div class="stat-value" id="devTotalMemories">0</div>
+                        <div class="stat-label">Memorias</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-value" id="devTotalConvs">0</div>
+                        <div class="stat-label">Conversaciones</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-value" id="devTodayLearned">0</div>
+                        <div class="stat-label">Hoy</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-value" id="devDbType">-</div>
+                        <div class="stat-label">Base de datos</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="dev-section">
+                <h4>Logs Recientes</h4>
+                <div id="devLogs">
+                    <div class="log-entry">Sistema iniciado correctamente</div>
+                </div>
+            </div>
+            
+            <div class="dev-section">
+                <h4>Acciones</h4>
+                <button class="danger-btn" onclick="clearDatabase()">🗑️ Limpiar Base de Datos</button>
+            </div>
+        </div>
+    </aside>
+
+    <!-- Login Modal -->
+    <div class="modal" id="loginModal">
+        <div class="modal-content">
+            <h3>🔒 Acceso Desarrollador</h3>
+            <input type="password" id="devPassword" placeholder="Contraseña">
+            <div class="modal-actions">
+                <button class="btn-secondary" onclick="closeLoginModal()">Cancelar</button>
+                <button class="btn-primary" onclick="loginDev()">Acceder</button>
             </div>
         </div>
     </div>
 
     <script>
+        // Estado
         let currentMode = 'balanced';
-        let isProcessing = false;
-        
-        // Inicializar
+        let currentFile = null;
+        let devToken = localStorage.getItem('devToken');
+        let messages = [];
+
+        // Inicialización
         document.addEventListener('DOMContentLoaded', () => {
-            loadStatus();
-            setInterval(loadStatus, 30000); // Actualizar cada 30 segundos
+            loadHistory();
+            updateStats();
             
-            // Enter para enviar
-            document.getElementById('userInput').addEventListener('keypress', (e) => {
-                if (e.key === 'Enter') sendMessage();
+            // Auto-resize textarea
+            const textarea = document.getElementById('messageInput');
+            textarea.addEventListener('input', function() {
+                this.style.height = 'auto';
+                this.style.height = Math.min(this.scrollHeight, 200) + 'px';
             });
-            
-            // Focus en input
-            document.getElementById('userInput').focus();
         });
-        
+
+        // Modo
         function setMode(mode) {
             currentMode = mode;
             document.querySelectorAll('.mode-btn').forEach(btn => {
-                btn.classList.remove('active');
+                btn.classList.toggle('active', btn.dataset.mode === mode);
             });
-            document.getElementById(`mode-${mode}`).classList.add('active');
-            console.log('Modo cambiado a:', mode);
         }
-        
+
+        // Archivos
+        function handleFileSelect(event) {
+            const file = event.target.files[0];
+            if (file) {
+                currentFile = file;
+                document.getElementById('fileName').textContent = file.name;
+                document.getElementById('filePreview').style.display = 'flex';
+            }
+        }
+
+        function removeFile() {
+            currentFile = null;
+            document.getElementById('filePreview').style.display = 'none';
+            document.getElementById('fileInput').value = '';
+        }
+
+        // Chat
+        function handleKeyPress(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        }
+
         async function sendMessage() {
-            if (isProcessing) return;
-            
-            const input = document.getElementById('userInput');
+            const input = document.getElementById('messageInput');
             const message = input.value.trim();
             
-            if (!message) return;
+            if (!message && !currentFile) return;
             
-            // Mostrar mensaje del usuario
-            addMessage(message, 'user', 'Tú');
+            // Ocultar welcome
+            document.getElementById('welcomeScreen').style.display = 'none';
+            document.getElementById('messages').style.display = 'block';
+            
+            // Agregar mensaje usuario
+            addMessage(message || '[Archivo adjunto]', 'user');
+            
+            // Limpiar input
             input.value = '';
+            input.style.height = 'auto';
             
-            // Mostrar indicador de carga
-            isProcessing = true;
+            // Mostrar typing
             document.getElementById('typing').classList.add('show');
             document.getElementById('sendBtn').disabled = true;
-            hideError();
             
             try {
-                const response = await fetch('/chat', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        message: message,
-                        mode: currentMode
-                    })
-                });
+                let response;
                 
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-                
-                const data = await response.json();
-                
-                // Construir meta información
-                let metaHtml = `Bebé IA <span class="model-badge">${data.model_used || 'local'}</span>`;
-                
-                if (data.sources_used && data.sources_used.length > 0) {
-                    metaHtml += ' • ' + data.sources_used.map(s => 
-                        `<span class="source-tag">${s}</span>`
-                    ).join('');
-                }
-                
-                if (data.memories_found > 0) {
-                    metaHtml += ` • 🧠 ${data.memories_found} memorias`;
-                }
-                
-                addMessage(data.response, 'bot', metaHtml);
-                
-                // Actualizar estadísticas
-                loadStatus();
-                
-            } catch (error) {
-                console.error('Error:', error);
-                showError('Error de conexión. Intenta de nuevo.');
-                addMessage('Lo siento, tuve un problema de conexión. ¿Puedes intentar de nuevo?', 'bot', 'Error');
-            } finally {
-                isProcessing = false;
-                document.getElementById('typing').classList.remove('show');
-                document.getElementById('sendBtn').disabled = false;
-                input.focus();
-            }
-        }
-        
-        function addMessage(content, sender, meta) {
-            const chatArea = document.getElementById('chatArea');
-            const messageDiv = document.createElement('div');
-            messageDiv.className = `message ${sender}`;
-            
-            const contentDiv = document.createElement('div');
-            contentDiv.className = 'message-content';
-            contentDiv.innerHTML = content.replace(/\n/g, '<br>');
-            
-            const metaDiv = document.createElement('div');
-            metaDiv.className = 'message-meta';
-            metaDiv.innerHTML = meta || (sender === 'user' ? 'Tú' : 'Bebé IA');
-            
-            messageDiv.appendChild(contentDiv);
-            messageDiv.appendChild(metaDiv);
-            chatArea.appendChild(messageDiv);
-            
-            // Scroll al final
-            chatArea.scrollTop = chatArea.scrollHeight;
-        }
-        
-        async function loadStatus() {
-            try {
-                const response = await fetch('/status');
-                if (!response.ok) return;
-                
-                const data = await response.json();
-                
-                document.getElementById('statStage').textContent = data.stage || '🍼 Aprendiz';
-                document.getElementById('statMemories').textContent = `📚 ${data.total_memories || 0} memorias`;
-                document.getElementById('statLearning').textContent = 
-                    data.learning_active ? `🔄 Hoy: ${data.daily_learned || 0}` : '🔄 OFF';
-                
-            } catch (e) {
-                console.error('Error cargando estado:', e);
-            }
-        }
-        
-        async function forceLearn(source) {
-            const query = prompt(`¿Sobre qué tema quieres que aprenda de ${source}?`);
-            if (!query) return;
-            
-            addMessage(`🔬 Iniciando aprendizaje: "${query}"...`, 'bot', 'Sistema');
-            
-            try {
-                const response = await fetch('/learn', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ source: source, query: query })
-                });
-                
-                const data = await response.json();
-                addMessage(data.message || data.error || 'Completado', 'bot', 'Sistema');
-                loadStatus();
-                
-            } catch (error) {
-                addMessage('❌ Error al iniciar aprendizaje', 'bot', 'Error');
-            }
-        }
-        
-        async function showStatus() {
-            try {
-                const response = await fetch('/status');
-                const data = await response.json();
-                
-                let content = `📊 **Estado del Sistema**\n\n`;
-                content += `**Etapa:** ${data.stage}\n`;
-                content += `**Memorias totales:** ${data.total_memories}\n`;
-                content += `**Conversaciones:** ${data.total_conversations}\n`;
-                content += `**Aprendidos hoy:** ${data.daily_learned}\n`;
-                content += `**Modo:** ${data.mode}\n`;
-                content += `**Estado:** ${data.status}`;
-                
-                addMessage(content, 'bot', 'Sistema');
-                
-            } catch (error) {
-                addMessage('❌ Error obteniendo estado', 'bot', 'Error');
-            }
-        }
-        
-        function showTeach() {
-            const text = prompt('¿Qué quieres enseñarme? Escribe el conocimiento:');
-            if (!text) return;
-            
-            fetch('/teach', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ correct: text })
-            })
-            .then(response => response.json())
-            .then(data => {
-                addMessage(data.message || 'Aprendido', 'bot', 'Aprendizaje manual');
-                loadStatus();
-            })
-            .catch(() => {
-                addMessage('❌ Error guardando conocimiento', 'bot', 'Error');
-            });
-        }
-        
-        async function showMemories() {
-            try {
-                const response = await fetch('/memories');
-                const data = await response.json();
-                
-                if (data.error) {
-                    addMessage(`Error: ${data.error}`, 'bot', 'Error');
-                    return;
-                }
-                
-                let content = '🧠 **Últimas memorias:**\n\n';
-                
-                if (data.length === 0) {
-                    content += 'No hay memorias aún. ¡Habla conmigo o usa los botones de aprendizaje!';
+                if (currentFile) {
+                    // Enviar con archivo
+                    const formData = new FormData();
+                    formData.append('message', message);
+                    formData.append('mode', currentMode);
+                    formData.append('file', currentFile);
+                    
+                    response = await fetch('/api/chat-with-file', {
+                        method: 'POST',
+                        body: formData
+                    });
+                    
+                    removeFile();
                 } else {
-                    data.forEach((m, i) => {
-                        content += `${i+1}. **[${m.source}]** ${m.topic}\n`;
-                        content += `   ${m.content.substring(0, 100)}...\n\n`;
+                    // Solo texto
+                    response = await fetch('/api/chat', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({message, mode: currentMode})
                     });
                 }
                 
-                addMessage(content, 'bot', 'Sistema');
+                const data = await response.json();
+                
+                document.getElementById('typing').classList.remove('show');
+                
+                if (data.error) {
+                    addMessage('Error: ' + data.error, 'bot', 'error');
+                } else {
+                    addMessage(data.response, 'bot', data.sources_used?.[0]);
+                }
+                
+                updateStats();
                 
             } catch (error) {
-                addMessage('❌ Error cargando memorias', 'bot', 'Error');
+                document.getElementById('typing').classList.remove('show');
+                addMessage('Lo siento, tuve un error de conexión.', 'bot', 'error');
+            } finally {
+                document.getElementById('sendBtn').disabled = false;
             }
         }
-        
-        function showError(msg) {
-            const errorDiv = document.getElementById('errorMessage');
-            errorDiv.textContent = msg;
-            errorDiv.classList.add('show');
-            setTimeout(hideError, 5000);
+
+        function addMessage(content, sender, source) {
+            const container = document.getElementById('messages');
+            const div = document.createElement('div');
+            div.className = `message ${sender}`;
+            
+            const avatar = sender === 'user' ? '👤' : '🤖';
+            const meta = source ? `<div class="message-meta">Fuente: ${source}</div>` : '';
+            
+            div.innerHTML = `
+                <div class="message-avatar">${avatar}</div>
+                <div class="message-content">
+                    ${content.replace(/\n/g, '<br>')}
+                    ${meta}
+                </div>
+            `;
+            
+            container.appendChild(div);
+            container.scrollTop = container.scrollHeight;
         }
-        
-        function hideError() {
-            document.getElementById('errorMessage').classList.remove('show');
+
+        function newChat() {
+            document.getElementById('messages').innerHTML = '';
+            document.getElementById('messages').style.display = 'none';
+            document.getElementById('welcomeScreen').style.display = 'flex';
+            messages = [];
+        }
+
+        // Herramientas
+        async function openWiki() {
+            const topic = prompt('¿Sobre qué tema quieres que aprenda de Wikipedia?');
+            if (!topic) return;
+            
+            addMessage(`📚 Aprendiendo sobre: ${topic}...`, 'bot');
+            
+            try {
+                const response = await fetch('/api/learn', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({query: topic, source: 'wikipedia'})
+                });
+                
+                const data = await response.json();
+                addMessage(data.message, 'bot');
+                updateStats();
+                
+            } catch (error) {
+                addMessage('Error al iniciar aprendizaje', 'bot');
+            }
+        }
+
+        async function openTeach() {
+            const text = prompt('¿Qué quieres enseñarme?');
+            if (!text) return;
+            
+            try {
+                const response = await fetch('/api/teach', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({text})
+                });
+                
+                const data = await response.json();
+                addMessage(data.message, 'bot');
+                updateStats();
+                
+            } catch (error) {
+                addMessage('Error al guardar', 'bot');
+            }
+        }
+
+        async function showMemories() {
+            try {
+                const response = await fetch('/api/memories');
+                const data = await response.json();
+                
+                let content = '🧠 **Memorias recientes:**\n\n';
+                data.forEach((m, i) => {
+                    content += `${i+1}. [${m.source}] ${m.topic}\n`;
+                });
+                
+                addMessage(content, 'bot');
+                
+            } catch (error) {
+                addMessage('Error cargando memorias', 'bot');
+            }
+        }
+
+        async function showStats() {
+            try {
+                const response = await fetch('/api/status');
+                const data = await response.json();
+                
+                let content = `📊 **Estadísticas:**\n\n`;
+                content += `• Etapa: ${data.stage}\n`;
+                content += `• Memorias: ${data.total_memories}\n`;
+                content += `• Conversaciones: ${data.total_conversations}\n`;
+                content += `• Aprendidos hoy: ${data.today_learned}\n`;
+                content += `• Base de datos: ${data.db_size}`;
+                
+                addMessage(content, 'bot');
+                
+            } catch (error) {
+                addMessage('Error obteniendo estadísticas', 'bot');
+            }
+        }
+
+        // Historial
+        async function loadHistory() {
+            try {
+                const response = await fetch('/api/history');
+                const data = await response.json();
+                
+                const container = document.getElementById('chatHistory');
+                container.innerHTML = '';
+                
+                data.slice(0, 5).forEach(conv => {
+                    const div = document.createElement('div');
+                    div.className = 'nav-item';
+                    div.innerHTML = `<span>💬</span><span>${conv.user.substring(0, 30)}...</span>`;
+                    div.onclick = () => loadConversation(conv);
+                    container.appendChild(div);
+                });
+                
+            } catch (error) {
+                console.error('Error cargando historial:', error);
+            }
+        }
+
+        function loadConversation(conv) {
+            document.getElementById('welcomeScreen').style.display = 'none';
+            document.getElementById('messages').style.display = 'block';
+            document.getElementById('messages').innerHTML = '';
+            
+            addMessage(conv.user, 'user');
+            addMessage(conv.bot, 'bot');
+        }
+
+        async function updateStats() {
+            try {
+                const response = await fetch('/api/status');
+                const data = await response.json();
+                
+                // Actualizar dev panel si está abierto
+                document.getElementById('devTotalMemories').textContent = data.total_memories;
+                document.getElementById('devTotalConvs').textContent = data.total_conversations;
+                document.getElementById('devTodayLearned').textContent = data.today_learned;
+                document.getElementById('devDbType').textContent = data.db_size;
+                
+            } catch (error) {
+                console.error('Error actualizando stats:', error);
+            }
+        }
+
+        // Modo Desarrollador
+        function openDevLogin() {
+            document.getElementById('loginModal').classList.add('show');
+        }
+
+        function closeLoginModal() {
+            document.getElementById('loginModal').classList.remove('show');
+        }
+
+        async function loginDev() {
+            const password = document.getElementById('devPassword').value;
+            
+            try {
+                const response = await fetch('/api/dev/login', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({password})
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    devToken = data.token;
+                    localStorage.setItem('devToken', devToken);
+                    closeLoginModal();
+                    openDevPanel();
+                    loadDevLogs();
+                } else {
+                    alert('Contraseña incorrecta');
+                }
+                
+            } catch (error) {
+                alert('Error de conexión');
+            }
+        }
+
+        function openDevPanel() {
+            document.getElementById('devPanel').classList.add('show');
+            updateStats();
+        }
+
+        function closeDevPanel() {
+            document.getElementById('devPanel').classList.remove('show');
+        }
+
+        async function loadDevLogs() {
+            if (!devToken) return;
+            
+            try {
+                const response = await fetch('/api/dev/logs', {
+                    headers: {'X-Dev-Token': devToken}
+                });
+                
+                const data = await response.json();
+                
+                // Mostrar logs
+                const logsContainer = document.getElementById('devLogs');
+                logsContainer.innerHTML = '';
+                
+                data.recent_memories.forEach(mem => {
+                    const div = document.createElement('div');
+                    div.className = 'log-entry';
+                    div.textContent = `[${mem.source}] ${mem.topic}: ${mem.content.substring(0, 50)}...`;
+                    logsContainer.appendChild(div);
+                });
+                
+            } catch (error) {
+                console.error('Error cargando logs:', error);
+            }
+        }
+
+        async function clearDatabase() {
+            if (!confirm('¿Estás seguro? Se borrarán TODOS los datos.')) return;
+            
+            try {
+                const response = await fetch('/api/dev/clear-db', {
+                    method: 'POST',
+                    headers: {'X-Dev-Token': devToken}
+                });
+                
+                const data = await response.json();
+                alert(data.message);
+                updateStats();
+                
+            } catch (error) {
+                alert('Error al limpiar');
+            }
+        }
+
+        // Verificar token existente al cargar
+        if (devToken) {
+            fetch('/api/dev/verify', {
+                headers: {'X-Dev-Token': devToken}
+            }).then(r => r.json()).then(data => {
+                if (!data.valid) {
+                    localStorage.removeItem('devToken');
+                    devToken = null;
+                }
+            });
         }
     </script>
 </body>
