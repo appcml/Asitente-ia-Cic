@@ -46,7 +46,7 @@ class Conversation(db.Model):
     bot_response = db.Column(db.Text, nullable=False)
     timestamp = db.Column(db.DateTime, default=datetime.utcnow)
 
-# Crear tablas
+# Crear tablas dentro de contexto
 with app.app_context():
     db.create_all()
 
@@ -129,13 +129,17 @@ class BebeIA:
         self.daily_learned = 0
         self.last_reset = datetime.now()
         
+        # Obtener conteo inicial dentro de contexto
+        with app.app_context():
+            initial_memories = Memory.query.count()
+        
         # Iniciar aprendizaje automático
         self.learn_thread = threading.Thread(target=self._auto_learn_loop, daemon=True)
         self.learn_thread.start()
         
         print("=" * 60)
         print("🚀 BEBÉ IA PRO - MODO ESTABLE OFFLINE")
-        print(f"📚 {Memory.query.count()} memorias en base de datos")
+        print(f"📚 {initial_memories} memorias en base de datos")
         print("🔄 Aprendizaje automático: ACTIVO")
         print("=" * 60)
     
@@ -170,56 +174,60 @@ class BebeIA:
                 best_score = score
                 best_topic = topic
         
-        # 3. Buscar en memorias de la base de datos
-        memories = Memory.query.all()
-        relevant_memories = []
-        
-        for mem in memories:
-            mem_words = set(mem.content.lower().split())
-            input_words = set(input_lower.split())
-            common_words = mem_words & input_words
+        # 3. Buscar en memorias de la base de datos (con contexto)
+        with app.app_context():
+            memories = Memory.query.all()
+            relevant_memories = []
             
-            if len(common_words) >= 2:
-                relevant_memories.append(mem)
-                mem.access_count += 1
-        
-        db.session.commit()
-        
-        # 4. Generar respuesta
-        if best_score >= 2 and best_topic:
-            responses = KNOWLEDGE_BASE[best_topic]['respuestas']
-            response = random.choice(responses)
-            source = 'knowledge_base'
-            confidence = 'high'
-        elif relevant_memories:
-            memory = relevant_memories[0]
-            response = f"Basándome en lo que aprendí anteriormente: {memory.content[:400]}"
-            source = f"memory_{memory.source}"
-            confidence = 'medium'
-        else:
-            tema = user_input[:40] if len(user_input) > 5 else "este tema"
-            response = random.choice(KNOWLEDGE_BASE['default']['respuestas']).format(tema=tema)
-            source = 'local_ai'
-            confidence = 'learning'
-            self._schedule_learning(user_input)
-        
-        # Ajustar según modo
-        if mode == 'fast':
-            sentences = response.split('.')
-            response = sentences[0] + '.' if len(sentences) > 1 else response[:150]
-        elif mode == 'complete' and best_topic:
-            response += f"\n\n¿Te gustaría que investigue más sobre {best_topic.replace('_', ' ')}?"
-        
-        return self._save_and_respond(user_input, response, source, len(relevant_memories), confidence, mode)
+            for mem in memories:
+                mem_words = set(mem.content.lower().split())
+                input_words = set(input_lower.split())
+                common_words = mem_words & input_words
+                
+                if len(common_words) >= 2:
+                    relevant_memories.append(mem)
+                    mem.access_count += 1
+            
+            db.session.commit()
+            
+            # 4. Generar respuesta
+            if best_score >= 2 and best_topic:
+                responses = KNOWLEDGE_BASE[best_topic]['respuestas']
+                response = random.choice(responses)
+                source = 'knowledge_base'
+                confidence = 'high'
+            elif relevant_memories:
+                memory = relevant_memories[0]
+                response = f"Basándome en lo que aprendí anteriormente: {memory.content[:400]}"
+                source = f"memory_{memory.source}"
+                confidence = 'medium'
+            else:
+                tema = user_input[:40] if len(user_input) > 5 else "este tema"
+                response = random.choice(KNOWLEDGE_BASE['default']['respuestas']).format(tema=tema)
+                source = 'local_ai'
+                confidence = 'learning'
+                self._schedule_learning(user_input)
+            
+            # Ajustar según modo
+            if mode == 'fast':
+                sentences = response.split('.')
+                response = sentences[0] + '.' if len(sentences) > 1 else response[:150]
+            elif mode == 'complete' and best_topic:
+                response += f"\n\n¿Te gustaría que investigue más sobre {best_topic.replace('_', ' ')}?"
+            
+            return self._save_and_respond(user_input, response, source, len(relevant_memories), confidence, mode)
     
     def _save_and_respond(self, user_input: str, response: str, source: str, 
                          memories_found: int, confidence: str, mode: str) -> dict:
         """Guardar conversación y formatear respuesta"""
         
-        # Guardar conversación
-        conv = Conversation(user_message=user_input, bot_response=response)
-        db.session.add(conv)
-        db.session.commit()
+        with app.app_context():
+            # Guardar conversación
+            conv = Conversation(user_message=user_input, bot_response=response)
+            db.session.add(conv)
+            db.session.commit()
+            
+            total_memories = Memory.query.count()
         
         return {
             'response': response,
@@ -228,7 +236,7 @@ class BebeIA:
             'sources_used': [source],
             'memories_found': memories_found,
             'confidence': confidence,
-            'total_memories': Memory.query.count()
+            'total_memories': total_memories
         }
     
     def _is_date_time_question(self, input_lower: str) -> bool:
@@ -270,27 +278,31 @@ class BebeIA:
         """Bucle de aprendizaje automático cada 15 minutos"""
         while self.learning_active:
             try:
-                if (datetime.now() - self.last_reset).days >= 1:
-                    self.daily_learned = 0
-                    self.last_reset = datetime.now()
+                with app.app_context():
+                    # Reset diario
+                    if (datetime.now() - self.last_reset).days >= 1:
+                        self.daily_learned = 0
+                        self.last_reset = datetime.now()
+                    
+                    # Aprender si tenemos menos de 50 memorias
+                    if Memory.query.count() < 50 and self.daily_learned < 20:
+                        topics = ['inteligencia artificial', 'python', 'tecnología', 'ciencia', 'programación']
+                        topic = random.choice(topics)
+                        self._learn_from_wikipedia(topic)
+                        self.daily_learned += 1
                 
-                if Memory.query.count() < 50 and self.daily_learned < 20:
-                    topics = ['inteligencia artificial', 'python', 'tecnología', 'ciencia', 'programación']
-                    topic = random.choice(topics)
-                    self._learn_from_wikipedia(topic)
-                    self.daily_learned += 1
-                
-                time.sleep(900)
+                time.sleep(900)  # 15 minutos
                 
             except Exception as e:
                 print(f"Error en auto-learn: {e}")
-                time.sleep(300)
+                time.sleep(300)  # 5 minutos si hay error
     
     def _learn_from_wikipedia(self, query: str):
-        """Aprender de Wikipedia"""
+        """Aprender de Wikipedia (siempre dentro de app_context)"""
         try:
             print(f"🎓 Aprendiendo de Wikipedia: {query}")
             
+            # Buscar artículos
             search_url = f"https://es.wikipedia.org/w/api.php?action=query&list=search&srsearch={urllib.parse.quote(query)}&format=json&srlimit=2"
             
             with urllib.request.urlopen(search_url, timeout=15) as response:
@@ -298,6 +310,7 @@ class BebeIA:
             
             articles_found = 0
             for item in search_data['query']['search']:
+                # Obtener contenido completo
                 title = item['title']
                 content_url = f"https://es.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext&exchars=1500&titles={urllib.parse.quote(title)}&format=json"
                 
@@ -327,17 +340,18 @@ class BebeIA:
     def force_learn(self, source: str, query: str) -> str:
         """Aprendizaje forzado por el usuario"""
         try:
-            if source == 'wikipedia':
-                self._learn_from_wikipedia(query)
-                count = Memory.query.filter(Memory.topic.contains(query)).count()
-                return f"✅ Aprendí sobre '{query}' de Wikipedia. Ahora tengo {count} artículos relacionados."
-            
-            elif source == 'arxiv':
-                self._learn_from_wikipedia(query)
-                return f"✅ Investigación completada sobre '{query}' (usando Wikipedia como fuente principal)"
-            
-            else:
-                return "❌ Fuente no disponible. Usa 'wikipedia'."
+            with app.app_context():
+                if source == 'wikipedia':
+                    self._learn_from_wikipedia(query)
+                    count = Memory.query.filter(Memory.topic.contains(query)).count()
+                    return f"✅ Aprendí sobre '{query}' de Wikipedia. Ahora tengo {count} artículos relacionados."
+                
+                elif source == 'arxiv':
+                    self._learn_from_wikipedia(query)
+                    return f"✅ Investigación completada sobre '{query}' (usando Wikipedia como fuente principal)"
+                
+                else:
+                    return "❌ Fuente no disponible. Usa 'wikipedia'."
                 
         except Exception as e:
             return f"❌ Error al aprender: {str(e)}"
@@ -345,21 +359,24 @@ class BebeIA:
     def teach(self, text: str) -> str:
         """Enseñar manualmente a la IA"""
         try:
-            memory = Memory(
-                content=text,
-                source='user_teaching',
-                topic='manual_teaching',
-                access_count=1
-            )
-            db.session.add(memory)
-            db.session.commit()
-            return f"🎓 ¡Aprendido! He guardado: '{text[:50]}...' en mi memoria permanente."
+            with app.app_context():
+                memory = Memory(
+                    content=text,
+                    source='user_teaching',
+                    topic='manual_teaching',
+                    access_count=1
+                )
+                db.session.add(memory)
+                db.session.commit()
+                return f"🎓 ¡Aprendido! He guardado: '{text[:50]}...' en mi memoria permanente."
         except Exception as e:
             return f"❌ Error guardando: {str(e)}"
     
     def get_status(self) -> dict:
         """Obtener estado del sistema"""
-        total_memories = Memory.query.count()
+        with app.app_context():
+            total_memories = Memory.query.count()
+            total_conversations = Conversation.query.count()
         
         if total_memories < 20:
             stage = '🍼 Aprendiz'
@@ -373,7 +390,7 @@ class BebeIA:
         return {
             'stage': stage,
             'total_memories': total_memories,
-            'total_conversations': Conversation.query.count(),
+            'total_conversations': total_conversations,
             'daily_learned': self.daily_learned,
             'learning_active': self.learning_active,
             'mode': 'offline_stable',
