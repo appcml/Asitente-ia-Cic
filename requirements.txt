@@ -34,3 +34,5 @@ Pillow==10.0.0
 
 # Logging y Monitoreo
 python-json-logger==2.0.7
+gunicorn==21.2.0
+
