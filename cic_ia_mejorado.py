@@ -483,6 +483,27 @@ class CicIA:
 # Instancia global
 cic_ia = CicIA()
 
+# ============ RUTAS DE PÁGINAS WEB ============
+
+@app.route('/')
+def index():
+    """Página principal - Chat interface"""
+    return render_template('index.html')
+
+@app.route('/chat')
+def chat_page():
+    """Alias para la página principal"""
+    return render_template('index.html')
+
+@app.route('/health')
+def health_check():
+    """Health check endpoint para Render"""
+    return jsonify({
+        'status': 'healthy',
+        'timestamp': datetime.utcnow().isoformat(),
+        'version': '2.0'
+    })
+
 # ============ RUTAS API ============
 
 @app.route('/api/chat', methods=['POST'])
@@ -552,8 +573,6 @@ def status():
             })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
-
-# ============ RESTO DE RUTAS (igual que antes) ============
 
 @app.route('/api/learn', methods=['POST'])
 def learn():
@@ -717,6 +736,21 @@ def dev_clear_db():
 def uploaded_file(filename):
     """Servir archivos subidos"""
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
+
+# ============ MANEJADORES DE ERROR ============
+
+@app.errorhandler(404)
+def not_found(error):
+    """Manejar 404 - Redirigir a la app para rutas SPA"""
+    if request.path.startswith('/api/'):
+        return jsonify({'error': 'Endpoint no encontrado'}), 404
+    return render_template('index.html')
+
+@app.errorhandler(500)
+def internal_error(error):
+    """Manejar 500"""
+    db.session.rollback()
+    return jsonify({'error': 'Error interno del servidor'}), 500
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
