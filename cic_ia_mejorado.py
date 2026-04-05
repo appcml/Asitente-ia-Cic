@@ -7,6 +7,7 @@ Cic_IA - Asistente Inteligente MEJORADO con Búsqueda Web Autónoma
 ✅ NUEVO: Búsqueda web autónoma con DuckDuckGo
 ✅ NUEVO: Análisis semántico de respuestas
 ✅ NUEVO: Aprendizaje continuo mejorado
+✅ NUEVO: Auto-aprendizaje cada 6 horas
 """
 
 from flask import Flask, render_template, request, jsonify, send_from_directory
@@ -60,13 +61,13 @@ db = SQLAlchemy(app)
 class Memory(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     content = db.Column(db.Text, nullable=False)
-    source = db.Column(db.String(50), default='local')  # local, wikipedia, web, user_taught
+    source = db.Column(db.String(50), default='local')  # local, wikipedia, web, user_taught, auto_learning
     topic = db.Column(db.String(200))
     file_path = db.Column(db.String(500))
     file_type = db.Column(db.String(50))
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     access_count = db.Column(db.Integer, default=0)
-    relevance_score = db.Column(db.Float, default=0.5)  # NUEVO: Puntuación de relevancia
+    relevance_score = db.Column(db.Float, default=0.5)
 
 class Conversation(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -74,14 +75,15 @@ class Conversation(db.Model):
     bot_response = db.Column(db.Text, nullable=False)
     has_attachment = db.Column(db.Boolean, default=False)
     attachment_path = db.Column(db.String(500))
-    sources_used = db.Column(db.JSON)  # NUEVO: Guardar fuentes usadas
+    sources_used = db.Column(db.JSON)
     timestamp = db.Column(db.DateTime, default=datetime.utcnow)
 
 class LearningLog(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     date = db.Column(db.Date, default=date.today, unique=True)
     count = db.Column(db.Integer, default=0)
-    web_searches = db.Column(db.Integer, default=0)  # NUEVO: Búsquedas web realizadas
+    web_searches = db.Column(db.Integer, default=0)
+    auto_learned = db.Column(db.Integer, default=0)  # NUEVO: Contador de auto-aprendizaje
 
 class DeveloperSession(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -89,12 +91,21 @@ class DeveloperSession(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     last_access = db.Column(db.DateTime, default=datetime.utcnow)
 
-class WebSearchCache(db.Model):  # NUEVO: Cache de búsquedas web
+class WebSearchCache(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     query = db.Column(db.String(500), unique=True)
     results = db.Column(db.JSON)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     expires_at = db.Column(db.DateTime)
+
+class KnowledgeEvolution(db.Model):  # NUEVO: Trackear evolución del conocimiento
+    id = db.Column(db.Integer, primary_key=True)
+    date = db.Column(db.DateTime, default=datetime.utcnow)
+    topic = db.Column(db.String(200))
+    action = db.Column(db.String(50))  # 'learned', 'updated', 'forgotten'
+    old_content = db.Column(db.Text)
+    new_content = db.Column(db.Text)
+    source = db.Column(db.String(50))
 
 # Crear tablas
 with app.app_context():
@@ -105,7 +116,6 @@ with app.app_context():
 DEV_PASSWORD_HASH = hashlib.sha256("CicDev2024!".encode()).hexdigest()
 
 def verify_dev_token(token):
-    """Verificar si el token de desarrollador es válido"""
     if not token:
         return False
     with app.app_context():
@@ -119,16 +129,9 @@ def verify_dev_token(token):
 # ============ BÚSQUEDA WEB AUTÓNOMA ============
 
 class WebSearchEngine:
-    """Motor de búsqueda autónomo para Cic_IA"""
-    
     @staticmethod
     def search_duckduckgo(query, max_results=5):
-        """
-        Buscar en DuckDuckGo usando web scraping
-        Alternativa: usar librería duckduckgo-search
-        """
         try:
-            # Usar la librería duckduckgo-search si está disponible
             try:
                 from duckduckgo_search import DDGS
                 results = []
@@ -142,7 +145,6 @@ class WebSearchEngine:
                         })
                 return results
             except ImportError:
-                # Fallback: usar requests + BeautifulSoup
                 logger.warning("duckduckgo-search no instalada, usando fallback")
                 return WebSearchEngine._search_fallback(query, max_results)
         except Exception as e:
@@ -151,12 +153,9 @@ class WebSearchEngine:
     
     @staticmethod
     def _search_fallback(query, max_results=5):
-        """Fallback para búsqueda sin librería especializada"""
         try:
             url = f"https://html.duckduckgo.com/?q={urllib.parse.quote(query)}"
-            headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-            }
+            headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
             response = requests.get(url, headers=headers, timeout=10)
             soup = BeautifulSoup(response.content, 'html.parser')
             
@@ -165,7 +164,6 @@ class WebSearchEngine:
                 try:
                     title_elem = result.find('a', class_='result__a')
                     snippet_elem = result.find('a', class_='result__snippet')
-                    
                     if title_elem and snippet_elem:
                         results.append({
                             'title': title_elem.get_text(),
@@ -175,36 +173,10 @@ class WebSearchEngine:
                         })
                 except:
                     continue
-            
             return results
         except Exception as e:
             logger.error(f"Error en fallback de búsqueda: {e}")
             return []
-    
-    @staticmethod
-    def extract_content(url, max_length=1000):
-        """Extraer contenido principal de una URL"""
-        try:
-            headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-            }
-            response = requests.get(url, headers=headers, timeout=10)
-            soup = BeautifulSoup(response.content, 'html.parser')
-            
-            # Remover scripts y styles
-            for script in soup(['script', 'style']):
-                script.decompose()
-            
-            # Obtener texto
-            text = soup.get_text(separator=' ', strip=True)
-            
-            # Limpiar espacios
-            text = ' '.join(text.split())
-            
-            return text[:max_length]
-        except Exception as e:
-            logger.error(f"Error extrayendo contenido de {url}: {e}")
-            return ""
 
 # ============ BASE DE CONOCIMIENTO ============
 KNOWLEDGE_BASE = {
@@ -231,12 +203,12 @@ KNOWLEDGE_BASE = {
     },
     'fecha_hora': {
         'respuestas': ['DYNAMIC_DATE'],
-        'keywords': ['qué día es', 'qué hora es', 'fecha actual', 'hora actual', 'hoy es']
+        'keywords': ['qué día', 'qué hora', 'fecha', 'hora actual', 'hoy es']
     },
     'cic_ia': {
         'respuestas': [
             "Soy Cic_IA, una inteligencia artificial en desarrollo creada para aprender y asistir.",
-            "Cic_IA está construida con Python y Flask, ahora con búsqueda web autónoma."
+            "Cic_IA está construida con Python y Flask, con búsqueda web autónoma y aprendizaje continuo."
         ],
         'keywords': ['quién eres', 'qué eres', 'cic_ia', 'tu nombre', 'presentación']
     },
@@ -255,23 +227,46 @@ class CicIA:
         self.learning_active = True
         self.web_search_engine = WebSearchEngine()
         
+        # Temas para auto-aprendizaje continuo
+        self.auto_learning_topics = [
+            'inteligencia artificial noticias 2024',
+            'machine learning avances',
+            'python programación novedades',
+            'tecnología futuro',
+            'ciencia de datos tendencias',
+            'deep learning aplicaciones',
+            'IA ética y regulación',
+            'computación cuántica',
+            'robótica avances',
+            'procesamiento lenguaje natural',
+            'visión artificial',
+            'redes neuronales',
+            'big data analytics',
+            'cloud computing tendencias',
+            'ciberseguridad IA'
+        ]
+        
         with app.app_context():
             self.stats = {
                 'memories': Memory.query.count(),
                 'conversations': Conversation.query.count(),
-                'today_learned': self._get_today_count()
+                'today_learned': self._get_today_count(),
+                'auto_learned_total': self._get_auto_learned_total()
             }
         
         # Iniciar threads
         threading.Thread(target=self._auto_learn_loop, daemon=True).start()
         threading.Thread(target=self._auto_web_search_loop, daemon=True).start()
+        threading.Thread(target=self._continuous_learning_loop, daemon=True).start()  # NUEVO
         
         print("=" * 60)
         print("🚀 CIC_IA MEJORADA INICIADA")
         print(f"📚 Memorias: {self.stats['memories']}")
         print(f"💬 Conversaciones: {self.stats['conversations']}")
         print(f"📈 Aprendidos hoy: {self.stats['today_learned']}")
+        print(f"🤖 Auto-aprendidos total: {self.stats['auto_learned_total']}")
         print("🌐 Búsqueda web: ACTIVADA")
+        print("🧠 Auto-aprendizaje: ACTIVADO (cada 6 horas)")
         print("=" * 60)
     
     def _get_today_count(self):
@@ -279,12 +274,115 @@ class CicIA:
         log = LearningLog.query.filter_by(date=today).first()
         return log.count if log else 0
     
+    def _get_auto_learned_total(self):
+        total = db.session.query(db.func.sum(LearningLog.auto_learned)).scalar()
+        return int(total) if total else 0
+    
+    # ============ AUTO-APRENDIZAJE CONTINUO (NUEVO) ============
+    
+    def _continuous_learning_loop(self):
+        """Loop de aprendizaje continuo - cada 6 horas aprende algo nuevo"""
+        logger.info("🧠 Iniciando loop de auto-aprendizaje continuo...")
+        
+        # Primera ejecución después de 5 minutos (para no sobrecargar al inicio)
+        time.sleep(300)
+        
+        while self.learning_active:
+            try:
+                self._perform_auto_learning()
+            except Exception as e:
+                logger.error(f"Error en auto-aprendizaje: {e}")
+            
+            # Esperar 6 horas antes de volver a aprender
+            logger.info("⏰ Auto-aprendizaje: esperando 6 horas...")
+            time.sleep(21600)  # 6 horas en segundos
+    
+    def _perform_auto_learning(self):
+        """Realizar una sesión de auto-aprendizaje"""
+        with app.app_context():
+            # Elegir tema aleatorio
+            topic = random.choice(self.auto_learning_topics)
+            logger.info(f"🤖 Auto-aprendizaje: investigando sobre '{topic}'")
+            
+            # Buscar información
+            results = self.web_search_engine.search_duckduckgo(topic, max_results=3)
+            
+            if not results:
+                logger.warning(f"No se encontraron resultados para '{topic}'")
+                return
+            
+            learned_count = 0
+            
+            for result in results:
+                try:
+                    # Verificar si ya existe contenido similar (evitar duplicados)
+                    content_preview = result['snippet'][:100]
+                    exists = Memory.query.filter(
+                        Memory.content.ilike(f'%{content_preview}%')
+                    ).first()
+                    
+                    if exists:
+                        logger.info(f"⏭️ Ya existe información similar: {result['title'][:50]}...")
+                        continue
+                    
+                    # Verificar duplicado por URL
+                    url_exists = Memory.query.filter(
+                        Memory.content.contains(result['url'])
+                    ).first()
+                    
+                    if url_exists:
+                        logger.info(f"⏭️ URL ya conocida: {result['url'][:50]}...")
+                        continue
+                    
+                    # Crear memoria
+                    memory = Memory(
+                        content=f"{result['title']}\n\n{result['snippet']}\n\nFuente: {result['url']}",
+                        source='auto_learning',
+                        topic=topic,
+                        relevance_score=0.6,
+                        access_count=0
+                    )
+                    db.session.add(memory)
+                    learned_count += 1
+                    
+                    # Registrar evolución
+                    evolution = KnowledgeEvolution(
+                        topic=topic,
+                        action='learned',
+                        new_content=result['snippet'][:200],
+                        source='auto_learning'
+                    )
+                    db.session.add(evolution)
+                    
+                    logger.info(f"✅ Aprendido: {result['title'][:60]}...")
+                    
+                except Exception as e:
+                    logger.error(f"Error procesando resultado: {e}")
+                    continue
+            
+            # Actualizar contadores
+            if learned_count > 0:
+                db.session.commit()
+                
+                today = date.today()
+                log = LearningLog.query.filter_by(date=today).first()
+                if not log:
+                    log = LearningLog(date=today, count=0, web_searches=0, auto_learned=0)
+                    db.session.add(log)
+                
+                log.auto_learned += learned_count
+                log.web_searches += len(results)
+                db.session.commit()
+                
+                logger.info(f"🎉 Auto-aprendizaje completado: {learned_count} nuevos conocimientos")
+            else:
+                logger.info("📝 No se aprendió nada nuevo en esta ronda")
+    
     def _auto_web_search_loop(self):
-        """Thread para limpiar cache de búsquedas web expiradas"""
+        """Limpiar cache de búsquedas web expiradas"""
         while self.learning_active:
             try:
                 with app.app_context():
-                    # ✅ CORREGIDO: SQLAlchemy 2.0 style
                     stmt = select(WebSearchCache).where(
                         WebSearchCache.expires_at < datetime.utcnow()
                     )
@@ -292,45 +390,41 @@ class CicIA:
                     for cache_entry in expired:
                         db.session.delete(cache_entry)
                     db.session.commit()
-                    logger.info(f"🧹 Cache limpiado: {len(expired)} entradas eliminadas")
+                    if len(expired) > 0:
+                        logger.info(f"🧹 Cache limpiado: {len(expired)} entradas eliminadas")
             except Exception as e:
                 logger.error(f"Error limpiando cache: {e}")
-            time.sleep(3600)  # Cada hora
+            time.sleep(3600)
     
     def _auto_learn_loop(self):
-        """Thread para aprendizaje automático continuo"""
+        """Actualizar puntuaciones de relevancia"""
         while self.learning_active:
             try:
                 with app.app_context():
-                    # Actualizar puntuaciones de relevancia
                     memories = Memory.query.all()
                     for mem in memories:
-                        # Aumentar relevancia si se accede frecuentemente
                         mem.relevance_score = min(1.0, mem.relevance_score + (mem.access_count * 0.01))
                     db.session.commit()
             except Exception as e:
                 logger.error(f"Error en auto-learn: {e}")
-            time.sleep(3600)  # Cada hora
+            time.sleep(3600)
+    
+    # ============ CHAT Y RESPUESTAS ============
     
     def chat(self, user_input, mode='balanced', attachment_info=None):
-        """Procesar mensaje con búsqueda web autónoma"""
         input_lower = user_input.lower().strip()
         
-        # Fecha/hora dinámica
         if self._is_date_time_question(input_lower):
             response = self._get_dynamic_date_response(input_lower)
             return self._save_conversation(user_input, response, 'system_time', 
                                          attachment_info=attachment_info)
         
-        # Buscar en conocimiento base
         best_topic = self._find_best_topic(input_lower)
         
-        # Buscar en memorias locales
         with app.app_context():
             memories = Memory.query.all()
             relevant_memories = self._find_relevant_memories(input_lower, memories)
             
-            # Generar respuesta
             sources_used = []
             
             if best_topic and best_topic != 'default':
@@ -341,7 +435,6 @@ class CicIA:
                 response = f"Basándome en mi conocimiento: {mem.content[:300]}"
                 sources_used.append(f"memory_{mem.source}")
             else:
-                # NUEVO: Buscar en web si no hay respuesta local
                 tema = user_input[:40] if len(user_input) > 5 else "este tema"
                 web_results = self._search_and_learn(user_input)
                 
@@ -353,7 +446,6 @@ class CicIA:
                     response = random.choice(KNOWLEDGE_BASE['default']['respuestas']).format(tema=tema)
                     sources_used.append('learning')
             
-            # Ajustar según modo
             if mode == 'fast':
                 response = response.split('.')[0] + '.' if '.' in response else response[:100]
             elif mode == 'complete':
@@ -365,27 +457,22 @@ class CicIA:
                                          sources_used=sources_used)
     
     def _search_and_learn(self, query):
-        """Buscar en web y aprender automáticamente"""
         try:
             with app.app_context():
-                # Verificar cache
                 cached = WebSearchCache.query.filter_by(query=query).first()
                 if cached and cached.expires_at > datetime.utcnow():
                     return cached.results
                 
-                # Buscar en web
                 results = self.web_search_engine.search_duckduckgo(query, max_results=3)
                 
                 if not results:
                     return None
                 
-                # Procesar resultados
                 summary = ""
                 for i, result in enumerate(results, 1):
                     summary += f"{i}. **{result['title']}**\n"
                     summary += f"   {result['snippet']}\n\n"
                     
-                    # Guardar en memoria
                     memory = Memory(
                         content=result['snippet'],
                         source='web_search',
@@ -394,7 +481,6 @@ class CicIA:
                     )
                     db.session.add(memory)
                 
-                # Guardar en cache (válido por 24 horas)
                 cache_entry = WebSearchCache(
                     query=query,
                     results={'summary': summary},
@@ -443,17 +529,15 @@ class CicIA:
             )
             db.session.add(conv)
             
-            # Actualizar log de aprendizaje
             today = date.today()
             log = LearningLog.query.filter_by(date=today).first()
             if not log:
-                log = LearningLog(date=today, count=1)
+                log = LearningLog(date=today, count=1, web_searches=0, auto_learned=0)
                 db.session.add(log)
             else:
                 log.count += 1
             
             db.session.commit()
-            
             total_mem = Memory.query.count()
         
         return {
@@ -479,6 +563,38 @@ class CicIA:
         hora = f"🕐 Son las {now.strftime('%H:%M:%S')}"
         
         return f"{fecha}\n{hora}"
+    
+    # ============ NUEVOS MÉTODOS PARA EVOLUCIÓN ============
+    
+    def get_learning_stats(self):
+        """Obtener estadísticas de aprendizaje"""
+        with app.app_context():
+            total_memories = Memory.query.count()
+            auto_learned = Memory.query.filter_by(source='auto_learning').count()
+            web_learned = Memory.query.filter_by(source='web_search').count()
+            user_taught = Memory.query.filter_by(source='user_taught').count()
+            
+            # Últimos 7 días
+            week_ago = date.today() - timedelta(days=7)
+            recent_logs = LearningLog.query.filter(LearningLog.date >= week_ago).all()
+            
+            weekly_stats = {
+                'conversations': sum(log.count for log in recent_logs),
+                'web_searches': sum(log.web_searches for log in recent_logs),
+                'auto_learned': sum(log.auto_learned for log in recent_logs)
+            }
+            
+            return {
+                'total_memories': total_memories,
+                'by_source': {
+                    'auto_learning': auto_learned,
+                    'web_search': web_learned,
+                    'user_taught': user_taught,
+                    'knowledge_base': total_memories - auto_learned - web_learned - user_taught
+                },
+                'last_7_days': weekly_stats,
+                'evolution_ready': True
+            }
 
 # Instancia global
 cic_ia = CicIA()
@@ -487,28 +603,25 @@ cic_ia = CicIA()
 
 @app.route('/')
 def index():
-    """Página principal - Chat interface"""
     return render_template('index.html')
 
 @app.route('/chat')
 def chat_page():
-    """Alias para la página principal"""
     return render_template('index.html')
 
 @app.route('/health')
 def health_check():
-    """Health check endpoint para Render"""
     return jsonify({
         'status': 'healthy',
         'timestamp': datetime.utcnow().isoformat(),
-        'version': '2.0'
+        'version': '2.1',
+        'features': ['chat', 'web_search', 'auto_learning', 'memory', 'evolution']
     })
 
 # ============ RUTAS API ============
 
 @app.route('/api/chat', methods=['POST'])
 def chat():
-    """Chat endpoint mejorado"""
     try:
         data = request.json
         message = data.get('message', '').strip()
@@ -524,16 +637,13 @@ def chat():
 
 @app.route('/api/web-search', methods=['POST'])
 def web_search():
-    """NUEVO: Endpoint de búsqueda web"""
     try:
         query = request.json.get('query', '').strip()
-        
         if not query:
             return jsonify({'error': 'Query vacío'}), 400
         
         results = cic_ia.web_search_engine.search_duckduckgo(query, max_results=5)
         
-        # Guardar en base de datos
         with app.app_context():
             for result in results:
                 memory = Memory(
@@ -556,27 +666,29 @@ def web_search():
 
 @app.route('/api/status')
 def status():
-    """Status endpoint mejorado"""
     try:
         with app.app_context():
             today = date.today()
             log = LearningLog.query.filter_by(date=today).first()
+            stats = cic_ia.get_learning_stats()
             
             return jsonify({
-                'stage': 'v2_mejorada',
-                'total_memories': Memory.query.count(),
+                'stage': 'v2.1_evolution',
+                'total_memories': stats['total_memories'],
                 'total_conversations': Conversation.query.count(),
                 'today_learned': log.count if log else 0,
+                'today_auto_learned': log.auto_learned if log else 0,
                 'web_searches_today': log.web_searches if log else 0,
                 'db_size': 'PostgreSQL' if database_url else 'SQLite',
-                'features': ['chat', 'web_search', 'memory', 'learning', 'attachments']
+                'auto_learning_active': True,
+                'learning_stats': stats,
+                'features': ['chat', 'web_search', 'auto_learning', 'memory', 'evolution', 'attachments']
             })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/learn', methods=['POST'])
 def learn():
-    """Aprender de Wikipedia o web"""
     try:
         data = request.json
         query = data.get('query', '')
@@ -594,7 +706,6 @@ def learn():
                     )
                     db.session.add(memory)
             else:
-                # Wikipedia fallback
                 memory = Memory(
                     content=f"Información sobre {query}",
                     source='wikipedia',
@@ -614,7 +725,6 @@ def learn():
 
 @app.route('/api/teach', methods=['POST'])
 def teach():
-    """Enseñar a la IA"""
     try:
         text = request.json.get('text', '')
         
@@ -634,7 +744,6 @@ def teach():
 
 @app.route('/api/memories')
 def memories():
-    """Obtener memorias"""
     try:
         with app.app_context():
             mems = Memory.query.order_by(Memory.created_at.desc()).limit(10).all()
@@ -650,7 +759,6 @@ def memories():
 
 @app.route('/api/history')
 def history():
-    """Historial de conversaciones"""
     try:
         with app.app_context():
             convs = Conversation.query.order_by(Conversation.timestamp.desc()).limit(5).all()
@@ -662,9 +770,30 @@ def history():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+# NUEVO: Endpoint para estadísticas de evolución
+@app.route('/api/evolution/stats')
+def evolution_stats():
+    try:
+        stats = cic_ia.get_learning_stats()
+        return jsonify(stats)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# NUEVO: Endpoint para forzar auto-aprendizaje (modo dev)
+@app.route('/api/evolution/learn-now', methods=['POST'])
+def force_learning():
+    token = request.headers.get('X-Dev-Token')
+    if not verify_dev_token(token):
+        return jsonify({'error': 'No autorizado'}), 403
+    
+    try:
+        threading.Thread(target=cic_ia._perform_auto_learning, daemon=True).start()
+        return jsonify({'message': '🤖 Auto-aprendizaje iniciado manualmente'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/dev/login', methods=['POST'])
 def dev_login():
-    """Login de desarrollador"""
     try:
         password = request.json.get('password', '')
         password_hash = hashlib.sha256(password.encode()).hexdigest()
@@ -682,13 +811,11 @@ def dev_login():
 
 @app.route('/api/dev/verify')
 def dev_verify():
-    """Verificar token de desarrollador"""
     token = request.headers.get('X-Dev-Token')
     return jsonify({'valid': verify_dev_token(token)})
 
 @app.route('/api/dev/logs')
 def dev_logs():
-    """Obtener logs del sistema"""
     token = request.headers.get('X-Dev-Token')
     if not verify_dev_token(token):
         return jsonify({'error': 'No autorizado'}), 403
@@ -700,7 +827,8 @@ def dev_logs():
                     'memories': Memory.query.count(),
                     'conversations': Conversation.query.count(),
                     'learning_logs': LearningLog.query.count(),
-                    'web_searches': WebSearchCache.query.count()
+                    'web_searches': WebSearchCache.query.count(),
+                    'knowledge_evolution': KnowledgeEvolution.query.count()
                 },
                 'recent_memories': [{
                     'id': m.id,
@@ -709,14 +837,19 @@ def dev_logs():
                     'content': m.content[:200],
                     'relevance': m.relevance_score,
                     'created': m.created_at.isoformat()
-                } for m in Memory.query.order_by(Memory.created_at.desc()).limit(5).all()]
+                } for m in Memory.query.order_by(Memory.created_at.desc()).limit(5).all()],
+                'recent_evolution': [{
+                    'id': e.id,
+                    'topic': e.topic,
+                    'action': e.action,
+                    'date': e.date.isoformat()
+                } for e in KnowledgeEvolution.query.order_by(KnowledgeEvolution.date.desc()).limit(5).all()]
             })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/dev/clear-db', methods=['POST'])
 def dev_clear_db():
-    """Limpiar base de datos"""
     token = request.headers.get('X-Dev-Token')
     if not verify_dev_token(token):
         return jsonify({'error': 'No autorizado'}), 403
@@ -727,28 +860,24 @@ def dev_clear_db():
             Conversation.query.delete()
             LearningLog.query.delete()
             WebSearchCache.query.delete()
+            KnowledgeEvolution.query.delete()
             db.session.commit()
-            return jsonify({'message': 'Base de datos limpiada'})
+            return jsonify({'message': 'Base de datos limpiada completamente'})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
 @app.route('/uploads/<path:filename>')
 def uploaded_file(filename):
-    """Servir archivos subidos"""
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
-
-# ============ MANEJADORES DE ERROR ============
 
 @app.errorhandler(404)
 def not_found(error):
-    """Manejar 404 - Redirigir a la app para rutas SPA"""
     if request.path.startswith('/api/'):
         return jsonify({'error': 'Endpoint no encontrado'}), 404
     return render_template('index.html')
 
 @app.errorhandler(500)
 def internal_error(error):
-    """Manejar 500"""
     db.session.rollback()
     return jsonify({'error': 'Error interno del servidor'}), 500
 
