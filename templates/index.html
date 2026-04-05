@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cic_IA - Asistente Inteligente</title>
+    <title>Cic_IA - Asistente Inteligente Mejorado</title>
     <style>
         * {
             margin: 0;
@@ -373,7 +373,6 @@
             cursor: not-allowed;
         }
 
-        /* File attachment */
         .file-preview {
             display: flex;
             align-items: center;
@@ -381,7 +380,6 @@
             padding: 8px 12px;
             background: var(--bg-dark);
             border-radius: 6px;
-            margin-bottom: 10px;
         }
 
         .file-preview button {
@@ -394,51 +392,57 @@
         /* Typing indicator */
         .typing {
             display: none;
-            align-items: center;
-            gap: 5px;
-            padding: 10px 0;
+            padding: 20px;
+            text-align: center;
         }
 
         .typing.show {
-            display: flex;
+            display: block;
         }
 
         .typing-dot {
+            display: inline-block;
             width: 8px;
             height: 8px;
-            background: var(--primary);
             border-radius: 50%;
+            background: var(--primary);
+            margin: 0 4px;
             animation: typing 1.4s infinite;
         }
 
-        .typing-dot:nth-child(2) { animation-delay: 0.2s; }
-        .typing-dot:nth-child(3) { animation-delay: 0.4s; }
-
-        @keyframes typing {
-            0%, 60%, 100% { transform: translateY(0); }
-            30% { transform: translateY(-10px); }
+        .typing-dot:nth-child(2) {
+            animation-delay: 0.2s;
         }
 
-        /* ============ DEV PANEL ============ */
+        .typing-dot:nth-child(3) {
+            animation-delay: 0.4s;
+        }
+
+        @keyframes typing {
+            0%, 60%, 100% { opacity: 0.5; }
+            30% { opacity: 1; }
+        }
+
+        /* Dev Panel */
         .dev-panel {
-            display: none;
             position: fixed;
+            right: -400px;
             top: 0;
-            right: 0;
             width: 400px;
             height: 100vh;
             background: var(--bg-darker);
             border-left: 1px solid var(--border);
+            transition: right 0.3s;
             z-index: 200;
             overflow-y: auto;
         }
 
         .dev-panel.show {
-            display: block;
+            right: 0;
         }
 
         .dev-header {
-            padding: 20px;
+            padding: 15px;
             border-bottom: 1px solid var(--border);
             display: flex;
             justify-content: space-between;
@@ -446,18 +450,16 @@
         }
 
         .dev-content {
-            padding: 20px;
+            padding: 15px;
         }
 
         .dev-section {
-            margin-bottom: 25px;
+            margin-bottom: 20px;
         }
 
         .dev-section h4 {
-            color: var(--primary);
             margin-bottom: 10px;
-            font-size: 14px;
-            text-transform: uppercase;
+            color: var(--primary);
         }
 
         .stat-grid {
@@ -467,14 +469,14 @@
         }
 
         .stat-box {
-            background: var(--bg-dark);
-            padding: 15px;
-            border-radius: 8px;
+            background: var(--bg-chat);
+            padding: 10px;
+            border-radius: 6px;
             text-align: center;
         }
 
         .stat-value {
-            font-size: 24px;
+            font-size: 20px;
             font-weight: bold;
             color: var(--primary);
         }
@@ -482,22 +484,20 @@
         .stat-label {
             font-size: 12px;
             color: var(--text-secondary);
-            margin-top: 5px;
         }
 
         .log-entry {
-            background: var(--bg-dark);
-            padding: 10px;
-            border-radius: 6px;
-            margin-bottom: 8px;
-            font-family: monospace;
+            padding: 8px;
+            background: var(--bg-chat);
+            border-radius: 4px;
+            margin-bottom: 5px;
             font-size: 12px;
         }
 
         .danger-btn {
             width: 100%;
-            padding: 12px;
-            background: #dc3545;
+            padding: 10px;
+            background: #d32f2f;
             border: none;
             border-radius: 6px;
             color: white;
@@ -644,7 +644,7 @@
     <!-- Main Content -->
     <main class="main-content">
         <header class="header">
-            <div class="header-title">Cic_IA</div>
+            <div class="header-title">🤖 Cic_IA Mejorado</div>
             <div class="header-actions">
                 <div class="mode-selector">
                     <button class="mode-btn" data-mode="fast" onclick="setMode('fast')">Rápido</button>
@@ -657,25 +657,25 @@
         <div class="chat-container" id="chatContainer">
             <!-- Welcome Screen -->
             <div class="welcome-screen" id="welcomeScreen">
-                <h1 class="welcome-title">Cic_IA</h1>
-                <p class="welcome-subtitle">Tu asistente inteligente con memoria y aprendizaje continuo</p>
+                <h1 class="welcome-title">Cic_IA Mejorado</h1>
+                <p class="welcome-subtitle">Asistente inteligente con búsqueda web, aprendizaje continuo y análisis semántico</p>
                 
                 <div class="capabilities">
                     <div class="capability-card">
-                        <h4>💬 Chat Inteligente</h4>
-                        <p>Conversaciones naturales con contexto y memoria</p>
+                        <h4>🌐 Búsqueda Web</h4>
+                        <p>Investiga en internet automáticamente</p>
                     </div>
                     <div class="capability-card">
-                        <h4>📎 Archivos</h4>
-                        <p>Adjunta documentos, imágenes y código para analizar</p>
+                        <h4>📎 Documentos</h4>
+                        <p>Procesa PDFs, imágenes, Word y más</p>
                     </div>
                     <div class="capability-card">
-                        <h4>🧠 Aprendizaje</h4>
-                        <p>Aprende de Wikipedia y de tus enseñanzas</p>
+                        <h4>🧠 Análisis Semántico</h4>
+                        <p>Comprensión profunda del lenguaje</p>
                     </div>
                     <div class="capability-card">
-                        <h4>🔒 Privado</h4>
-                        <p>Tus datos se almacenan de forma segura</p>
+                        <h4>📈 Aprendizaje Continuo</h4>
+                        <p>Mejora constantemente con cada interacción</p>
                     </div>
                 </div>
             </div>
@@ -707,7 +707,7 @@
                             <button class="icon-btn" onclick="document.getElementById('fileInput').click()" title="Adjuntar archivo">
                                 📎
                             </button>
-                            <input type="file" id="fileInput" onchange="handleFileSelect(event)" accept=".txt,.pdf,.png,.jpg,.jpeg,.gif,.doc,.docx,.py,.js,.html,.css,.json">
+                            <input type="file" id="fileInput" onchange="handleFileSelect(event)">
                         </div>
                         
                         <button class="send-btn" id="sendBtn" onclick="sendMessage()">
@@ -752,7 +752,7 @@
             <div class="dev-section">
                 <h4>Logs Recientes</h4>
                 <div id="devLogs">
-                    <div class="log-entry">Sistema iniciado correctamente</div>
+                    <div class="log-entry">Sistema inicializado correctamente</div>
                 </div>
             </div>
             
@@ -787,7 +787,6 @@
             loadHistory();
             updateStats();
             
-            // Auto-resize textarea
             const textarea = document.getElementById('messageInput');
             textarea.addEventListener('input', function() {
                 this.style.height = 'auto';
@@ -833,18 +832,14 @@
             
             if (!message && !currentFile) return;
             
-            // Ocultar welcome
             document.getElementById('welcomeScreen').style.display = 'none';
             document.getElementById('messages').style.display = 'block';
             
-            // Agregar mensaje usuario
             addMessage(message || '[Archivo adjunto]', 'user');
             
-            // Limpiar input
             input.value = '';
             input.style.height = 'auto';
             
-            // Mostrar typing
             document.getElementById('typing').classList.add('show');
             document.getElementById('sendBtn').disabled = true;
             
@@ -852,7 +847,6 @@
                 let response;
                 
                 if (currentFile) {
-                    // Enviar con archivo
                     const formData = new FormData();
                     formData.append('message', message);
                     formData.append('mode', currentMode);
@@ -865,7 +859,6 @@
                     
                     removeFile();
                 } else {
-                    // Solo texto
                     response = await fetch('/api/chat', {
                         method: 'POST',
                         headers: {'Content-Type': 'application/json'},
@@ -922,7 +915,7 @@
 
         // Herramientas
         async function openWiki() {
-            const topic = prompt('¿Sobre qué tema quieres que aprenda de Wikipedia?');
+            const topic = prompt('¿Sobre qué tema quieres que aprenda?');
             if (!topic) return;
             
             addMessage(`📚 Aprendiendo sobre: ${topic}...`, 'bot');
@@ -931,13 +924,12 @@
                 const response = await fetch('/api/learn', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({query: topic, source: 'wikipedia'})
+                    body: JSON.stringify({query: topic, source: 'web'})
                 });
                 
                 const data = await response.json();
                 addMessage(data.message, 'bot');
                 updateStats();
-                
             } catch (error) {
                 addMessage('Error al iniciar aprendizaje', 'bot');
             }
@@ -957,7 +949,6 @@
                 const data = await response.json();
                 addMessage(data.message, 'bot');
                 updateStats();
-                
             } catch (error) {
                 addMessage('Error al guardar', 'bot');
             }
@@ -974,7 +965,6 @@
                 });
                 
                 addMessage(content, 'bot');
-                
             } catch (error) {
                 addMessage('Error cargando memorias', 'bot');
             }
@@ -993,7 +983,6 @@
                 content += `• Base de datos: ${data.db_size}`;
                 
                 addMessage(content, 'bot');
-                
             } catch (error) {
                 addMessage('Error obteniendo estadísticas', 'bot');
             }
@@ -1015,7 +1004,6 @@
                     div.onclick = () => loadConversation(conv);
                     container.appendChild(div);
                 });
-                
             } catch (error) {
                 console.error('Error cargando historial:', error);
             }
@@ -1035,12 +1023,10 @@
                 const response = await fetch('/api/status');
                 const data = await response.json();
                 
-                // Actualizar dev panel si está abierto
                 document.getElementById('devTotalMemories').textContent = data.total_memories;
                 document.getElementById('devTotalConvs').textContent = data.total_conversations;
                 document.getElementById('devTodayLearned').textContent = data.today_learned;
                 document.getElementById('devDbType').textContent = data.db_size;
-                
             } catch (error) {
                 console.error('Error actualizando stats:', error);
             }
@@ -1076,7 +1062,6 @@
                 } else {
                     alert('Contraseña incorrecta');
                 }
-                
             } catch (error) {
                 alert('Error de conexión');
             }
@@ -1101,7 +1086,6 @@
                 
                 const data = await response.json();
                 
-                // Mostrar logs
                 const logsContainer = document.getElementById('devLogs');
                 logsContainer.innerHTML = '';
                 
@@ -1111,7 +1095,6 @@
                     div.textContent = `[${mem.source}] ${mem.topic}: ${mem.content.substring(0, 50)}...`;
                     logsContainer.appendChild(div);
                 });
-                
             } catch (error) {
                 console.error('Error cargando logs:', error);
             }
@@ -1129,7 +1112,6 @@
                 const data = await response.json();
                 alert(data.message);
                 updateStats();
-                
             } catch (error) {
                 alert('Error al limpiar');
             }
