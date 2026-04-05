@@ -12,7 +12,7 @@ Cic_IA - Asistente Inteligente MEJORADO con Búsqueda Web Autónoma
 from flask import Flask, render_template, request, jsonify, send_from_directory
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.utils import secure_filename
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 import os
 import json
 import random
@@ -25,6 +25,7 @@ import hashlib
 import requests
 from bs4 import BeautifulSoup
 import logging
+from sqlalchemy import select
 
 # Configurar logging
 logging.basicConfig(level=logging.INFO)
@@ -283,11 +284,15 @@ class CicIA:
         while self.learning_active:
             try:
                 with app.app_context():
-                    # Limpiar cache expirado cada hora
-                    WebSearchCache.query.filter(
+                    # ✅ CORREGIDO: SQLAlchemy 2.0 style
+                    stmt = select(WebSearchCache).where(
                         WebSearchCache.expires_at < datetime.utcnow()
-                    ).delete()
+                    )
+                    expired = db.session.execute(stmt).scalars().all()
+                    for cache_entry in expired:
+                        db.session.delete(cache_entry)
                     db.session.commit()
+                    logger.info(f"🧹 Cache limpiado: {len(expired)} entradas eliminadas")
             except Exception as e:
                 logger.error(f"Error limpiando cache: {e}")
             time.sleep(3600)  # Cada hora
@@ -390,7 +395,6 @@ class CicIA:
                     db.session.add(memory)
                 
                 # Guardar en cache (válido por 24 horas)
-                from datetime import timedelta
                 cache_entry = WebSearchCache(
                     query=query,
                     results={'summary': summary},
