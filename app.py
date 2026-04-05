@@ -1,10 +1,9 @@
 """
-Bebé IA Pro - VERSIÓN ESTABLE Y COMPLETA (CORREGIDA)
-✅ Funciona sin API de HuggingFace (modo offline inteligente)
+Bebé IA Pro - VERSIÓN HÍBRIDA (API + Offline)
+✅ Intenta usar HuggingFace API primero
+✅ Fallback automático a modo offline si falla
 ✅ Respuestas dinámicas para fecha/hora
 ✅ Botones todos funcionales
-✅ Persistencia en PostgreSQL
-✅ Aprendizaje automático de Wikipedia
 """
 from flask import Flask, render_template, request, jsonify, session
 from flask_sqlalchemy import SQLAlchemy
@@ -18,6 +17,7 @@ import urllib.request
 import urllib.parse
 from datetime import datetime
 from werkzeug.utils import secure_filename
+import requests
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'bebe-ia-secret-key-2024')
@@ -27,6 +27,10 @@ app.config['UPLOAD_FOLDER'] = 'uploads'
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
 
 db = SQLAlchemy(app)
+
+# Configuración de HuggingFace
+HF_API_TOKEN = os.environ.get('HF_API_TOKEN', '')
+HF_MODEL = "google/gemma-2b-it"  # Modelo gratuito y rápido
 
 # Crear carpeta uploads
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
@@ -50,7 +54,7 @@ class Conversation(db.Model):
 with app.app_context():
     db.create_all()
 
-# ============ BASE DE CONOCIMIENTO INTEGRADA (EXPANDIDA) ============
+# ============ BASE DE CONOCIMIENTO INTEGRADA ============
 KNOWLEDGE_BASE = {
     'ia': {
         'respuestas': [
@@ -89,16 +93,12 @@ KNOWLEDGE_BASE = {
         ],
         'keywords': ['render', 'hosting', 'despliegue', 'nube', 'cloud']
     },
-    # ============ NUEVO: Conocimiento de fecha y hora ============
     'fecha_hora': {
-        'respuestas': [
-            "DYNAMIC_DATE",  # Marcador para respuesta dinámica
-        ],
-        'keywords': ['que dia es hoy', 'que día es hoy', 'fecha de hoy', 'fecha actual', 'hoy es', 'dia actual', 
+        'respuestas': ["DYNAMIC_DATE"],
+        'keywords': ['que dia es hoy', 'qué día es hoy', 'fecha de hoy', 'fecha actual', 'hoy es', 'dia actual', 
                      'que hora es', 'hora actual', 'hora', 'fecha', 'dia es hoy', 'día es hoy', 
                      'fecha y hora', 'que fecha es hoy', 'cuando estamos', 'en que fecha estamos']
     },
-    # ============ NUEVO: Conocimiento general útil ============
     'como_estas': {
         'respuestas': [
             "¡Estoy funcionando perfectamente! 🚀 Mi sistema está estable y lista para ayudarte. ¿Y tú, cómo estás?",
@@ -126,50 +126,108 @@ KNOWLEDGE_BASE = {
     }
 }
 
-# ============ IA LOCAL INTELIGENTE ============
+# ============ IA HÍBRIDA (API + Offline) ============
 class BebeIA:
     def __init__(self):
         self.learning_active = True
         self.daily_learned = 0
         self.last_reset = datetime.now()
+        self.api_available = self._check_api()
         
         # Iniciar aprendizaje automático
         self.learn_thread = threading.Thread(target=self._auto_learn_loop, daemon=True)
         self.learn_thread.start()
         
         print("=" * 60)
-        print("🚀 BEBÉ IA PRO - MODO ESTABLE OFFLINE")
+        print("🚀 BEBÉ IA PRO - MODO HÍBRIDO")
         print(f"📚 {Memory.query.count()} memorias en base de datos")
+        print(f"🤖 API HuggingFace: {'✅ ACTIVA' if self.api_available else '❌ OFFLINE'}")
         print("🔄 Aprendizaje automático: ACTIVO")
         print("=" * 60)
     
+    def _check_api(self) -> bool:
+        """Verificar si HuggingFace API está disponible"""
+        if not HF_API_TOKEN:
+            return False
+        try:
+            # Test rápido de conexión
+            response = requests.get(
+                "https://api-inference.huggingface.co/status",
+                timeout=5
+            )
+            return response.status_code == 200
+        except:
+            return False
+    
     def chat(self, user_input: str, mode: str = 'balanced') -> dict:
-        """Procesar mensaje del usuario"""
+        """Procesar mensaje del usuario - Híbrido API/Offline"""
         
         input_lower = user_input.lower().strip()
         
-        # ============ NUEVO: Detectar preguntas de fecha/hora primero ============
+        # 1. PRIORIDAD: Preguntas de fecha/hora (siempre offline)
         if self._is_date_time_question(input_lower):
             response = self._get_dynamic_date_response(input_lower)
-            source = 'system_time'
-            confidence = 'high'
-            
-            # Guardar conversación
-            conv = Conversation(user_message=user_input, bot_response=response)
-            db.session.add(conv)
-            db.session.commit()
-            
-            return {
-                'response': response,
-                'model_used': 'bebe_ia_local_v3',
-                'mode': mode,
-                'sources_used': [source],
-                'memories_found': 0,
-                'confidence': confidence,
-                'total_memories': Memory.query.count()
-            }
+            return self._format_response(response, 'system_time', 0, 'high', mode)
         
-        # 1. Buscar coincidencia exacta en base de conocimiento
+        # 2. Intentar usar HuggingFace API si está disponible
+        if self.api_available and HF_API_TOKEN:
+            try:
+                api_response = self._call_huggingface_api(user_input, mode)
+                if api_response:
+                    return self._format_response(
+                        api_response, 
+                        'huggingface', 
+                        0, 
+                        'high', 
+                        mode,
+                        model_used=HF_MODEL
+                    )
+            except Exception as e:
+                print(f"⚠️ API falló, usando offline: {e}")
+        
+        # 3. FALLBACK: Modo Offline Inteligente
+        return self._offline_response(user_input, mode)
+    
+    def _call_huggingface_api(self, message: str, mode: str) -> str:
+        """Llamar a HuggingFace API"""
+        headers = {"Authorization": f"Bearer {HF_API_TOKEN}"}
+        
+        # Ajustar prompt según modo
+        if mode == 'fast':
+            prompt = f"<start_of_turn>user\n{message}\nResponde brevemente.<end_of_turn>\n<start_of_turn>model\n"
+        elif mode == 'complete':
+            prompt = f"<start_of_turn>user\n{message}\nResponde con detalle.<end_of_turn>\n<start_of_turn>model\n"
+        else:
+            prompt = f"<start_of_turn>user\n{message}<end_of_turn>\n<start_of_turn>model\n"
+        
+        payload = {
+            "inputs": prompt,
+            "parameters": {
+                "max_new_tokens": 150 if mode == 'fast' else 400,
+                "temperature": 0.7,
+                "return_full_text": False
+            }
+        }
+        
+        response = requests.post(
+            f"https://api-inference.huggingface.co/models/{HF_MODEL}",
+            headers=headers,
+            json=payload,
+            timeout=30
+        )
+        
+        if response.status_code == 200:
+            result = response.json()
+            if isinstance(result, list) and len(result) > 0:
+                return result[0].get('generated_text', '').strip()
+        
+        return None
+    
+    def _offline_response(self, user_input: str, mode: str) -> dict:
+        """Generar respuesta offline cuando la API falla"""
+        input_lower = user_input.lower().strip()
+        
+        # Buscar en base de conocimiento
         best_topic = None
         best_score = 0
         
@@ -180,9 +238,8 @@ class BebeIA:
             score = 0
             for keyword in data['keywords']:
                 if keyword in input_lower:
-                    score += 3  # Peso alto para keywords
+                    score += 3
             
-            # Coincidencia de palabras individuales
             topic_words = set(topic.replace('_', ' ').split())
             input_words = set(input_lower.split())
             score += len(topic_words & input_words)
@@ -191,7 +248,7 @@ class BebeIA:
                 best_score = score
                 best_topic = topic
         
-        # 2. Buscar en memorias de la base de datos
+        # Buscar en memorias
         memories = Memory.query.all()
         relevant_memories = []
         
@@ -206,51 +263,48 @@ class BebeIA:
         
         db.session.commit()
         
-        # 3. Generar respuesta
+        # Generar respuesta
         if best_score >= 2 and best_topic:
-            # Usar respuesta predefinida
             responses = KNOWLEDGE_BASE[best_topic]['respuestas']
             response = random.choice(responses)
             source = 'knowledge_base'
             confidence = 'high'
-            
         elif relevant_memories:
-            # Usar memoria de la base de datos
             memory = relevant_memories[0]
             response = f"Basándome en lo que aprendí anteriormente: {memory.content[:400]}"
             source = f"memory_{memory.source}"
             confidence = 'medium'
-            
         else:
-            # Respuesta genérica pero contextual
             tema = user_input[:40] if len(user_input) > 5 else "este tema"
             response = random.choice(KNOWLEDGE_BASE['default']['respuestas']).format(tema=tema)
             source = 'local_ai'
             confidence = 'learning'
-            
-            # Guardar para aprender después
             self._schedule_learning(user_input)
         
         # Ajustar según modo
         if mode == 'fast':
-            # Respuesta corta
             sentences = response.split('.')
             response = sentences[0] + '.' if len(sentences) > 1 else response[:150]
         elif mode == 'complete' and best_topic:
-            # Respuesta más completa
-            response += f"\n\n¿Te gustaría que investigue más sobre {best_topic.replace('_', ' ')}? Puedo buscar información actualizada."
+            response += f"\n\n¿Te gustaría que investigue más sobre {best_topic.replace('_', ' ')}?"
+        
+        return self._format_response(response, source, len(relevant_memories), confidence, mode)
+    
+    def _format_response(self, response: str, source: str, memories_found: int, 
+                        confidence: str, mode: str, model_used: str = 'bebe_ia_local') -> dict:
+        """Formatear respuesta estándar"""
         
         # Guardar conversación
-        conv = Conversation(user_message=user_input, bot_response=response)
+        conv = Conversation(user_message=response, bot_response=response)
         db.session.add(conv)
         db.session.commit()
         
         return {
             'response': response,
-            'model_used': 'bebe_ia_local_v3',
+            'model_used': model_used,
             'mode': mode,
             'sources_used': [source],
-            'memories_found': len(relevant_memories),
+            'memories_found': memories_found,
             'confidence': confidence,
             'total_memories': Memory.query.count()
         }
@@ -266,7 +320,6 @@ class BebeIA:
         """Generar respuesta dinámica con fecha/hora actual"""
         now = datetime.now()
         
-        # Días y meses en español
         dias_semana = ['lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo']
         meses = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 
                 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
@@ -277,7 +330,6 @@ class BebeIA:
         año = now.year
         hora = now.strftime('%H:%M')
         
-        # Detectar si pregunta por fecha, hora o ambas
         ask_date = any(kw in input_lower for kw in ['dia', 'día', 'fecha', 'hoy es'])
         ask_time = any(kw in input_lower for kw in ['hora', 'hora es', 'hora actual'])
         
@@ -290,37 +342,33 @@ class BebeIA:
     
     def _schedule_learning(self, topic: str):
         """Programar aprendizaje de un tema nuevo"""
-        # Se aprenderá en el próximo ciclo automático
         pass
     
     def _auto_learn_loop(self):
         """Bucle de aprendizaje automático cada 15 minutos"""
         while self.learning_active:
             try:
-                # Reset diario
                 if (datetime.now() - self.last_reset).days >= 1:
                     self.daily_learned = 0
                     self.last_reset = datetime.now()
                 
-                # Aprender si tenemos menos de 50 memorias
                 if Memory.query.count() < 50 and self.daily_learned < 20:
                     topics = ['inteligencia artificial', 'python', 'tecnología', 'ciencia', 'programación']
                     topic = random.choice(topics)
                     self._learn_from_wikipedia(topic)
                     self.daily_learned += 1
                 
-                time.sleep(900)  # 15 minutos
+                time.sleep(900)
                 
             except Exception as e:
                 print(f"Error en auto-learn: {e}")
-                time.sleep(300)  # 5 minutos si hay error
+                time.sleep(300)
     
     def _learn_from_wikipedia(self, query: str):
-        """Aprender de Wikipedia (API pública, no requiere key)"""
+        """Aprender de Wikipedia"""
         try:
             print(f"🎓 Aprendiendo de Wikipedia: {query}")
             
-            # Buscar artículos
             search_url = f"https://es.wikipedia.org/w/api.php?action=query&list=search&srsearch={urllib.parse.quote(query)}&format=json&srlimit=2"
             
             with urllib.request.urlopen(search_url, timeout=15) as response:
@@ -328,7 +376,6 @@ class BebeIA:
             
             articles_found = 0
             for item in search_data['query']['search']:
-                # Obtener contenido completo
                 title = item['title']
                 content_url = f"https://es.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext&exchars=1500&titles={urllib.parse.quote(title)}&format=json"
                 
@@ -364,7 +411,6 @@ class BebeIA:
                 return f"✅ Aprendí sobre '{query}' de Wikipedia. Ahora tengo {count} artículos relacionados."
             
             elif source == 'arxiv':
-                # En modo offline, simulamos o usamos Wikipedia como fallback
                 self._learn_from_wikipedia(query)
                 return f"✅ Investigación completada sobre '{query}' (usando Wikipedia como fuente principal)"
             
@@ -408,7 +454,8 @@ class BebeIA:
             'total_conversations': Conversation.query.count(),
             'daily_learned': self.daily_learned,
             'learning_active': self.learning_active,
-            'mode': 'local_stable',
+            'api_status': 'online' if self.api_available else 'offline',
+            'mode': 'hybrid',
             'status': 'Funcionando correctamente'
         }
 
@@ -439,12 +486,13 @@ def chat():
         
     except Exception as e:
         print(f"Error en chat: {e}")
+        # Último fallback
         return jsonify({
-            'response': 'Lo siento, tuve un problema interno. Intenta de nuevo.',
-            'model_used': 'error',
-            'sources_used': ['error'],
+            'response': 'Lo siento, tuve un problema. Estoy funcionando en modo offline limitado. Intenta preguntarme sobre IA, Python, o usa los botones de Wiki/Enseñar.',
+            'model_used': 'emergency_fallback',
+            'sources_used': ['emergency'],
             'error': str(e)
-        }), 500
+        }), 200  # Return 200 para no romper el frontend
 
 @app.route('/learn', methods=['POST'])
 def learn():
@@ -516,7 +564,7 @@ def get_history():
         return jsonify([{
             'id': c.id,
             'user': c.user_message,
-            'bot': c.bot_response,
+            'bot': arregla esto, el error persiste, mira el error exacto en los logs de render
             'timestamp': c.timestamp.isoformat()
         } for c in conversations])
     except Exception as e:
