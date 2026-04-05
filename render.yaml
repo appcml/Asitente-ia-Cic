@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: cic-ia
+    env: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn cic_ia_mejorado:app
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11
