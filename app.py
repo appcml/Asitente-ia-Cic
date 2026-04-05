@@ -1,6 +1,7 @@
 """
-Bebé IA Pro - VERSIÓN ESTABLE Y COMPLETA
+Bebé IA Pro - VERSIÓN ESTABLE Y COMPLETA (CORREGIDA)
 ✅ Funciona sin API de HuggingFace (modo offline inteligente)
+✅ Respuestas dinámicas para fecha/hora
 ✅ Botones todos funcionales
 ✅ Persistencia en PostgreSQL
 ✅ Aprendizaje automático de Wikipedia
@@ -49,7 +50,7 @@ class Conversation(db.Model):
 with app.app_context():
     db.create_all()
 
-# ============ BASE DE CONOCIMIENTO INTEGRADA ============
+# ============ BASE DE CONOCIMIENTO INTEGRADA (EXPANDIDA) ============
 KNOWLEDGE_BASE = {
     'ia': {
         'respuestas': [
@@ -88,11 +89,38 @@ KNOWLEDGE_BASE = {
         ],
         'keywords': ['render', 'hosting', 'despliegue', 'nube', 'cloud']
     },
+    # ============ NUEVO: Conocimiento de fecha y hora ============
+    'fecha_hora': {
+        'respuestas': [
+            "DYNAMIC_DATE",  # Marcador para respuesta dinámica
+        ],
+        'keywords': ['que dia es hoy', 'que día es hoy', 'fecha de hoy', 'fecha actual', 'hoy es', 'dia actual', 
+                     'que hora es', 'hora actual', 'hora', 'fecha', 'dia es hoy', 'día es hoy', 
+                     'fecha y hora', 'que fecha es hoy', 'cuando estamos', 'en que fecha estamos']
+    },
+    # ============ NUEVO: Conocimiento general útil ============
+    'como_estas': {
+        'respuestas': [
+            "¡Estoy funcionando perfectamente! 🚀 Mi sistema está estable y lista para ayudarte. ¿Y tú, cómo estás?",
+            "Todo bien por aquí. Estoy en modo de aprendizaje automático y funcionando al 100%. ¿En qué puedo ayudarte?",
+            "¡Excelente! Acabo de actualizar mis estadísticas. Tengo muchas ganas de aprender contigo hoy."
+        ],
+        'keywords': ['como estas', 'cómo estás', 'que tal', 'como te va', 'todo bien', 'estado']
+    },
+    'nombre': {
+        'respuestas': [
+            "Soy Bebé IA Pro 🤖, una inteligencia artificial en desarrollo que aprende de Wikipedia y de las conversaciones contigo.",
+            "Me llamo Bebé IA Pro. Fui creada para aprender y ayudar, y estoy alojada en Render con base de datos PostgreSQL.",
+            "¡Bebé IA Pro a tu servicio! Estoy en la etapa de aprendizaje pero me esfuerzo por dar buenas respuestas."
+        ],
+        'keywords': ['como te llamas', 'tu nombre', 'quien eres', 'qué eres', 'quien sos', 'presentate']
+    },
     'default': {
         'respuestas': [
             "Entiendo tu pregunta sobre '{tema}'. Estoy en modo de aprendizaje continuo. ¿Puedes darme más contexto?",
-            "Interesante tema: '{tema}'. Estoy investigando para darte la mejor respuesta.",
-            "Estoy aprendiendo sobre '{tema}'. Mientras tanto, ¿qué aspecto específico te interesa?"
+            "Interesante tema: '{tema}'. Estoy investigando para darte la mejor respuesta. Mientras tanto, ¿quieres que busque información en Wikipedia?",
+            "Estoy aprendiendo sobre '{tema}'. Puedo investigar este tema usando el botón 📖 **Wiki** si lo deseas.",
+            "No tengo suficiente información sobre '{tema}' aún. ¿Te gustaría enseñarme algo al respecto usando el botón 🎓 **Enseñar**?"
         ],
         'keywords': []
     }
@@ -110,7 +138,7 @@ class BebeIA:
         self.learn_thread.start()
         
         print("=" * 60)
-        print("🚀 BEbÉ IA PRO - MODO ESTABLE OFFLINE")
+        print("🚀 BEBÉ IA PRO - MODO ESTABLE OFFLINE")
         print(f"📚 {Memory.query.count()} memorias en base de datos")
         print("🔄 Aprendizaje automático: ACTIVO")
         print("=" * 60)
@@ -119,6 +147,27 @@ class BebeIA:
         """Procesar mensaje del usuario"""
         
         input_lower = user_input.lower().strip()
+        
+        # ============ NUEVO: Detectar preguntas de fecha/hora primero ============
+        if self._is_date_time_question(input_lower):
+            response = self._get_dynamic_date_response(input_lower)
+            source = 'system_time'
+            confidence = 'high'
+            
+            # Guardar conversación
+            conv = Conversation(user_message=user_input, bot_response=response)
+            db.session.add(conv)
+            db.session.commit()
+            
+            return {
+                'response': response,
+                'model_used': 'bebe_ia_local_v3',
+                'mode': mode,
+                'sources_used': [source],
+                'memories_found': 0,
+                'confidence': confidence,
+                'total_memories': Memory.query.count()
+            }
         
         # 1. Buscar coincidencia exacta en base de conocimiento
         best_topic = None
@@ -205,6 +254,39 @@ class BebeIA:
             'confidence': confidence,
             'total_memories': Memory.query.count()
         }
+    
+    def _is_date_time_question(self, input_lower: str) -> bool:
+        """Detectar si es una pregunta sobre fecha o hora"""
+        date_keywords = ['que dia es hoy', 'qué día es hoy', 'fecha', 'hora es', 'hora actual', 
+                        'fecha actual', 'dia actual', 'día actual', 'hoy es', 'fecha de hoy',
+                        'que hora', 'qué hora', 'fecha y hora', 'que fecha', 'qué fecha']
+        return any(kw in input_lower for kw in date_keywords)
+    
+    def _get_dynamic_date_response(self, input_lower: str) -> str:
+        """Generar respuesta dinámica con fecha/hora actual"""
+        now = datetime.now()
+        
+        # Días y meses en español
+        dias_semana = ['lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo']
+        meses = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 
+                'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
+        
+        dia_semana = dias_semana[now.weekday()]
+        dia = now.day
+        mes = meses[now.month - 1]
+        año = now.year
+        hora = now.strftime('%H:%M')
+        
+        # Detectar si pregunta por fecha, hora o ambas
+        ask_date = any(kw in input_lower for kw in ['dia', 'día', 'fecha', 'hoy es'])
+        ask_time = any(kw in input_lower for kw in ['hora', 'hora es', 'hora actual'])
+        
+        if ask_date and ask_time:
+            return f"📅 Hoy es {dia_semana}, {dia} de {mes} de {año}.\n⏰ La hora actual es {hora}."
+        elif ask_time:
+            return f"⏰ Son las {hora}."
+        else:
+            return f"📅 Hoy es {dia_semana}, {dia} de {mes} de {año}."
     
     def _schedule_learning(self, topic: str):
         """Programar aprendizaje de un tema nuevo"""
