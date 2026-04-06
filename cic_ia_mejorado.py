@@ -736,21 +736,57 @@ def learn():
 
 @app.route('/api/teach', methods=['POST'])
 def teach():
+    """Enseñar a la IA manualmente (desde chat o modo desarrollador)"""
     try:
-        text = request.json.get('text', '')
+        data = request.json
+        text = data.get('text', '').strip()
+        topic = data.get('topic', '').strip()
+        source = data.get('source', 'user_taught')
+        
+        # Verificar token de desarrollador (opcional pero recomendado)
+        token = request.headers.get('X-Dev-Token')
+        is_dev = verify_dev_token(token) if token else False
+        
+        if not text:
+            return jsonify({'error': 'Texto vacío'}), 400
+        
+        # Si no hay tema, usar primeros 50 caracteres
+        if not topic:
+            topic = text[:50]
         
         with app.app_context():
+            # Crear memoria
             memory = Memory(
                 content=text,
-                source='user_taught',
-                topic=text[:50],
-                relevance_score=0.9
+                source=source,
+                topic=topic,
+                relevance_score=0.9 if source == 'user_taught' else 0.7,
+                access_count=0
             )
             db.session.add(memory)
+            
+            # Si es modo desarrollador, registrar en evolución
+            if is_dev:
+                evolution = KnowledgeEvolution(
+                    topic=topic,
+                    action='manual_teach',
+                    new_content=text[:200],
+                    source='developer'
+                )
+                db.session.add(evolution)
+            
             db.session.commit()
             
-            return jsonify({'message': '✅ He aprendido lo que me enseñaste'})
+            return jsonify({
+                'message': 'He aprendido lo que me enseñaste',
+                'memory_id': memory.id,
+                'topic': topic,
+                'source': source,
+                'is_dev_mode': is_dev
+            })
+            
     except Exception as e:
+        db.session.rollback()
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/memories')
@@ -816,10 +852,14 @@ def get_topics():
         }
     })
 
+# ========== NUEVOS ENDPOINTS PARA MODO DESARROLLADOR ==========
+
 @app.route('/api/dev/login', methods=['POST'])
 def dev_login():
+    """Login para modo desarrollador"""
     try:
-        password = request.json.get('password', '')
+        data = request.json
+        password = data.get('password', '')
         password_hash = hashlib.sha256(password.encode()).hexdigest()
         
         if password_hash == DEV_PASSWORD_HASH:
@@ -835,11 +875,13 @@ def dev_login():
 
 @app.route('/api/dev/verify')
 def dev_verify():
+    """Verificar si el token es válido"""
     token = request.headers.get('X-Dev-Token')
     return jsonify({'valid': verify_dev_token(token)})
 
 @app.route('/api/dev/logs')
 def dev_logs():
+    """Obtener logs detallados para desarrollador"""
     token = request.headers.get('X-Dev-Token')
     if not verify_dev_token(token):
         return jsonify({'error': 'No autorizado'}), 403
@@ -874,20 +916,35 @@ def dev_logs():
 
 @app.route('/api/dev/clear-db', methods=['POST'])
 def dev_clear_db():
+    """Limpiar toda la base de datos (solo desarrollador)"""
     token = request.headers.get('X-Dev-Token')
     if not verify_dev_token(token):
         return jsonify({'error': 'No autorizado'}), 403
     
     try:
         with app.app_context():
+            # Guardar conteo antes de borrar
+            counts = {
+                'memories': Memory.query.count(),
+                'conversations': Conversation.query.count(),
+                'logs': LearningLog.query.count()
+            }
+            
+            # Eliminar todo
             Memory.query.delete()
             Conversation.query.delete()
             LearningLog.query.delete()
             WebSearchCache.query.delete()
             KnowledgeEvolution.query.delete()
+            DeveloperSession.query.delete()
+            
             db.session.commit()
-            return jsonify({'message': 'Base de datos limpiada completamente'})
+            
+            return jsonify({
+                'message': f'Base de datos limpiada. Se eliminaron: {counts["memories"]} memorias, {counts["conversations"]} conversaciones, {counts["logs"]} logs.'
+            })
     except Exception as e:
+        db.session.rollback()
         return jsonify({'error': str(e)}), 500
 
 @app.route('/uploads/<path:filename>')
