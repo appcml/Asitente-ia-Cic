@@ -33,7 +33,7 @@
             height: 100vh;
         }
 
-        /* ========== SIDEBAR ========== */
+        /* SIDEBAR */
         .sidebar {
             width: 260px;
             background: var(--sidebar);
@@ -61,7 +61,7 @@
             transform: translateY(-1px);
         }
 
-        /* HERRAMIENTAS COMPACTAS */
+        /* HERRAMIENTAS COMPACTAS - ARRIBA */
         .tools-section {
             margin-bottom: 15px;
         }
@@ -71,7 +71,7 @@
             font-size: 10px;
             text-transform: uppercase;
             letter-spacing: 1px;
-            margin-bottom: 8px;
+            margin-bottom: 10px;
             opacity: 0.8;
         }
 
@@ -79,7 +79,7 @@
             display: flex;
             align-items: center;
             gap: 10px;
-            padding: 8px 10px;
+            padding: 10px;
             margin-bottom: 6px;
             background: var(--card);
             border-radius: 6px;
@@ -94,7 +94,7 @@
         }
 
         .tool-icon {
-            font-size: 16px;
+            font-size: 18px;
         }
 
         .tool-info {
@@ -109,10 +109,9 @@
         .tool-desc {
             font-size: 10px;
             color: #888;
-            margin-top: 1px;
         }
 
-        /* HISTORIAL */
+        /* HISTORIAL - ABAJO */
         .history-section {
             flex: 1;
             overflow-y: auto;
@@ -120,7 +119,7 @@
         }
 
         .history-item {
-            padding: 8px 10px;
+            padding: 10px;
             margin-bottom: 5px;
             background: var(--card);
             border-radius: 6px;
@@ -143,7 +142,7 @@
             color: #ccc;
         }
 
-        /* BOTÓN MODO DEV */
+        /* BOTÓN MODO DEV / INDICADOR */
         .dev-login-btn {
             margin-top: auto;
             padding: 10px;
@@ -161,11 +160,10 @@
             color: white;
         }
 
-        /* INDICADOR MODO DEV ACTIVO */
         .dev-indicator {
             display: none;
             margin-top: auto;
-            padding: 10px;
+            padding: 12px;
             background: var(--danger);
             color: white;
             border-radius: 6px;
@@ -179,7 +177,7 @@
 
         .dev-indicator button {
             margin-top: 8px;
-            padding: 5px 10px;
+            padding: 6px 10px;
             background: white;
             color: var(--danger);
             border: none;
@@ -189,7 +187,7 @@
             width: 100%;
         }
 
-        /* ========== MAIN CONTENT ========== */
+        /* MAIN CONTENT */
         .main-content {
             flex: 1;
             display: flex;
@@ -250,7 +248,7 @@
             font-weight: 600;
         }
 
-        /* CHAT AREA CON SCROLL */
+        /* CHAT AREA */
         .chat-area {
             flex: 1;
             overflow-y: auto;
@@ -287,7 +285,7 @@
         .feature-card {
             background: var(--sidebar);
             border-radius: 10px;
-            padding: 15px;
+            padding: 20px;
             text-align: center;
             border: 1px solid var(--border);
             transition: all 0.3s;
@@ -299,7 +297,7 @@
 
         .feature-icon {
             font-size: 28px;
-            margin-bottom: 8px;
+            margin-bottom: 10px;
         }
 
         .feature-title {
@@ -371,7 +369,7 @@
             margin-top: 5px;
         }
 
-        /* INPUT AREA */
+        /* INPUT */
         .input-area {
             padding: 15px 20px;
             border-top: 1px solid var(--border);
@@ -415,11 +413,11 @@
             justify-content: center;
         }
 
-        /* TYPING INDICATOR */
+        /* TYPING */
         .typing {
             display: flex;
             gap: 4px;
-            padding: 8px 0;
+            padding: 4px 0;
         }
 
         .typing span {
@@ -434,11 +432,11 @@
         .typing span:nth-child(3) { animation-delay: 0.4s; }
 
         @keyframes typing {
-            0%, 100% { opacity: 0.3; transform: scale(0.8); }
-            50% { opacity: 1; transform: scale(1); }
+            0%, 100% { opacity: 0.3; }
+            50% { opacity: 1; }
         }
 
-        /* ========== PANEL DESARROLLADOR ========== */
+        /* PANEL DESARROLLADOR */
         .dev-panel {
             position: fixed;
             right: -400px;
@@ -503,7 +501,6 @@
             gap: 6px;
         }
 
-        /* FORMULARIOS DEV */
         .dev-input, .dev-textarea {
             width: 100%;
             padding: 10px;
@@ -547,7 +544,6 @@
             color: white;
         }
 
-        /* STATS GRID */
         .stats-grid {
             display: grid;
             grid-template-columns: repeat(2, 1fr);
@@ -574,7 +570,6 @@
             margin-top: 3px;
         }
 
-        /* MEMORIES LIST */
         .memories-list {
             max-height: 200px;
             overflow-y: auto;
@@ -669,11 +664,6 @@
             font-size: 14px;
         }
 
-        .form-group input:focus {
-            outline: none;
-            border-color: var(--primary);
-        }
-
         .modal-buttons {
             display: flex;
             gap: 10px;
@@ -711,7 +701,10 @@
             display: block;
         }
 
-        /* SCROLLBAR */
+        .hidden {
+            display: none !important;
+        }
+
         ::-webkit-scrollbar {
             width: 6px;
         }
@@ -728,15 +721,11 @@
         ::-webkit-scrollbar-thumb:hover {
             background: var(--primary);
         }
-
-        .hidden {
-            display: none !important;
-        }
     </style>
 </head>
 <body>
     <div class="container">
-        <!-- ========== SIDEBAR ========== -->
+        <!-- SIDEBAR -->
         <aside class="sidebar" id="sidebar">
             <button class="new-chat-btn" onclick="newChat()">+ Nuevo chat</button>
             
@@ -780,10 +769,9 @@
             <!-- HISTORIAL -->
             <div class="history-section" id="history-list">
                 <div class="section-title">Historial</div>
-                <!-- Se llena dinámicamente -->
             </div>
             
-            <!-- BOTÓN LOGIN DEV / INDICADOR -->
+            <!-- BOTÓN DEV / INDICADOR -->
             <button class="dev-login-btn" id="dev-login-btn" onclick="openDevLogin()">
                 🔒 Acceso Desarrollador
             </button>
@@ -795,7 +783,7 @@
             </div>
         </aside>
 
-        <!-- ========== MAIN CONTENT ========== -->
+        <!-- MAIN -->
         <main class="main-content" id="main-content">
             <header class="header">
                 <div class="logo">
@@ -811,7 +799,6 @@
             </header>
             
             <div class="chat-area" id="chat-area">
-                <!-- BIENVENIDA -->
                 <div class="welcome" id="welcome-screen">
                     <h1>Cic_IA Mejorado</h1>
                     <p>Asistente inteligente con búsqueda web y aprendizaje continuo</p>
@@ -840,7 +827,6 @@
                     </div>
                 </div>
                 
-                <!-- MENSAJES -->
                 <div class="messages hidden" id="messages-container"></div>
             </div>
             
@@ -855,7 +841,7 @@
         </main>
     </div>
 
-    <!-- ========== PANEL DESARROLLADOR ========== -->
+    <!-- PANEL DESARROLLADOR -->
     <div class="dev-panel" id="dev-panel">
         <div class="dev-header">
             <h2>🔧 Modo Desarrollador</h2>
@@ -863,7 +849,6 @@
         </div>
         
         <div class="dev-content">
-            <!-- ENSEÑAR -->
             <div class="dev-section">
                 <h3>📝 Enseñar a la IA</h3>
                 <textarea class="dev-textarea" id="teach-text" 
@@ -876,7 +861,6 @@
                 <div class="error-msg" id="teach-result"></div>
             </div>
             
-            <!-- ESTADÍSTICAS -->
             <div class="dev-section">
                 <h3>📊 Estadísticas</h3>
                 <div class="stats-grid">
@@ -902,7 +886,6 @@
                 </button>
             </div>
             
-            <!-- MEMORIAS -->
             <div class="dev-section">
                 <h3>🔍 Memorias Recientes</h3>
                 <div class="memories-list" id="memories-list">
@@ -915,7 +898,6 @@
                 </button>
             </div>
             
-            <!-- ACCIONES -->
             <div class="dev-section">
                 <h3>⚡ Acciones</h3>
                 <button class="dev-btn primary" onclick="forceLearning()" 
@@ -929,7 +911,7 @@
         </div>
     </div>
 
-    <!-- ========== MODAL LOGIN DESARROLLADOR ========== -->
+    <!-- MODAL LOGIN -->
     <div class="modal-overlay" id="dev-login-modal">
         <div class="modal-box">
             <h3>🔒 Acceso Desarrollador</h3>
@@ -955,20 +937,12 @@
     </div>
 
     <script>
-        // ========== VARIABLES GLOBALES ==========
+        // Variables globales
         let currentMode = 'balanced';
         let isDevMode = false;
         let devToken = null;
         let devUsername = null;
-        let conversationHistory = [];
 
-        // Credenciales de desarrollador (en producción esto debe estar en el backend)
-        const DEV_CREDENTIALS = {
-            'admin': 'CicDev2024!',
-            'dev': 'CicDev2024!'
-        };
-
-        // ========== FUNCIONES BÁSICAS ==========
         function setMode(mode) {
             currentMode = mode;
             document.querySelectorAll('.mode-btn').forEach(btn => {
@@ -987,20 +961,17 @@
         }
 
         function handleKeyPress(event) {
-            if (event.key === 'Enter') {
-                sendMessage();
-            }
+            if (event.key === 'Enter') sendMessage();
         }
 
         function useTool(tool) {
-            const messages = {
-                'web': '🔍 Búsqueda Web activada. Pregúntame sobre cualquier tema actual.',
-                'docs': '📎 Función Documentos: Puedes subir archivos para analizar.',
-                'semantic': '🧠 Análisis Semántico activado. Puedo analizar textos complejos.',
-                'learning': '📈 Aprendizaje Continuo: Mejoro automáticamente cada 3 horas.'
+            const msgs = {
+                'web': '🔍 Búsqueda Web activada. Pregunta sobre cualquier tema actual.',
+                'docs': '📎 Puedes subir PDFs, imágenes o Word para analizar.',
+                'semantic': '🧠 Análisis profundo activado.',
+                'learning': '📈 Aprendizaje continuo activo (cada 3 horas).'
             };
-            
-            addMessage('bot', messages[tool] || 'Herramienta seleccionada');
+            addMessage('bot', msgs[tool]);
             showChat();
         }
 
@@ -1009,80 +980,72 @@
             document.getElementById('messages-container').classList.remove('hidden');
         }
 
-        // ========== CHAT CON SCROLL AUTOMÁTICO ==========
         async function sendMessage() {
             const input = document.getElementById('chat-input');
-            const message = input.value.trim();
-            
-            if (!message) return;
-            
+            const msg = input.value.trim();
+            if (!msg) return;
+
             showChat();
-            addMessage('user', message);
+            addMessage('user', msg);
             input.value = '';
-            
-            const loadingId = addLoadingMessage();
-            
+
+            const loadingId = addLoading();
+
             try {
-                const response = await fetch('/api/chat', {
+                const res = await fetch('/api/chat', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({
-                        message: message,
-                        mode: currentMode
-                    })
+                    body: JSON.stringify({message: msg, mode: currentMode})
                 });
                 
-                const data = await response.json();
+                const data = await res.json();
                 document.getElementById(loadingId).remove();
                 
-                let responseText = data.response;
-                if (data.sources_used && data.sources_used.includes('web_search')) {
-                    responseText += '\n\n🌐 *Información de búsqueda web*';
+                let text = data.response;
+                if (data.sources_used?.includes('web_search')) {
+                    text += '\n\n🌐 *Información de búsqueda web*';
                 }
                 
-                addMessage('bot', responseText);
-                updateHistory(message);
+                addMessage('bot', text);
+                updateHistory(msg);
                 scrollToBottom();
                 
-            } catch (error) {
+            } catch (e) {
                 document.getElementById(loadingId).remove();
-                addMessage('bot', '❌ Error al procesar. Intenta de nuevo.');
+                addMessage('bot', '❌ Error. Intenta de nuevo.');
                 scrollToBottom();
             }
         }
 
         function addMessage(sender, text) {
             const container = document.getElementById('messages-container');
-            const messageDiv = document.createElement('div');
-            messageDiv.className = `message ${sender}`;
+            const div = document.createElement('div');
+            div.className = `message ${sender}`;
             
             const avatar = sender === 'user' ? '👤' : '🤖';
             const bg = sender === 'user' ? 'var(--primary)' : 'var(--danger)';
             
-            messageDiv.innerHTML = `
+            div.innerHTML = `
                 <div class="message-avatar" style="background: ${bg}">${avatar}</div>
                 <div class="message-content">
                     ${text.replace(/\n/g, '<br>')}
                     <div class="message-meta">${new Date().toLocaleTimeString()}</div>
                 </div>
             `;
-            
-            container.appendChild(messageDiv);
+            container.appendChild(div);
             scrollToBottom();
         }
 
-        function addLoadingMessage() {
+        function addLoading() {
             const container = document.getElementById('messages-container');
-            const id = 'loading-' + Date.now();
+            const id = 'load-' + Date.now();
             const div = document.createElement('div');
             div.id = id;
             div.className = 'message bot';
             div.innerHTML = `
                 <div class="message-avatar" style="background: var(--danger)">🤖</div>
                 <div class="message-content">
-                    <div class="typing">
-                        <span></span><span></span><span></span>
-                    </div>
+                    <div class="typing"><span></span><span></span><span></span></div>
                 </div>
             `;
             container.appendChild(div);
@@ -1091,30 +1054,26 @@
         }
 
         function scrollToBottom() {
-            const chatArea = document.getElementById('chat-area');
-            chatArea.scrollTop = chatArea.scrollHeight;
+            document.getElementById('chat-area').scrollTop = document.getElementById('chat-area').scrollHeight;
         }
 
-        function updateHistory(message) {
-            const historyList = document.getElementById('history-list');
+        function updateHistory(msg) {
+            const list = document.getElementById('history-list');
             const item = document.createElement('div');
             item.className = 'history-item';
-            item.innerHTML = `
-                <span>💬</span>
-                <span class="history-text">${message.substring(0, 25)}...</span>
-            `;
-            item.onclick = () => loadConversation(message);
-            historyList.insertBefore(item, historyList.children[1]);
+            item.innerHTML = `<span>💬</span><span class="history-text">${msg.substring(0, 25)}...</span>`;
+            item.onclick = () => loadConv(msg);
+            list.insertBefore(item, list.children[1]);
         }
 
-        function loadConversation(message) {
+        function loadConv(msg) {
             showChat();
             document.getElementById('messages-container').innerHTML = '';
-            addMessage('user', message);
+            addMessage('user', msg);
             addMessage('bot', 'Conversación cargada del historial.');
         }
 
-        // ========== MODO DESARROLLADOR ==========
+        // MODO DESARROLLADOR
         function openDevLogin() {
             if (isDevMode) {
                 openDevPanel();
@@ -1131,44 +1090,54 @@
         }
 
         async function devLogin() {
-            const username = document.getElementById('login-username').value;
-            const password = document.getElementById('login-password').value;
-            
-            // Validar credenciales
-            if (DEV_CREDENTIALS[username] === password) {
-                // Login exitoso
-                isDevMode = true;
-                devUsername = username;
-                devToken = btoa(username + ':' + Date.now());
+            const user = document.getElementById('login-username').value;
+            const pass = document.getElementById('login-password').value;
+
+            try {
+                const res = await fetch('/api/dev/login', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({username: user, password: pass})
+                });
                 
-                closeDevLogin();
-                activateDevMode();
-                openDevPanel();
-            } else {
+                const data = await res.json();
+                
+                if (data.success) {
+                    isDevMode = true;
+                    devToken = data.token;
+                    devUsername = data.username;
+                    closeDevLogin();
+                    activateDevMode();
+                    openDevPanel();
+                } else {
+                    document.getElementById('login-error').classList.add('show');
+                }
+            } catch (e) {
+                document.getElementById('login-error').textContent = 'Error de conexión';
                 document.getElementById('login-error').classList.add('show');
             }
         }
 
         function activateDevMode() {
-            // Cambiar UI
             document.getElementById('dev-login-btn').classList.add('hidden');
             document.getElementById('dev-indicator').classList.add('active');
             document.getElementById('dev-username').textContent = devUsername;
-            document.getElementById('mode-label').textContent = 'Dev';
+            document.getElementById('mode-label').textContent = 'DEV';
             document.getElementById('mode-label').style.color = 'var(--danger)';
         }
 
         function switchToUserMode() {
+            fetch('/api/dev/logout', {
+                method: 'POST',
+                headers: {'X-Dev-Token': devToken}
+            }).catch(() => {});
+            
             isDevMode = false;
             closeDevPanel();
-            
-            // Restaurar UI
             document.getElementById('dev-login-btn').classList.remove('hidden');
             document.getElementById('dev-indicator').classList.remove('active');
             document.getElementById('mode-label').textContent = 'Chat';
             document.getElementById('mode-label').style.color = 'var(--primary)';
-            
-            // Limpiar token
             devToken = null;
             devUsername = null;
         }
@@ -1186,57 +1155,56 @@
             document.getElementById('dev-panel').classList.remove('open');
         }
 
-        // ========== FUNCIONES DESARROLLADOR ==========
+        // FUNCIONES DEV
         async function teachAI() {
             const text = document.getElementById('teach-text').value.trim();
             const topic = document.getElementById('teach-topic').value.trim() || 'manual';
-            const resultDiv = document.getElementById('teach-result');
-            
+            const result = document.getElementById('teach-result');
+
             if (!text) {
-                resultDiv.className = 'error-msg show';
-                resultDiv.textContent = '❌ Escribe contenido';
+                result.className = 'error-msg show';
+                result.textContent = '❌ Escribe contenido';
                 return;
             }
-            
-            resultDiv.className = '';
-            resultDiv.textContent = '⏳ Guardando...';
-            
+
+            result.className = '';
+            result.style.color = '#888';
+            result.textContent = '⏳ Guardando...';
+
             try {
-                const response = await fetch('/api/teach', {
+                const res = await fetch('/api/teach', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                         'X-Dev-Token': devToken
                     },
-                    body: JSON.stringify({text, topic})
+                    body: JSON.stringify({text, topic, source: 'developer'})
                 });
                 
-                const data = await response.json();
+                const data = await res.json();
                 
                 if (data.error) throw new Error(data.error);
                 
-                resultDiv.className = '';
-                resultDiv.style.color = 'var(--primary)';
-                resultDiv.textContent = '✅ Guardado';
-                
+                result.style.color = 'var(--primary)';
+                result.textContent = '✅ Guardado';
                 document.getElementById('teach-text').value = '';
                 document.getElementById('teach-topic').value = '';
                 refreshStats();
                 
-            } catch (error) {
-                resultDiv.className = 'error-msg show';
-                resultDiv.textContent = '❌ Error: ' + error.message;
+            } catch (e) {
+                result.className = 'error-msg show';
+                result.textContent = '❌ Error: ' + e.message;
             }
         }
 
         async function refreshStats() {
             try {
-                const response = await fetch('/api/evolution/stats', {
+                const res = await fetch('/api/dev/stats/detailed', {
                     headers: {'X-Dev-Token': devToken}
                 });
-                const data = await response.json();
+                const data = await res.json();
                 
-                document.getElementById('stat-total').textContent = data.total_memories || 0;
+                document.getElementById('stat-total').textContent = data.general?.total_memories || 0;
                 document.getElementById('stat-auto').textContent = data.by_source?.auto_learning || 0;
                 document.getElementById('stat-user').textContent = data.by_source?.user_taught || 0;
                 document.getElementById('stat-web').textContent = data.by_source?.web_search || 0;
@@ -1248,19 +1216,19 @@
         async function loadMemories() {
             const list = document.getElementById('memories-list');
             list.innerHTML = '<p style="color: #666; text-align: center;">⏳...</p>';
-            
+
             try {
-                const response = await fetch('/api/memories', {
+                const res = await fetch('/api/dev/memories/all?per_page=10', {
                     headers: {'X-Dev-Token': devToken}
                 });
-                const memories = await response.json();
+                const data = await res.json();
                 
-                if (memories.length === 0) {
+                if (!data.memories?.length) {
                     list.innerHTML = '<p style="color: #666; text-align: center;">Sin memorias</p>';
                     return;
                 }
                 
-                list.innerHTML = memories.map(m => `
+                list.innerHTML = data.memories.map(m => `
                     <div class="memory-item">
                         <strong>${m.topic || 'Sin título'}</strong>
                         <p>${m.content?.substring(0, 80) || '...'}...</p>
@@ -1276,39 +1244,37 @@
             if (!confirm('¿Forzar aprendizaje ahora?')) return;
             
             try {
-                const response = await fetch('/api/evolution/learn-now', {
+                const res = await fetch('/api/dev/system/force-learning', {
                     method: 'POST',
                     headers: {'X-Dev-Token': devToken}
                 });
-                const data = await response.json();
-                alert('✅ ' + data.message);
+                const data = await res.json();
+                alert(data.success ? '✅ ' + data.message : '❌ Error');
                 refreshStats();
             } catch (e) {
-                alert('❌ Error');
+                alert('❌ Error de conexión');
             }
         }
 
         async function clearDatabase() {
-            if (!confirm('⚠️ ¿BORRAR TODO? Esta acción no se puede deshacer.')) return;
-            if (!confirm('🔴 CONFIRMACIÓN FINAL: ¿Eliminar todas las memorias?')) return;
+            if (!confirm('⚠️ ¿BORRAR TODA LA BASE DE DATOS?')) return;
+            if (!confirm('🔴 ¿CONFIRMAS? Esta acción NO se puede deshacer.')) return;
             
             try {
-                const response = await fetch('/api/dev/clear-db', {
+                const res = await fetch('/api/dev/system/clear-db', {
                     method: 'POST',
-                    headers: {'X-Dev-Token': devToken}
+                    headers: {
+                        'X-Dev-Token': devToken,
+                        'X-Confirm-Delete': 'DESTRUIR_TODO'
+                    }
                 });
-                const data = await response.json();
-                alert('🗑️ ' + data.message);
+                const data = await res.json();
+                alert(data.success ? '🗑️ ' + data.message : '❌ ' + data.error);
                 refreshStats();
             } catch (e) {
                 alert('❌ Error');
             }
         }
-
-        // Inicializar
-        window.onload = function() {
-            // Cargar historial si existe
-        };
     </script>
 </body>
 </html>
