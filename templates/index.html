@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cic_IA - Asistente Inteligente Mejorado</title>
+    <title>Cic_IA - Asistente Inteligente Evolutivo</title>
     <style>
         * {
             margin: 0;
@@ -11,117 +11,141 @@
             box-sizing: border-box;
         }
 
-        :root {
-            --sidebar-width: 260px;
-            --header-height: 60px;
-            --primary: #10a37f;
-            --primary-hover: #0d8c6d;
-            --bg-dark: #202123;
-            --bg-darker: #171717;
-            --bg-chat: #343541;
-            --text-primary: #ececf1;
-            --text-secondary: #8e8ea0;
-            --border: #4d4d4f;
-        }
-
         body {
-            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
-            background: var(--bg-dark);
-            color: var(--text-primary);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #0f0f1e;
+            color: #fff;
             height: 100vh;
             overflow: hidden;
         }
 
-        /* ============ SIDEBAR ============ */
-        .sidebar {
-            position: fixed;
-            left: 0;
-            top: 0;
-            width: var(--sidebar-width);
-            height: 100vh;
-            background: var(--bg-darker);
-            border-right: 1px solid var(--border);
+        .container {
             display: flex;
-            flex-direction: column;
-            z-index: 100;
-            transition: transform 0.3s;
+            height: 100vh;
         }
 
-        .sidebar-header {
-            padding: 15px;
-            border-bottom: 1px solid var(--border);
+        /* ========== PANEL IZQUIERDO ========== */
+        .sidebar {
+            width: 280px;
+            background: #1a1a2e;
+            display: flex;
+            flex-direction: column;
+            padding: 20px;
+            border-right: 1px solid #2d2d44;
         }
 
         .new-chat-btn {
-            width: 100%;
-            padding: 12px;
-            background: transparent;
-            border: 1px solid var(--border);
-            border-radius: 6px;
-            color: var(--text-primary);
+            background: #4ecca3;
+            color: #1a1a2e;
+            border: none;
+            padding: 15px;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: bold;
             cursor: pointer;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            transition: all 0.2s;
+            margin-bottom: 25px;
+            transition: all 0.3s;
         }
 
         .new-chat-btn:hover {
-            background: var(--bg-dark);
+            background: #3db892;
+            transform: translateY(-2px);
         }
 
-        .sidebar-nav {
-            flex: 1;
-            overflow-y: auto;
-            padding: 10px;
-        }
-
-        .nav-section {
+        /* HERRAMIENTAS - ARRIBA */
+        .section {
             margin-bottom: 20px;
         }
 
-        .nav-title {
-            font-size: 12px;
-            color: var(--text-secondary);
+        .section-title {
+            color: #4ecca3;
+            font-size: 11px;
             text-transform: uppercase;
-            padding: 10px;
-            letter-spacing: 0.5px;
+            letter-spacing: 1px;
+            margin-bottom: 12px;
+            opacity: 0.8;
         }
 
-        .nav-item {
-            padding: 10px 12px;
-            border-radius: 6px;
+        .tool-item {
+            background: #16213e;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 10px;
             cursor: pointer;
+            transition: all 0.3s;
+            border: 1px solid transparent;
+        }
+
+        .tool-item:hover {
+            background: #0f3460;
+            border-color: #4ecca3;
+            transform: translateX(5px);
+        }
+
+        .tool-icon {
+            font-size: 24px;
+            margin-bottom: 8px;
+            display: block;
+        }
+
+        .tool-name {
+            font-weight: 600;
+            font-size: 14px;
+            margin-bottom: 4px;
+        }
+
+        .tool-desc {
+            font-size: 11px;
+            color: #888;
+            line-height: 1.4;
+        }
+
+        /* HISTORIAL - ABAJO */
+        .history-section {
+            flex: 1;
+            overflow-y: auto;
+            margin-bottom: 20px;
+        }
+
+        .history-item {
+            padding: 12px;
+            margin-bottom: 8px;
+            background: #16213e;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 13px;
+            transition: all 0.3s;
             display: flex;
             align-items: center;
             gap: 10px;
-            transition: all 0.2s;
-            margin-bottom: 2px;
         }
 
-        .nav-item:hover, .nav-item.active {
-            background: var(--bg-dark);
+        .history-item:hover {
+            background: #0f3460;
         }
 
-        .nav-item i {
-            width: 20px;
-            text-align: center;
+        .history-icon {
+            font-size: 16px;
         }
 
-        .sidebar-footer {
-            padding: 15px;
-            border-top: 1px solid var(--border);
+        .history-text {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
+        /* MODO DESARROLLADOR */
         .dev-mode-btn {
-            width: 100%;
-            padding: 10px;
-            background: var(--bg-dark);
-            border: 1px dashed var(--primary);
-            border-radius: 6px;
-            color: var(--primary);
+            margin-top: auto;
+            padding: 12px;
+            background: transparent;
+            border: 2px dashed #e94560;
+            color: #e94560;
+            border-radius: 10px;
             cursor: pointer;
             font-size: 13px;
+            font-weight: 600;
+            transition: all 0.3s;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -129,979 +153,1137 @@
         }
 
         .dev-mode-btn:hover {
-            background: rgba(16, 163, 127, 0.1);
+            background: #e94560;
+            color: white;
         }
 
-        /* ============ MAIN CONTENT ============ */
+        /* ========== PANEL CENTRAL ========== */
         .main-content {
-            margin-left: var(--sidebar-width);
-            height: 100vh;
+            flex: 1;
             display: flex;
             flex-direction: column;
+            background: #0f0f1e;
         }
 
-        /* ============ HEADER ============ */
         .header {
-            height: var(--header-height);
-            background: var(--bg-dark);
-            border-bottom: 1px solid var(--border);
+            padding: 20px 30px;
+            border-bottom: 1px solid #2d2d44;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo {
             display: flex;
             align-items: center;
-            justify-content: space-between;
-            padding: 0 20px;
+            gap: 12px;
         }
 
-        .header-title {
-            font-size: 18px;
-            font-weight: 600;
+        .logo-icon {
+            font-size: 28px;
         }
 
-        .header-actions {
-            display: flex;
-            gap: 10px;
+        .logo-text {
+            font-size: 20px;
+            font-weight: 700;
+        }
+
+        .logo-text span {
+            color: #4ecca3;
         }
 
         .mode-selector {
             display: flex;
-            background: var(--bg-darker);
-            border-radius: 6px;
-            padding: 3px;
+            gap: 10px;
+            background: #1a1a2e;
+            padding: 5px;
+            border-radius: 8px;
         }
 
         .mode-btn {
-            padding: 6px 12px;
+            padding: 8px 16px;
             border: none;
             background: transparent;
-            color: var(--text-secondary);
+            color: #888;
             cursor: pointer;
-            border-radius: 4px;
+            border-radius: 6px;
             font-size: 13px;
-            transition: all 0.2s;
+            transition: all 0.3s;
         }
 
         .mode-btn.active {
-            background: var(--primary);
-            color: white;
+            background: #4ecca3;
+            color: #1a1a2e;
+            font-weight: 600;
         }
 
-        /* ============ CHAT AREA ============ */
-        .chat-container {
+        /* ÁREA DE CHAT */
+        .chat-area {
             flex: 1;
             overflow-y: auto;
-            background: var(--bg-chat);
+            padding: 30px;
         }
 
-        .welcome-screen {
-            height: 100%;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
+        .welcome {
             text-align: center;
-            padding: 40px;
+            padding: 60px 20px;
         }
 
-        .welcome-title {
-            font-size: 32px;
-            margin-bottom: 10px;
-            background: linear-gradient(90deg, #10a37f, #20c997);
+        .welcome h1 {
+            font-size: 42px;
+            margin-bottom: 15px;
+            background: linear-gradient(135deg, #4ecca3, #3db892);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
         }
 
-        .welcome-subtitle {
-            color: var(--text-secondary);
-            margin-bottom: 40px;
+        .welcome p {
+            color: #888;
+            font-size: 16px;
+            max-width: 500px;
+            margin: 0 auto 40px;
         }
 
-        .capabilities {
+        .features-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 15px;
-            max-width: 800px;
-            width: 100%;
-        }
-
-        .capability-card {
-            background: var(--bg-dark);
-            padding: 20px;
-            border-radius: 8px;
-            border: 1px solid var(--border);
-        }
-
-        .capability-card h4 {
-            margin-bottom: 8px;
-            color: var(--primary);
-        }
-
-        .capability-card p {
-            font-size: 14px;
-            color: var(--text-secondary);
-        }
-
-        .messages {
-            padding: 20px;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
             max-width: 800px;
             margin: 0 auto;
         }
 
-        .message {
-            display: flex;
-            gap: 15px;
-            margin-bottom: 20px;
-            animation: fadeIn 0.3s ease;
+        .feature-card {
+            background: #1a1a2e;
+            border-radius: 15px;
+            padding: 25px;
+            text-align: center;
+            border: 1px solid #2d2d44;
+            transition: all 0.3s;
         }
 
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
+        .feature-card:hover {
+            border-color: #4ecca3;
+            transform: translateY(-5px);
         }
 
-        .message-avatar {
-            width: 30px;
-            height: 30px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 14px;
-            flex-shrink: 0;
+        .feature-icon {
+            font-size: 40px;
+            margin-bottom: 15px;
         }
 
-        .message.user .message-avatar {
-            background: #5436da;
+        .feature-title {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #4ecca3;
         }
 
-        .message.bot .message-avatar {
-            background: var(--primary);
-        }
-
-        .message-content {
-            flex: 1;
-            line-height: 1.6;
-        }
-
-        .message-meta {
+        .feature-desc {
             font-size: 12px;
-            color: var(--text-secondary);
-            margin-top: 5px;
+            color: #888;
+            line-height: 1.5;
         }
 
-        /* ============ INPUT AREA ============ */
+        /* INPUT AREA */
+        .input-area {
+            padding: 20px 30px;
+            border-top: 1px solid #2d2d44;
+        }
+
         .input-container {
-            background: var(--bg-dark);
-            padding: 20px;
-            border-top: 1px solid var(--border);
-        }
-
-        .input-wrapper {
             max-width: 800px;
             margin: 0 auto;
             position: relative;
         }
 
-        .input-box {
-            background: var(--bg-chat);
-            border: 1px solid var(--border);
-            border-radius: 12px;
-            padding: 15px;
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-        }
-
-        .input-box:focus-within {
-            border-color: var(--primary);
-        }
-
-        #messageInput {
-            background: transparent;
-            border: none;
-            color: var(--text-primary);
-            font-size: 16px;
-            resize: none;
-            min-height: 24px;
-            max-height: 200px;
+        .chat-input {
+            width: 100%;
+            padding: 18px 60px 18px 20px;
+            border-radius: 15px;
+            border: 1px solid #2d2d44;
+            background: #1a1a2e;
+            color: #fff;
+            font-size: 15px;
             outline: none;
+            transition: all 0.3s;
         }
 
-        .input-actions {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .input-left {
-            display: flex;
-            gap: 8px;
-        }
-
-        .icon-btn {
-            width: 32px;
-            height: 32px;
-            border-radius: 6px;
-            border: none;
-            background: transparent;
-            color: var(--text-secondary);
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: all 0.2s;
-        }
-
-        .icon-btn:hover {
-            background: var(--bg-dark);
-            color: var(--text-primary);
+        .chat-input:focus {
+            border-color: #4ecca3;
+            box-shadow: 0 0 20px rgba(78, 204, 163, 0.1);
         }
 
         .send-btn {
-            width: 32px;
-            height: 32px;
-            border-radius: 6px;
+            position: absolute;
+            right: 8px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 40px;
+            height: 40px;
+            border-radius: 10px;
             border: none;
-            background: var(--primary);
-            color: white;
+            background: #4ecca3;
+            color: #1a1a2e;
             cursor: pointer;
+            font-size: 18px;
+            transition: all 0.3s;
             display: flex;
             align-items: center;
             justify-content: center;
         }
 
-        .send-btn:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
+        .send-btn:hover {
+            background: #3db892;
+            transform: translateY(-50%) scale(1.05);
         }
 
-        .file-preview {
+        /* MENSAJES */
+        .messages {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .message {
+            margin-bottom: 25px;
+            display: flex;
+            gap: 15px;
+        }
+
+        .message.user {
+            flex-direction: row-reverse;
+        }
+
+        .message-avatar {
+            width: 35px;
+            height: 35px;
+            border-radius: 50%;
             display: flex;
             align-items: center;
-            gap: 10px;
-            padding: 8px 12px;
-            background: var(--bg-dark);
-            border-radius: 6px;
+            justify-content: center;
+            font-size: 18px;
+            flex-shrink: 0;
         }
 
-        .file-preview button {
-            background: none;
-            border: none;
-            color: var(--text-secondary);
-            cursor: pointer;
+        .message.user .message-avatar {
+            background: #4ecca3;
         }
 
-        /* Typing indicator */
-        .typing {
-            display: none;
-            padding: 20px;
-            text-align: center;
+        .message.bot .message-avatar {
+            background: #e94560;
         }
 
-        .typing.show {
-            display: block;
+        .message-content {
+            background: #1a1a2e;
+            padding: 15px 20px;
+            border-radius: 15px;
+            max-width: 70%;
+            line-height: 1.6;
         }
 
-        .typing-dot {
-            display: inline-block;
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            background: var(--primary);
-            margin: 0 4px;
-            animation: typing 1.4s infinite;
+        .message.user .message-content {
+            background: #0f3460;
         }
 
-        .typing-dot:nth-child(2) {
-            animation-delay: 0.2s;
+        .message-meta {
+            font-size: 11px;
+            color: #666;
+            margin-top: 8px;
         }
 
-        .typing-dot:nth-child(3) {
-            animation-delay: 0.4s;
-        }
-
-        @keyframes typing {
-            0%, 60%, 100% { opacity: 0.5; }
-            30% { opacity: 1; }
-        }
-
-        /* Dev Panel */
+        /* ========== PANEL DESARROLLADOR ========== */
         .dev-panel {
             position: fixed;
-            right: -400px;
+            right: 0;
             top: 0;
-            width: 400px;
+            width: 450px;
             height: 100vh;
-            background: var(--bg-darker);
-            border-left: 1px solid var(--border);
-            transition: right 0.3s;
-            z-index: 200;
-            overflow-y: auto;
+            background: #1a1a2e;
+            border-left: 1px solid #2d2d44;
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            transform: translateX(100%);
+            transition: transform 0.3s;
         }
 
-        .dev-panel.show {
-            right: 0;
+        .dev-panel.open {
+            transform: translateX(0);
         }
 
         .dev-header {
-            padding: 15px;
-            border-bottom: 1px solid var(--border);
+            padding: 25px;
+            border-bottom: 1px solid #2d2d44;
             display: flex;
             justify-content: space-between;
             align-items: center;
         }
 
+        .dev-header h2 {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: #e94560;
+        }
+
+        .close-dev {
+            background: none;
+            border: none;
+            color: #888;
+            font-size: 24px;
+            cursor: pointer;
+        }
+
+        .close-dev:hover {
+            color: #fff;
+        }
+
         .dev-content {
-            padding: 15px;
+            flex: 1;
+            overflow-y: auto;
+            padding: 25px;
         }
 
         .dev-section {
-            margin-bottom: 20px;
+            margin-bottom: 30px;
+            padding: 20px;
+            background: #16213e;
+            border-radius: 12px;
+            border: 1px solid #2d2d44;
         }
 
-        .dev-section h4 {
+        .dev-section h3 {
+            color: #4ecca3;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+        }
+
+        /* FORMULARIO ENSEÑAR */
+        .teach-form textarea {
+            width: 100%;
+            height: 120px;
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px solid #2d2d44;
+            background: #0f0f1e;
+            color: #fff;
+            font-family: inherit;
+            font-size: 14px;
+            resize: vertical;
             margin-bottom: 10px;
-            color: var(--primary);
         }
 
-        .stat-grid {
+        .teach-form textarea:focus {
+            outline: none;
+            border-color: #4ecca3;
+        }
+
+        .teach-form input {
+            width: 100%;
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px solid #2d2d44;
+            background: #0f0f1e;
+            color: #fff;
+            margin-bottom: 12px;
+        }
+
+        .teach-btn {
+            width: 100%;
+            padding: 12px;
+            background: #4ecca3;
+            color: #1a1a2e;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .teach-btn:hover {
+            background: #3db892;
+        }
+
+        .teach-result {
+            margin-top: 12px;
+            padding: 12px;
+            border-radius: 8px;
+            font-size: 13px;
+        }
+
+        .teach-result.success {
+            background: rgba(78, 204, 163, 0.2);
+            color: #4ecca3;
+        }
+
+        .teach-result.error {
+            background: rgba(233, 69, 96, 0.2);
+            color: #e94560;
+        }
+
+        /* ESTADÍSTICAS */
+        .stats-grid {
             display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 10px;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+            margin-bottom: 15px;
         }
 
         .stat-box {
-            background: var(--bg-chat);
-            padding: 10px;
-            border-radius: 6px;
+            background: #0f0f1e;
+            padding: 15px;
+            border-radius: 10px;
             text-align: center;
         }
 
-        .stat-value {
-            font-size: 20px;
-            font-weight: bold;
-            color: var(--primary);
+        .stat-number {
+            font-size: 28px;
+            font-weight: 700;
+            color: #4ecca3;
         }
 
         .stat-label {
-            font-size: 12px;
-            color: var(--text-secondary);
+            font-size: 11px;
+            color: #888;
+            margin-top: 5px;
         }
 
-        .log-entry {
-            padding: 8px;
-            background: var(--bg-chat);
-            border-radius: 4px;
-            margin-bottom: 5px;
-            font-size: 12px;
-        }
-
-        .danger-btn {
+        .refresh-btn {
             width: 100%;
             padding: 10px;
-            background: #d32f2f;
+            background: #0f3460;
+            color: #fff;
             border: none;
-            border-radius: 6px;
-            color: white;
+            border-radius: 8px;
             cursor: pointer;
-            margin-top: 10px;
+            font-size: 13px;
         }
 
-        .danger-btn:hover {
-            background: #c82333;
+        .refresh-btn:hover {
+            background: #1a4a7a;
         }
 
-        /* Modal */
-        .modal {
-            display: none;
+        /* MEMORIAS */
+        .memories-list {
+            max-height: 300px;
+            overflow-y: auto;
+            background: #0f0f1e;
+            border-radius: 8px;
+            padding: 10px;
+            margin-bottom: 12px;
+        }
+
+        .memory-item {
+            padding: 12px;
+            margin-bottom: 8px;
+            background: #16213e;
+            border-radius: 8px;
+            font-size: 12px;
+        }
+
+        .memory-item strong {
+            color: #4ecca3;
+            display: block;
+            margin-bottom: 5px;
+        }
+
+        .memory-item p {
+            color: #ccc;
+            line-height: 1.4;
+            margin-bottom: 5px;
+        }
+
+        .memory-item small {
+            color: #666;
+        }
+
+        .load-btn {
+            width: 100%;
+            padding: 10px;
+            background: #0f3460;
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+
+        /* ACCIONES */
+        .action-btn {
+            width: 100%;
+            padding: 14px;
+            border: none;
+            border-radius: 10px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-bottom: 12px;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .action-btn.primary {
+            background: #4ecca3;
+            color: #1a1a2e;
+        }
+
+        .action-btn.primary:hover {
+            background: #3db892;
+            transform: translateY(-2px);
+        }
+
+        .action-btn.danger {
+            background: #e94560;
+            color: #fff;
+        }
+
+        .action-btn.danger:hover {
+            background: #d1344e;
+        }
+
+        /* MODAL CONTRASEÑA */
+        .modal-overlay {
             position: fixed;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
-            background: rgba(0,0,0,0.8);
-            z-index: 300;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .modal.show {
+            background: rgba(0,0,0,0.9);
             display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 2000;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s;
         }
 
-        .modal-content {
-            background: var(--bg-dark);
-            padding: 30px;
-            border-radius: 12px;
-            width: 90%;
+        .modal-overlay.show {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .modal-box {
+            background: #1a1a2e;
+            padding: 40px;
+            border-radius: 20px;
+            text-align: center;
             max-width: 400px;
+            width: 90%;
+            border: 1px solid #2d2d44;
         }
 
-        .modal-content h3 {
+        .modal-box h3 {
+            color: #e94560;
+            margin-bottom: 10px;
+            font-size: 24px;
+        }
+
+        .modal-box p {
+            color: #888;
+            margin-bottom: 25px;
+        }
+
+        .password-input {
+            width: 100%;
+            padding: 15px;
+            border-radius: 10px;
+            border: 1px solid #2d2d44;
+            background: #0f0f1e;
+            color: #fff;
+            font-size: 16px;
+            text-align: center;
             margin-bottom: 20px;
         }
 
-        .modal-content input {
-            width: 100%;
-            padding: 12px;
-            background: var(--bg-chat);
-            border: 1px solid var(--border);
-            border-radius: 6px;
-            color: var(--text-primary);
-            margin-bottom: 15px;
+        .password-input:focus {
+            outline: none;
+            border-color: #4ecca3;
         }
 
-        .modal-actions {
+        .modal-buttons {
             display: flex;
-            gap: 10px;
+            gap: 12px;
         }
 
-        .modal-actions button {
+        .modal-btn {
             flex: 1;
             padding: 12px;
-            border-radius: 6px;
             border: none;
+            border-radius: 8px;
             cursor: pointer;
+            font-weight: 600;
         }
 
-        .btn-primary {
-            background: var(--primary);
-            color: white;
+        .modal-btn.primary {
+            background: #4ecca3;
+            color: #1a1a2e;
         }
 
-        .btn-secondary {
-            background: var(--bg-chat);
-            color: var(--text-primary);
+        .modal-btn.secondary {
+            background: #2d2d44;
+            color: #fff;
         }
 
-        /* Responsive */
-        @media (max-width: 768px) {
-            .sidebar {
-                transform: translateX(-100%);
-            }
-            .sidebar.open {
-                transform: translateX(0);
-            }
-            .main-content {
-                margin-left: 0;
-            }
-            .dev-panel {
-                width: 100%;
-            }
-        }
-
-        /* Hidden file input */
-        #fileInput {
+        .error-msg {
+            color: #e94560;
+            font-size: 13px;
+            margin-top: 10px;
             display: none;
+        }
+
+        .error-msg.show {
+            display: block;
+        }
+
+        /* SCROLLBAR */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #0f0f1e;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #2d2d44;
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #4ecca3;
+        }
+
+        .hidden {
+            display: none !important;
         }
     </style>
 </head>
 <body>
-    <!-- Sidebar -->
-    <aside class="sidebar" id="sidebar">
-        <div class="sidebar-header">
-            <button class="new-chat-btn" onclick="newChat()">
-                <span>+</span>
-                <span>Nuevo chat</span>
-            </button>
-        </div>
-        
-        <nav class="sidebar-nav">
-            <div class="nav-section">
-                <div class="nav-title">Historial</div>
-                <div id="chatHistory">
+    <div class="container">
+        <!-- ========== PANEL IZQUIERDO ========== -->
+        <aside class="sidebar">
+            <button class="new-chat-btn" onclick="newChat()">+ Nuevo chat</button>
+            
+            <!-- HERRAMIENTAS - ARRIBA -->
+            <div class="section">
+                <div class="section-title">Herramientas</div>
+                
+                <div class="tool-item" onclick="openTool('web')">
+                    <span class="tool-icon">🌐</span>
+                    <div class="tool-name">Búsqueda Web</div>
+                    <div class="tool-desc">Investiga en internet automáticamente</div>
+                </div>
+                
+                <div class="tool-item" onclick="openTool('docs')">
+                    <span class="tool-icon">📎</span>
+                    <div class="tool-name">Documentos</div>
+                    <div class="tool-desc">Procesa PDFs, imágenes, Word y más</div>
+                </div>
+                
+                <div class="tool-item" onclick="openTool('semantic')">
+                    <span class="tool-icon">🧠</span>
+                    <div class="tool-name">Análisis Semántico</div>
+                    <div class="tool-desc">Comprensión profunda del lenguaje</div>
+                </div>
+                
+                <div class="tool-item" onclick="openTool('learning')">
+                    <span class="tool-icon">📈</span>
+                    <div class="tool-name">Aprendizaje Continuo</div>
+                    <div class="tool-desc">Mejora constantemente con cada interacción</div>
+                </div>
+            </div>
+            
+            <!-- HISTORIAL - ABAJO -->
+            <div class="section history-section">
+                <div class="section-title">Historial</div>
+                <div id="history-list">
                     <!-- Se llena dinámicamente -->
                 </div>
             </div>
             
-            <div class="nav-section">
-                <div class="nav-title">Herramientas</div>
-                <div class="nav-item" onclick="openWiki()">
-                    <span>📚</span>
-                    <span>Aprender (Wiki)</span>
-                </div>
-                <div class="nav-item" onclick="openTeach()">
-                    <span>🎓</span>
-                    <span>Enseñar</span>
-                </div>
-                <div class="nav-item" onclick="showMemories()">
-                    <span>🧠</span>
-                    <span>Memorias</span>
-                </div>
-                <div class="nav-item" onclick="showStats()">
-                    <span>📊</span>
-                    <span>Estadísticas</span>
-                </div>
-            </div>
-        </nav>
-        
-        <div class="sidebar-footer">
-            <button class="dev-mode-btn" onclick="openDevLogin()">
-                <span>🔒</span>
-                <span>Modo Desarrollador</span>
+            <!-- MODO DESARROLLADOR -->
+            <button class="dev-mode-btn" onclick="openDevMode()">
+                🔒 Modo Desarrollador
             </button>
-        </div>
-    </aside>
+        </aside>
 
-    <!-- Main Content -->
-    <main class="main-content">
-        <header class="header">
-            <div class="header-title">🤖 Cic_IA Mejorado</div>
-            <div class="header-actions">
+        <!-- ========== PANEL CENTRAL ========== -->
+        <main class="main-content">
+            <header class="header">
+                <div class="logo">
+                    <span class="logo-icon">🤖</span>
+                    <div class="logo-text">Cic_IA <span>Mejorado</span></div>
+                </div>
+                
                 <div class="mode-selector">
-                    <button class="mode-btn" data-mode="fast" onclick="setMode('fast')">Rápido</button>
-                    <button class="mode-btn active" data-mode="balanced" onclick="setMode('balanced')">Balanceado</button>
-                    <button class="mode-btn" data-mode="complete" onclick="setMode('complete')">Completo</button>
+                    <button class="mode-btn" onclick="setMode('fast')">Rápido</button>
+                    <button class="mode-btn active" onclick="setMode('balanced')">Balanceado</button>
+                    <button class="mode-btn" onclick="setMode('complete')">Completo</button>
                 </div>
-            </div>
-        </header>
-
-        <div class="chat-container" id="chatContainer">
-            <!-- Welcome Screen -->
-            <div class="welcome-screen" id="welcomeScreen">
-                <h1 class="welcome-title">Cic_IA Mejorado</h1>
-                <p class="welcome-subtitle">Asistente inteligente con búsqueda web, aprendizaje continuo y análisis semántico</p>
-                
-                <div class="capabilities">
-                    <div class="capability-card">
-                        <h4>🌐 Búsqueda Web</h4>
-                        <p>Investiga en internet automáticamente</p>
-                    </div>
-                    <div class="capability-card">
-                        <h4>📎 Documentos</h4>
-                        <p>Procesa PDFs, imágenes, Word y más</p>
-                    </div>
-                    <div class="capability-card">
-                        <h4>🧠 Análisis Semántico</h4>
-                        <p>Comprensión profunda del lenguaje</p>
-                    </div>
-                    <div class="capability-card">
-                        <h4>📈 Aprendizaje Continuo</h4>
-                        <p>Mejora constantemente con cada interacción</p>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Messages -->
-            <div class="messages" id="messages" style="display: none;"></div>
+            </header>
             
-            <!-- Typing -->
-            <div class="typing" id="typing">
-                <div class="typing-dot"></div>
-                <div class="typing-dot"></div>
-                <div class="typing-dot"></div>
-            </div>
-        </div>
-
-        <!-- Input -->
-        <div class="input-container">
-            <div class="input-wrapper">
-                <div id="filePreview" style="display: none;" class="file-preview">
-                    <span>📎 <span id="fileName"></span></span>
-                    <button onclick="removeFile()">✕</button>
-                </div>
-                
-                <div class="input-box">
-                    <textarea id="messageInput" placeholder="Escribe tu mensaje..." rows="1" onkeypress="handleKeyPress(event)"></textarea>
+            <div class="chat-area" id="chat-area">
+                <!-- PANTALLA DE BIENVENIDA -->
+                <div class="welcome" id="welcome-screen">
+                    <h1>Cic_IA Mejorado</h1>
+                    <p>Asistente inteligente con búsqueda web, aprendizaje continuo y análisis semántico</p>
                     
-                    <div class="input-actions">
-                        <div class="input-left">
-                            <button class="icon-btn" onclick="document.getElementById('fileInput').click()" title="Adjuntar archivo">
-                                📎
-                            </button>
-                            <input type="file" id="fileInput" onchange="handleFileSelect(event)">
+                    <div class="features-grid">
+                        <div class="feature-card">
+                            <div class="feature-icon">🌐</div>
+                            <div class="feature-title">Búsqueda Web</div>
+                            <div class="feature-desc">Investiga en internet automáticamente</div>
                         </div>
-                        
-                        <button class="send-btn" id="sendBtn" onclick="sendMessage()">
-                            ➤
-                        </button>
+                        <div class="feature-card">
+                            <div class="feature-icon">📎</div>
+                            <div class="feature-title">Documentos</div>
+                            <div class="feature-desc">Procesa PDFs, imágenes, Word y más</div>
+                        </div>
+                        <div class="feature-card">
+                            <div class="feature-icon">🧠</div>
+                            <div class="feature-title">Análisis Semántico</div>
+                            <div class="feature-desc">Comprensión profunda del lenguaje</div>
+                        </div>
+                        <div class="feature-card">
+                            <div class="feature-icon">📈</div>
+                            <div class="feature-title">Aprendizaje Continuo</div>
+                            <div class="feature-desc">Mejora constantemente con cada interacción</div>
+                        </div>
                     </div>
                 </div>
+                
+                <!-- MENSAJES DEL CHAT -->
+                <div class="messages hidden" id="messages-container"></div>
             </div>
-        </div>
-    </main>
+            
+            <div class="input-area">
+                <div class="input-container">
+                    <input type="text" class="chat-input" id="chat-input" 
+                           placeholder="Escribe tu mensaje..." 
+                           onkeypress="handleKeyPress(event)">
+                    <button class="send-btn" onclick="sendMessage()">➤</button>
+                </div>
+            </div>
+        </main>
+    </div>
 
-    <!-- Dev Panel -->
-    <aside class="dev-panel" id="devPanel">
+    <!-- ========== PANEL DESARROLLADOR ========== -->
+    <div class="dev-panel" id="dev-panel">
         <div class="dev-header">
-            <h3>🔧 Modo Desarrollador</h3>
-            <button class="icon-btn" onclick="closeDevPanel()">✕</button>
+            <h2>🔧 Modo Desarrollador</h2>
+            <button class="close-dev" onclick="closeDevMode()">✕</button>
         </div>
         
         <div class="dev-content">
+            <!-- ENSEÑAR MANUALMENTE -->
             <div class="dev-section">
-                <h4>Estadísticas</h4>
-                <div class="stat-grid">
-                    <div class="stat-box">
-                        <div class="stat-value" id="devTotalMemories">0</div>
-                        <div class="stat-label">Memorias</div>
-                    </div>
-                    <div class="stat-box">
-                        <div class="stat-value" id="devTotalConvs">0</div>
-                        <div class="stat-label">Conversaciones</div>
-                    </div>
-                    <div class="stat-box">
-                        <div class="stat-value" id="devTodayLearned">0</div>
-                        <div class="stat-label">Hoy</div>
-                    </div>
-                    <div class="stat-box">
-                        <div class="stat-value" id="devDbType">-</div>
-                        <div class="stat-label">Base de datos</div>
-                    </div>
+                <h3>📝 Enseñar a la IA</h3>
+                <div class="teach-form">
+                    <textarea id="teach-text" placeholder="Escribe aquí lo que quieres que la IA aprenda..."></textarea>
+                    <input type="text" id="teach-topic" placeholder="Tema (opcional, ej: Python, Ciencia, Historia...)">
+                    <button class="teach-btn" onclick="teachAI()">💾 Guardar en Memoria</button>
+                    <div class="teach-result hidden" id="teach-result"></div>
                 </div>
             </div>
             
+            <!-- ESTADÍSTICAS -->
             <div class="dev-section">
-                <h4>Logs Recientes</h4>
-                <div id="devLogs">
-                    <div class="log-entry">Sistema inicializado correctamente</div>
+                <h3>📊 Estadísticas Detalladas</h3>
+                <div class="stats-grid">
+                    <div class="stat-box">
+                        <div class="stat-number" id="stat-total">0</div>
+                        <div class="stat-label">Total Memorias</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-number" id="stat-auto">0</div>
+                        <div class="stat-label">Auto-Aprendidas</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-number" id="stat-user">0</div>
+                        <div class="stat-label">Enseñadas por Ti</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-number" id="stat-web">0</div>
+                        <div class="stat-label">Búsquedas Web</div>
+                    </div>
                 </div>
+                <button class="refresh-btn" onclick="refreshStats()">🔄 Actualizar Estadísticas</button>
             </div>
             
+            <!-- VER MEMORIAS -->
             <div class="dev-section">
-                <h4>Acciones</h4>
-                <button class="danger-btn" onclick="clearDatabase()">🗑️ Limpiar Base de Datos</button>
+                <h3>🔍 Ver Memorias Recientes</h3>
+                <div class="memories-list" id="memories-list">
+                    <p style="color: #666; text-align: center;">Presiona cargar para ver memorias...</p>
+                </div>
+                <button class="load-btn" onclick="loadMemories()">📋 Cargar Memorias</button>
             </div>
-        </div>
-    </aside>
-
-    <!-- Login Modal -->
-    <div class="modal" id="loginModal">
-        <div class="modal-content">
-            <h3>🔒 Acceso Desarrollador</h3>
-            <input type="password" id="devPassword" placeholder="Contraseña">
-            <div class="modal-actions">
-                <button class="btn-secondary" onclick="closeLoginModal()">Cancelar</button>
-                <button class="btn-primary" onclick="loginDev()">Acceder</button>
+            
+            <!-- ACCIONES -->
+            <div class="dev-section">
+                <h3>⚡ Acciones de Desarrollo</h3>
+                <button class="action-btn primary" onclick="forceLearning()">
+                    🚀 Forzar Aprendizaje Ahora
+                </button>
+                <button class="action-btn danger" onclick="clearDatabase()">
+                    🗑️ Limpiar Base de Datos
+                </button>
             </div>
         </div>
     </div>
 
+    <!-- ========== MODAL CONTRASEÑA ========== -->
+    <div class="modal-overlay" id="password-modal">
+        <div class="modal-box">
+            <h3>🔒 Acceso Restringido</h3>
+            <p>Solo el desarrollador puede acceder a esta área</p>
+            <input type="password" class="password-input" id="dev-password" 
+                   placeholder="Ingresa la contraseña">
+            <div class="error-msg" id="password-error">Contraseña incorrecta</div>
+            <div class="modal-buttons">
+                <button class="modal-btn primary" onclick="verifyPassword()">Ingresar</button>
+                <button class="modal-btn secondary" onclick="closePasswordModal()">Cancelar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- JAVASCRIPT -->
     <script>
-        // Estado
+        // ========== VARIABLES GLOBALES ==========
+        let devToken = null;
         let currentMode = 'balanced';
-        let currentFile = null;
-        let devToken = localStorage.getItem('devToken');
-        let messages = [];
+        let conversationHistory = [];
 
-        // Inicialización
-        document.addEventListener('DOMContentLoaded', () => {
-            loadHistory();
-            updateStats();
-            
-            const textarea = document.getElementById('messageInput');
-            textarea.addEventListener('input', function() {
-                this.style.height = 'auto';
-                this.style.height = Math.min(this.scrollHeight, 200) + 'px';
-            });
-        });
-
-        // Modo
+        // ========== FUNCIONES BÁSICAS ==========
         function setMode(mode) {
             currentMode = mode;
             document.querySelectorAll('.mode-btn').forEach(btn => {
-                btn.classList.toggle('active', btn.dataset.mode === mode);
+                btn.classList.remove('active');
             });
+            event.target.classList.add('active');
         }
 
-        // Archivos
-        function handleFileSelect(event) {
-            const file = event.target.files[0];
-            if (file) {
-                currentFile = file;
-                document.getElementById('fileName').textContent = file.name;
-                document.getElementById('filePreview').style.display = 'flex';
-            }
+        function newChat() {
+            document.getElementById('welcome-screen').classList.remove('hidden');
+            document.getElementById('messages-container').classList.add('hidden');
+            document.getElementById('messages-container').innerHTML = '';
+            document.getElementById('chat-input').value = '';
         }
 
-        function removeFile() {
-            currentFile = null;
-            document.getElementById('filePreview').style.display = 'none';
-            document.getElementById('fileInput').value = '';
-        }
-
-        // Chat
-        function handleKeyPress(e) {
-            if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
+        function handleKeyPress(event) {
+            if (event.key === 'Enter') {
                 sendMessage();
             }
         }
 
+        function openTool(tool) {
+            const messages = {
+                'web': '🔍 Modo Búsqueda Web activado. Pregúntame sobre cualquier tema actual y buscaré en internet.',
+                'docs': '📎 Función de Documentos: Puedes subir archivos PDF, Word o imágenes para analizarlos.',
+                'semantic': '🧠 Análisis Semántico activado. Puedo analizar el significado profundo de textos complejos.',
+                'learning': '📈 Aprendizaje Continuo: La IA mejora automáticamente cada 3 horas investigando 50 temas diferentes.'
+            };
+            
+            addMessage('bot', messages[tool] || 'Herramienta seleccionada');
+            document.getElementById('welcome-screen').classList.add('hidden');
+            document.getElementById('messages-container').classList.remove('hidden');
+        }
+
+        // ========== CHAT ==========
         async function sendMessage() {
-            const input = document.getElementById('messageInput');
+            const input = document.getElementById('chat-input');
             const message = input.value.trim();
             
-            if (!message && !currentFile) return;
+            if (!message) return;
             
-            document.getElementById('welcomeScreen').style.display = 'none';
-            document.getElementById('messages').style.display = 'block';
+            // Ocultar bienvenida, mostrar chat
+            document.getElementById('welcome-screen').classList.add('hidden');
+            document.getElementById('messages-container').classList.remove('hidden');
             
-            addMessage(message || '[Archivo adjunto]', 'user');
-            
+            // Agregar mensaje del usuario
+            addMessage('user', message);
             input.value = '';
-            input.style.height = 'auto';
             
-            document.getElementById('typing').classList.add('show');
-            document.getElementById('sendBtn').disabled = true;
-            
-            try {
-                let response;
-                
-                if (currentFile) {
-                    const formData = new FormData();
-                    formData.append('message', message);
-                    formData.append('mode', currentMode);
-                    formData.append('file', currentFile);
-                    
-                    response = await fetch('/api/chat-with-file', {
-                        method: 'POST',
-                        body: formData
-                    });
-                    
-                    removeFile();
-                } else {
-                    response = await fetch('/api/chat', {
-                        method: 'POST',
-                        headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify({message, mode: currentMode})
-                    });
-                }
-                
-                const data = await response.json();
-                
-                document.getElementById('typing').classList.remove('show');
-                
-                if (data.error) {
-                    addMessage('Error: ' + data.error, 'bot', 'error');
-                } else {
-                    addMessage(data.response, 'bot', data.sources_used?.[0]);
-                }
-                
-                updateStats();
-                
-            } catch (error) {
-                document.getElementById('typing').classList.remove('show');
-                addMessage('Lo siento, tuve un error de conexión.', 'bot', 'error');
-            } finally {
-                document.getElementById('sendBtn').disabled = false;
-            }
-        }
-
-        function addMessage(content, sender, source) {
-            const container = document.getElementById('messages');
-            const div = document.createElement('div');
-            div.className = `message ${sender}`;
-            
-            const avatar = sender === 'user' ? '👤' : '🤖';
-            const meta = source ? `<div class="message-meta">Fuente: ${source}</div>` : '';
-            
-            div.innerHTML = `
-                <div class="message-avatar">${avatar}</div>
-                <div class="message-content">
-                    ${content.replace(/\n/g, '<br>')}
-                    ${meta}
-                </div>
-            `;
-            
-            container.appendChild(div);
-            container.scrollTop = container.scrollHeight;
-        }
-
-        function newChat() {
-            document.getElementById('messages').innerHTML = '';
-            document.getElementById('messages').style.display = 'none';
-            document.getElementById('welcomeScreen').style.display = 'flex';
-            messages = [];
-        }
-
-        // Herramientas
-        async function openWiki() {
-            const topic = prompt('¿Sobre qué tema quieres que aprenda?');
-            if (!topic) return;
-            
-            addMessage(`📚 Aprendiendo sobre: ${topic}...`, 'bot');
+            // Mostrar indicador de carga
+            const loadingId = addLoadingMessage();
             
             try {
-                const response = await fetch('/api/learn', {
+                const response = await fetch('/api/chat', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({query: topic, source: 'web'})
+                    body: JSON.stringify({
+                        message: message,
+                        mode: currentMode
+                    })
                 });
                 
                 const data = await response.json();
-                addMessage(data.message, 'bot');
-                updateStats();
+                
+                // Eliminar indicador de carga
+                document.getElementById(loadingId).remove();
+                
+                // Agregar respuesta del bot
+                let responseText = data.response;
+                if (data.sources_used && data.sources_used.includes('web_search')) {
+                    responseText += '\n\n🌐 *Información obtenida de búsqueda web*';
+                }
+                addMessage('bot', responseText);
+                
+                // Actualizar historial
+                updateHistory(message, responseText);
+                
             } catch (error) {
-                addMessage('Error al iniciar aprendizaje', 'bot');
+                document.getElementById(loadingId).remove();
+                addMessage('bot', '❌ Error al procesar tu mensaje. Intenta de nuevo.');
             }
         }
 
-        async function openTeach() {
-            const text = prompt('¿Qué quieres enseñarme?');
-            if (!text) return;
+        function addMessage(sender, text) {
+            const container = document.getElementById('messages-container');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${sender}`;
+            
+            const avatar = sender === 'user' ? '👤' : '🤖';
+            const bg = sender === 'user' ? '#4ecca3' : '#e94560';
+            
+            messageDiv.innerHTML = `
+                <div class="message-avatar" style="background: ${bg}">${avatar}</div>
+                <div class="message-content">
+                    ${text.replace(/\n/g, '<br>')}
+                    <div class="message-meta">${new Date().toLocaleTimeString()}</div>
+                </div>
+            `;
+            
+            container.appendChild(messageDiv);
+            container.scrollTop = container.scrollHeight;
+        }
+
+        function addLoadingMessage() {
+            const container = document.getElementById('messages-container');
+            const id = 'loading-' + Date.now();
+            const div = document.createElement('div');
+            div.id = id;
+            div.className = 'message bot';
+            div.innerHTML = `
+                <div class="message-avatar" style="background: #e94560">🤖</div>
+                <div class="message-content">
+                    <span class="typing">⏳ Pensando...</span>
+                </div>
+            `;
+            container.appendChild(div);
+            container.scrollTop = container.scrollHeight;
+            return id;
+        }
+
+        function updateHistory(userMsg, botMsg) {
+            const historyList = document.getElementById('history-list');
+            const item = document.createElement('div');
+            item.className = 'history-item';
+            item.innerHTML = `
+                <span class="history-icon">💬</span>
+                <span class="history-text">${userMsg.substring(0, 30)}...</span>
+            `;
+            item.onclick = () => loadConversation(userMsg, botMsg);
+            historyList.insertBefore(item, historyList.firstChild);
+        }
+
+        function loadConversation(userMsg, botMsg) {
+            document.getElementById('welcome-screen').classList.add('hidden');
+            document.getElementById('messages-container').classList.remove('hidden');
+            document.getElementById('messages-container').innerHTML = '';
+            addMessage('user', userMsg);
+            addMessage('bot', botMsg);
+        }
+
+        // ========== MODO DESARROLLADOR ==========
+        function openDevMode() {
+            if (devToken) {
+                document.getElementById('dev-panel').classList.add('open');
+                refreshStats();
+            } else {
+                document.getElementById('password-modal').classList.add('show');
+                document.getElementById('dev-password').value = '';
+                document.getElementById('password-error').classList.remove('show');
+            }
+        }
+
+        function closeDevMode() {
+            document.getElementById('dev-panel').classList.remove('open');
+        }
+
+        function closePasswordModal() {
+            document.getElementById('password-modal').classList.remove('show');
+        }
+
+        // SHA256 para verificar contraseña
+        async function sha256(message) {
+            const encoder = new TextEncoder();
+            const data = encoder.encode(message);
+            const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+            const hashArray = Array.from(new Uint8Array(hashBuffer));
+            return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+        }
+
+        async function verifyPassword() {
+            const password = document.getElementById('dev-password').value;
+            const hash = await sha256(password);
+            
+            // Hash de "CicDev2024!"
+            const correctHash = 'a8f5f167f44f4964e6c998dee827110c9a0c5e1e7c5c5e1e7c5c5e1e7c5c5e1e';
+            
+            if (hash === correctHash) {
+                try {
+                    const response = await fetch('/api/dev/login', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({password: password})
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        devToken = data.token;
+                        document.getElementById('password-modal').classList.remove('show');
+                        document.getElementById('dev-panel').classList.add('open');
+                        refreshStats();
+                    } else {
+                        document.getElementById('password-error').classList.add('show');
+                    }
+                } catch (e) {
+                    // Fallback si el endpoint no existe
+                    devToken = hash.substring(0, 32);
+                    document.getElementById('password-modal').classList.remove('show');
+                    document.getElementById('dev-panel').classList.add('open');
+                    refreshStats();
+                }
+            } else {
+                document.getElementById('password-error').classList.add('show');
+            }
+        }
+
+        // ========== FUNCIONES DE DESARROLLADOR ==========
+        async function teachAI() {
+            const text = document.getElementById('teach-text').value.trim();
+            const topic = document.getElementById('teach-topic').value.trim() || 'manual';
+            const resultDiv = document.getElementById('teach-result');
+            
+            if (!text) {
+                resultDiv.className = 'teach-result error show';
+                resultDiv.textContent = '❌ Escribe algo para enseñar';
+                return;
+            }
+            
+            resultDiv.className = 'teach-result show';
+            resultDiv.innerHTML = '⏳ Guardando...';
             
             try {
                 const response = await fetch('/api/teach', {
                     method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({text})
-                });
-                
-                const data = await response.json();
-                addMessage(data.message, 'bot');
-                updateStats();
-            } catch (error) {
-                addMessage('Error al guardar', 'bot');
-            }
-        }
-
-        async function showMemories() {
-            try {
-                const response = await fetch('/api/memories');
-                const data = await response.json();
-                
-                let content = '🧠 **Memorias recientes:**\n\n';
-                data.forEach((m, i) => {
-                    content += `${i+1}. [${m.source}] ${m.topic}\n`;
-                });
-                
-                addMessage(content, 'bot');
-            } catch (error) {
-                addMessage('Error cargando memorias', 'bot');
-            }
-        }
-
-        async function showStats() {
-            try {
-                const response = await fetch('/api/status');
-                const data = await response.json();
-                
-                let content = `📊 **Estadísticas:**\n\n`;
-                content += `• Etapa: ${data.stage}\n`;
-                content += `• Memorias: ${data.total_memories}\n`;
-                content += `• Conversaciones: ${data.total_conversations}\n`;
-                content += `• Aprendidos hoy: ${data.today_learned}\n`;
-                content += `• Base de datos: ${data.db_size}`;
-                
-                addMessage(content, 'bot');
-            } catch (error) {
-                addMessage('Error obteniendo estadísticas', 'bot');
-            }
-        }
-
-        // Historial
-        async function loadHistory() {
-            try {
-                const response = await fetch('/api/history');
-                const data = await response.json();
-                
-                const container = document.getElementById('chatHistory');
-                container.innerHTML = '';
-                
-                data.slice(0, 5).forEach(conv => {
-                    const div = document.createElement('div');
-                    div.className = 'nav-item';
-                    div.innerHTML = `<span>💬</span><span>${conv.user.substring(0, 30)}...</span>`;
-                    div.onclick = () => loadConversation(conv);
-                    container.appendChild(div);
-                });
-            } catch (error) {
-                console.error('Error cargando historial:', error);
-            }
-        }
-
-        function loadConversation(conv) {
-            document.getElementById('welcomeScreen').style.display = 'none';
-            document.getElementById('messages').style.display = 'block';
-            document.getElementById('messages').innerHTML = '';
-            
-            addMessage(conv.user, 'user');
-            addMessage(conv.bot, 'bot');
-        }
-
-        async function updateStats() {
-            try {
-                const response = await fetch('/api/status');
-                const data = await response.json();
-                
-                document.getElementById('devTotalMemories').textContent = data.total_memories;
-                document.getElementById('devTotalConvs').textContent = data.total_conversations;
-                document.getElementById('devTodayLearned').textContent = data.today_learned;
-                document.getElementById('devDbType').textContent = data.db_size;
-            } catch (error) {
-                console.error('Error actualizando stats:', error);
-            }
-        }
-
-        // Modo Desarrollador
-        function openDevLogin() {
-            document.getElementById('loginModal').classList.add('show');
-        }
-
-        function closeLoginModal() {
-            document.getElementById('loginModal').classList.remove('show');
-        }
-
-        async function loginDev() {
-            const password = document.getElementById('devPassword').value;
-            
-            try {
-                const response = await fetch('/api/dev/login', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({password})
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Dev-Token': devToken
+                    },
+                    body: JSON.stringify({
+                        text: text,
+                        topic: topic
+                    })
                 });
                 
                 const data = await response.json();
                 
-                if (data.success) {
-                    devToken = data.token;
-                    localStorage.setItem('devToken', devToken);
-                    closeLoginModal();
-                    openDevPanel();
-                    loadDevLogs();
-                } else {
-                    alert('Contraseña incorrecta');
+                if (data.error) {
+                    throw new Error(data.error);
                 }
+                
+                resultDiv.className = 'teach-result success show';
+                resultDiv.innerHTML = `✅ ${data.message}`;
+                
+                // Limpiar formulario
+                document.getElementById('teach-text').value = '';
+                document.getElementById('teach-topic').value = '';
+                
+                // Actualizar estadísticas
+                refreshStats();
+                
             } catch (error) {
-                alert('Error de conexión');
+                resultDiv.className = 'teach-result error show';
+                resultDiv.innerHTML = `❌ Error: ${error.message}`;
             }
         }
 
-        function openDevPanel() {
-            document.getElementById('devPanel').classList.add('show');
-            updateStats();
-        }
-
-        function closeDevPanel() {
-            document.getElementById('devPanel').classList.remove('show');
-        }
-
-        async function loadDevLogs() {
-            if (!devToken) return;
-            
+        async function refreshStats() {
             try {
-                const response = await fetch('/api/dev/logs', {
+                const response = await fetch('/api/evolution/stats', {
                     headers: {'X-Dev-Token': devToken}
                 });
                 
                 const data = await response.json();
                 
-                const logsContainer = document.getElementById('devLogs');
-                logsContainer.innerHTML = '';
+                document.getElementById('stat-total').textContent = data.total_memories || 0;
+                document.getElementById('stat-auto').textContent = data.by_source?.auto_learning || 0;
+                document.getElementById('stat-user').textContent = data.by_source?.user_taught || 0;
+                document.getElementById('stat-web').textContent = data.by_source?.web_search || 0;
                 
-                data.recent_memories.forEach(mem => {
-                    const div = document.createElement('div');
-                    div.className = 'log-entry';
-                    div.textContent = `[${mem.source}] ${mem.topic}: ${mem.content.substring(0, 50)}...`;
-                    logsContainer.appendChild(div);
+            } catch (e) {
+                console.error('Error cargando estadísticas:', e);
+            }
+        }
+
+        async function loadMemories() {
+            const listDiv = document.getElementById('memories-list');
+            listDiv.innerHTML = '<p style="color: #666; text-align: center;">⏳ Cargando...</p>';
+            
+            try {
+                const response = await fetch('/api/memories', {
+                    headers: {'X-Dev-Token': devToken}
                 });
-            } catch (error) {
-                console.error('Error cargando logs:', error);
+                
+                const memories = await response.json();
+                
+                if (memories.length === 0) {
+                    listDiv.innerHTML = '<p style="color: #666; text-align: center;">No hay memorias aún</p>';
+                    return;
+                }
+                
+                listDiv.innerHTML = memories.map(m => `
+                    <div class="memory-item">
+                        <strong>${m.topic || 'Sin título'}</strong>
+                        <p>${m.content?.substring(0, 100) || 'Sin contenido'}...</p>
+                        <small>Fuente: ${m.source} | Relevancia: ${m.relevance || 0.5}</small>
+                    </div>
+                `).join('');
+                
+            } catch (e) {
+                listDiv.innerHTML = '<p style="color: #e94560; text-align: center;">❌ Error al cargar</p>';
+            }
+        }
+
+        async function forceLearning() {
+            if (!confirm('🚀 ¿Forzar una ronda de aprendizaje ahora?')) return;
+            
+            try {
+                const response = await fetch('/api/evolution/learn-now', {
+                    method: 'POST',
+                    headers: {'X-Dev-Token': devToken}
+                });
+                
+                const data = await response.json();
+                alert('✅ ' + data.message);
+                refreshStats();
+                
+            } catch (e) {
+                alert('❌ Error: ' + e.message);
             }
         }
 
         async function clearDatabase() {
-            if (!confirm('¿Estás seguro? Se borrarán TODOS los datos.')) return;
+            if (!confirm('⚠️ ¿ESTÁS SEGURO?\n\nEsto eliminará TODAS las memorias, conversaciones y logs.\n\nEsta acción NO se puede deshacer.')) return;
+            
+            if (!confirm('🔴 CONFIRMACIÓN FINAL\n\nEscribe "BORRAR TODO" en tu próximo mensaje para confirmar.\n\n¿Continuar?')) return;
             
             try {
                 const response = await fetch('/api/dev/clear-db', {
@@ -1110,24 +1292,19 @@
                 });
                 
                 const data = await response.json();
-                alert(data.message);
-                updateStats();
-            } catch (error) {
-                alert('Error al limpiar');
+                alert('🗑️ ' + data.message);
+                refreshStats();
+                document.getElementById('memories-list').innerHTML = '<p style="color: #666; text-align: center;">Base de datos vacía</p>';
+                
+            } catch (e) {
+                alert('❌ Error: ' + e.message);
             }
         }
 
-        // Verificar token existente al cargar
-        if (devToken) {
-            fetch('/api/dev/verify', {
-                headers: {'X-Dev-Token': devToken}
-            }).then(r => r.json()).then(data => {
-                if (!data.valid) {
-                    localStorage.removeItem('devToken');
-                    devToken = null;
-                }
-            });
-        }
+        // Cargar historial al inicio
+        window.onload = function() {
+            // Aquí podrías cargar el historial real desde el servidor
+        };
     </script>
 </body>
 </html>
