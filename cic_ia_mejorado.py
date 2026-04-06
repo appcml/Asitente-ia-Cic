@@ -1,13 +1,13 @@
 """
 Cic_IA - Asistente Inteligente EVOLUTIVO
-Archivo principal - Versión modular
+Archivo principal simplificado - Versión Modular
 """
 
-from flask import Flask, render_template, request, jsonify, send_from_directory
+from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
+from flask import render_template, request, jsonify, send_from_directory
 from werkzeug.utils import secure_filename
 from datetime import datetime, date, timedelta
-from functools import wraps
 import os
 import json
 import random
@@ -17,17 +17,19 @@ import urllib.request
 import urllib.parse
 import re
 import hashlib
-import secrets
 import requests
 from bs4 import BeautifulSoup
 import logging
 from sqlalchemy import select
 
+# Configuración de logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# ========== CONFIGURACIÓN ==========
+# Inicializar Flask
 app = Flask(__name__)
+
+# ========== CONFIGURACIÓN ==========
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'cic-ia-secret-2024')
 
 database_url = os.environ.get('DATABASE_URL')
@@ -40,10 +42,7 @@ else:
 
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-# Credenciales DESARROLLADOR - SOLO TÚ (desde variables de entorno)
-app.config['DEV_USERNAME'] = os.environ.get('DEV_USERNAME', 'admin')
-app.config['DEV_PASSWORD'] = os.environ.get('DEV_PASSWORD', 'CicDev2024!')
-
+# Configuración de uploads
 UPLOAD_FOLDER = 'uploads'
 ALLOWED_EXTENSIONS = {'txt', 'pdf', 'png', 'jpg', 'jpeg', 'gif', 'doc', 'docx', 'py', 'js', 'html', 'css', 'json'}
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
@@ -51,6 +50,11 @@ app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
 
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
+# Credenciales DESARROLLADOR - SOLO TÚ (desde variables de entorno o defaults para desarrollo)
+DEV_USERNAME = os.environ.get('DEV_USERNAME', 'admin')
+DEV_PASSWORD = os.environ.get('DEV_PASSWORD', 'CicDev2024!')
+
+# Inicializar SQLAlchemy
 db = SQLAlchemy(app)
 
 # ========== MODELOS ==========
@@ -105,11 +109,12 @@ class KnowledgeEvolution(db.Model):
     new_content = db.Column(db.Text)
     source = db.Column(db.String(50))
 
+# Crear tablas
 with app.app_context():
     db.create_all()
     print("✅ Base de datos inicializada")
 
-# ========== SERVICIO DE AUTENTICACIÓN DESARROLLADOR ==========
+# ========== SERVICIO DE AUTENTICACIÓN ==========
 
 class DevAuthService:
     """Servicio de autenticación para modo desarrollador"""
@@ -118,20 +123,17 @@ class DevAuthService:
         self.active_sessions = {}
     
     def verify_credentials(self, username, password):
-        """Verificar credenciales contra configuración"""
-        expected_user = app.config.get('DEV_USERNAME')
-        expected_pass = app.config.get('DEV_PASSWORD')
-        return username == expected_user and password == expected_pass
+        """Verificar credenciales del desarrollador"""
+        return username == DEV_USERNAME and password == DEV_PASSWORD
     
     def generate_token(self, username):
-        """Generar token seguro de sesión"""
+        """Generar token de sesión"""
+        import secrets
         token = secrets.token_urlsafe(32)
-        expiry = datetime.utcnow() + timedelta(hours=24)
-        
         self.active_sessions[token] = {
             'username': username,
             'created_at': datetime.utcnow(),
-            'expires_at': expiry,
+            'expires_at': datetime.utcnow() + timedelta(hours=24),
             'last_used': datetime.utcnow()
         }
         return token
@@ -160,7 +162,8 @@ class DevAuthService:
 dev_auth = DevAuthService()
 
 def dev_required(f):
-    """Decorador para proteger rutas de desarrollador"""
+    """Decorador para rutas de desarrollador"""
+    from functools import wraps
     @wraps(f)
     def decorated_function(*args, **kwargs):
         token = request.headers.get('X-Dev-Token')
@@ -169,7 +172,7 @@ def dev_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
-# ========== CLASES PRINCIPALES ==========
+# ========== MOTOR DE BÚSQUEDA ==========
 
 class WebSearchEngine:
     @staticmethod
@@ -220,79 +223,74 @@ class WebSearchEngine:
             logger.error(f"Error en fallback de búsqueda: {e}")
             return []
 
-KNOWLEDGE_BASE = {
-    'ia': {
-        'respuestas': [
-            "La Inteligencia Artificial (IA) es la simulación de procesos de inteligencia humana por sistemas informáticos.",
-            "IA permite a las máquinas aprender, razonar y resolver problemas de manera autónoma."
-        ],
-        'keywords': ['inteligencia artificial', 'ia', 'ai', 'machine learning', 'deep learning']
-    },
-    'python': {
-        'respuestas': [
-            "Python es el lenguaje líder en IA por su sintaxis clara y bibliotecas como TensorFlow y PyTorch.",
-            "Python fue creado por Guido van Rossum y es ideal para prototipado rápido."
-        ],
-        'keywords': ['python', 'programación', 'código', 'desarrollo']
-    },
-    'hola': {
-        'respuestas': [
-            "¡Hola! Soy Cic_IA, tu asistente inteligente. ¿En qué puedo ayudarte hoy?",
-            "¡Bienvenido! Estoy lista para aprender y asistirte."
-        ],
-        'keywords': ['hola', 'buenas', 'hey', 'saludos']
-    },
-    'fecha_hora': {
-        'respuestas': ['DYNAMIC_DATE'],
-        'keywords': ['qué día', 'qué hora', 'fecha', 'hora actual', 'hoy es']
-    },
-    'cic_ia': {
-        'respuestas': [
-            "Soy Cic_IA, una inteligencia artificial evolutiva creada para aprender, asistir y crecer contigo.",
-            "Cic_IA aprende cada 3 horas de 50 temas distintos: ciencia, tecnología, sociedad y futuro."
-        ],
-        'keywords': ['quién eres', 'qué eres', 'cic_ia', 'tu nombre', 'presentación']
-    },
-    'default': {
-        'respuestas': [
-            "Interesante tema sobre '{tema}'. Voy a investigar en internet para darte la mejor respuesta.",
-            "Estoy aprendiendo sobre '{tema}'. Déjame buscar información actualizada para ti."
-        ],
-        'keywords': []
-    }
-}
+# ========== CLASE PRINCIPAL CIC_IA ==========
 
 class CicIA:
     def __init__(self):
         self.learning_active = True
         self.web_search_engine = WebSearchEngine()
         
+        # 50 TEMAS PARA AUTO-APRENDIZAJE
         self.auto_learning_topics = [
-            'física cuántica avances 2024', 'biología sintética descubrimientos',
-            'neurociencia cognitiva', 'matemáticas teoría nuevas',
-            'química materiales revolucionarios', 'astronomía exoplanetas',
-            'paleontología fósiles recientes', 'genética edición CRISPR',
-            'psicología conducta humana', 'filosofía mente artificial',
-            'inteligencia artificial noticias 2024', 'machine learning avances',
-            'desarrollo software arquitectura', 'python programación novedades',
-            'código limpio mejores prácticas', 'DevOps CI/CD tendencias',
-            'blockchain aplicaciones reales', 'Internet de las cosas IoT',
-            'realidad virtual aumentada', 'ciberseguridad ética hacking',
-            'computación cuántica progreso', 'edge computing computación borde',
-            'economía global tendencias', 'geopolítica análisis actual',
-            'cambio climático soluciones', 'educación innovación pedagógica',
-            'salud mental bienestar', 'arte inteligencia artificial',
-            'historia civilizaciones antiguas', 'lingüística evolución idiomas',
-            'derecho tecnología regulación', 'sociología cambios sociales',
-            'productividad métodos eficaces', 'aprendizaje acelerado técnicas',
-            'creatividad innovación pensamiento', 'comunicación persuasión',
-            'liderazgo gestión equipos', 'finanzas personales inversión',
-            'negociación conflictos resolución', 'mindfulness atención plena',
-            'inteligencia emocional', 'emprendimiento startups casos éxito',
-            'biotecnología longevidad', 'nanotecnología medicina',
-            'energía fusión nuclear', 'transporte eléctrico aviones',
-            'espacio colonización', 'metaverso evolución',
-            'robótica humanoides', 'transhumanismo mejoramiento',
+            # CIENCIA PROFUNDA (10)
+            'física cuántica avances 2024',
+            'biología sintética descubrimientos',
+            'neurociencia cognitiva',
+            'matemáticas teoría nuevas',
+            'química materiales revolucionarios',
+            'astronomía exoplanetas',
+            'paleontología fósiles recientes',
+            'genética edición CRISPR',
+            'psicología conducta humana',
+            'filosofía mente artificial',
+            
+            # TECNOLOGÍA (12)
+            'inteligencia artificial noticias 2024',
+            'machine learning avances',
+            'desarrollo software arquitectura',
+            'python programación novedades',
+            'código limpio mejores prácticas',
+            'DevOps CI/CD tendencias',
+            'blockchain aplicaciones reales',
+            'Internet de las cosas IoT',
+            'realidad virtual aumentada',
+            'ciberseguridad ética hacking',
+            'computación cuántica progreso',
+            'edge computing computación borde',
+            
+            # MUNDO Y SOCIEDAD (10)
+            'economía global tendencias',
+            'geopolítica análisis actual',
+            'cambio climático soluciones',
+            'educación innovación pedagógica',
+            'salud mental bienestar',
+            'arte inteligencia artificial',
+            'historia civilizaciones antiguas',
+            'lingüística evolución idiomas',
+            'derecho tecnología regulación',
+            'sociología cambios sociales',
+            
+            # DESARROLLO PERSONAL (10)
+            'productividad métodos eficaces',
+            'aprendizaje acelerado técnicas',
+            'creatividad innovación pensamiento',
+            'comunicación persuasión',
+            'liderazgo gestión equipos',
+            'finanzas personales inversión',
+            'negociación conflictos resolución',
+            'mindfulness atención plena',
+            'inteligencia emocional',
+            'emprendimiento startups casos éxito',
+            
+            # FUTURO (8)
+            'biotecnología longevidad',
+            'nanotecnología medicina',
+            'energía fusión nuclear',
+            'transporte eléctrico aviones',
+            'espacio colonización',
+            'metaverso evolución',
+            'robótica humanoides',
+            'transhumanismo mejoramiento',
         ]
         
         with app.app_context():
@@ -316,7 +314,6 @@ class CicIA:
         print("🌐 Búsqueda web: ACTIVADA")
         print("🧠 Auto-aprendizaje: ACTIVADO (cada 3 horas)")
         print(f"🎯 Temas de aprendizaje: {len(self.auto_learning_topics)} categorías")
-        print("🔒 Modo Desarrollador: Protegido")
         print("=" * 70)
     
     def _get_today_count(self):
@@ -632,9 +629,54 @@ class CicIA:
                 'evolution_ready': True
             }
 
+# ========== KNOWLEDGE BASE ==========
+
+KNOWLEDGE_BASE = {
+    'ia': {
+        'respuestas': [
+            "La Inteligencia Artificial (IA) es la simulación de procesos de inteligencia humana por sistemas informáticos.",
+            "IA permite a las máquinas aprender, razonar y resolver problemas de manera autónoma."
+        ],
+        'keywords': ['inteligencia artificial', 'ia', 'ai', 'machine learning', 'deep learning']
+    },
+    'python': {
+        'respuestas': [
+            "Python es el lenguaje líder en IA por su sintaxis clara y bibliotecas como TensorFlow y PyTorch.",
+            "Python fue creado por Guido van Rossum y es ideal para prototipado rápido."
+        ],
+        'keywords': ['python', 'programación', 'código', 'desarrollo']
+    },
+    'hola': {
+        'respuestas': [
+            "¡Hola! Soy Cic_IA, tu asistente inteligente. ¿En qué puedo ayudarte hoy?",
+            "¡Bienvenido! Estoy lista para aprender y asistirte."
+        ],
+        'keywords': ['hola', 'buenas', 'hey', 'saludos']
+    },
+    'fecha_hora': {
+        'respuestas': ['DYNAMIC_DATE'],
+        'keywords': ['qué día', 'qué hora', 'fecha', 'hora actual', 'hoy es']
+    },
+    'cic_ia': {
+        'respuestas': [
+            "Soy Cic_IA, una inteligencia artificial evolutiva creada para aprender, asistir y crecer contigo.",
+            "Cic_IA aprende cada 3 horas de 50 temas distintos: ciencia, tecnología, sociedad y futuro."
+        ],
+        'keywords': ['quién eres', 'qué eres', 'cic_ia', 'tu nombre', 'presentación']
+    },
+    'default': {
+        'respuestas': [
+            "Interesante tema sobre '{tema}'. Voy a investigar en internet para darte la mejor respuesta.",
+            "Estoy aprendiendo sobre '{tema}'. Déjame buscar información actualizada para ti."
+        ],
+        'keywords': []
+    }
+}
+
+# Instancia global
 cic_ia = CicIA()
 
-# ========== RUTAS PÚBLICAS (USUARIO) ==========
+# ========== RUTAS PÚBLICAS (USUARIOS) ==========
 
 @app.route('/')
 def index():
@@ -760,14 +802,13 @@ def learn():
 
 @app.route('/api/teach', methods=['POST'])
 def teach():
-    """Enseñar a la IA - puede usarse por usuario normal o desarrollador"""
+    """Enseñar a la IA - Público pero con bonus si es dev"""
     try:
         data = request.json
         text = data.get('text', '').strip()
         topic = data.get('topic', '').strip()
         source = data.get('source', 'user_taught')
         
-        # Verificar si es modo desarrollador
         token = request.headers.get('X-Dev-Token')
         is_dev = dev_auth.verify_token(token) if token else False
         
@@ -777,15 +818,12 @@ def teach():
         if not topic:
             topic = text[:50]
         
-        # Si es dev, usar source 'developer', si no, 'user_taught'
-        final_source = 'developer' if is_dev else source
-        
         with app.app_context():
             memory = Memory(
                 content=text,
-                source=final_source,
+                source='developer' if is_dev else source,
                 topic=topic,
-                relevance_score=0.9 if is_dev else 0.8,
+                relevance_score=0.95 if is_dev else 0.9,
                 access_count=0
             )
             db.session.add(memory)
@@ -805,7 +843,6 @@ def teach():
                 'message': 'He aprendido lo que me enseñaste',
                 'memory_id': memory.id,
                 'topic': topic,
-                'source': final_source,
                 'is_dev_mode': is_dev
             })
             
@@ -849,20 +886,6 @@ def evolution_stats():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-@app.route('/api/evolution/topics')
-def get_topics():
-    return jsonify({
-        'total': len(cic_ia.auto_learning_topics),
-        'topics': cic_ia.auto_learning_topics,
-        'categories': {
-            'ciencia': 10,
-            'tecnologia': 12,
-            'sociedad': 10,
-            'desarrollo_personal': 10,
-            'futuro': 8
-        }
-    })
-
 # ========== RUTAS DESARROLLADOR (PROTEGIDAS) ==========
 
 @app.route('/api/dev/login', methods=['POST'])
@@ -872,12 +895,6 @@ def dev_login():
         data = request.json
         username = data.get('username', '').strip()
         password = data.get('password', '').strip()
-        
-        if not username or not password:
-            return jsonify({
-                'success': False,
-                'error': 'Usuario y contraseña requeridos'
-            }), 400
         
         if dev_auth.verify_credentials(username, password):
             token = dev_auth.generate_token(username)
@@ -892,7 +909,6 @@ def dev_login():
                 'success': False,
                 'error': 'Credenciales inválidas'
             }), 401
-            
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -902,28 +918,25 @@ def dev_logout():
     token = request.headers.get('X-Dev-Token')
     if token:
         dev_auth.revoke_token(token)
-    
     return jsonify({'success': True, 'message': 'Sesión cerrada'})
 
 @app.route('/api/dev/verify')
 def dev_verify():
     """Verificar sesión activa"""
     token = request.headers.get('X-Dev-Token')
-    session = dev_auth.active_sessions.get(token)
-    
-    if session and dev_auth.verify_token(token):
+    if dev_auth.verify_token(token):
+        session = dev_auth.active_sessions.get(token)
         return jsonify({
             'valid': True,
             'username': session['username'],
             'expires_at': session['expires_at'].isoformat()
         })
-    
     return jsonify({'valid': False}), 401
 
 @app.route('/api/dev/memories/all')
 @dev_required
 def dev_memories_all():
-    """Obtener TODAS las memorias (solo dev)"""
+    """Todas las memorias (paginado)"""
     try:
         page = request.args.get('page', 1, type=int)
         per_page = request.args.get('per_page', 50, type=int)
@@ -947,6 +960,19 @@ def dev_memories_all():
             'current_page': page
         })
     except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/dev/memories/<int:id>', methods=['DELETE'])
+@dev_required
+def dev_delete_memory(id):
+    """Eliminar memoria específica"""
+    try:
+        memory = Memory.query.get_or_404(id)
+        db.session.delete(memory)
+        db.session.commit()
+        return jsonify({'success': True, 'message': f'Memoria {id} eliminada'})
+    except Exception as e:
+        db.session.rollback()
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/dev/stats/detailed')
@@ -1000,7 +1026,8 @@ def dev_force_learning():
         threading.Thread(target=cic_ia._perform_auto_learning, daemon=True).start()
         return jsonify({
             'success': True,
-            'message': 'Ciclo de aprendizaje iniciado manualmente'
+            'message': 'Ciclo de aprendizaje iniciado',
+            'started_at': datetime.utcnow().isoformat()
         })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -1008,7 +1035,7 @@ def dev_force_learning():
 @app.route('/api/dev/system/clear-db', methods=['POST'])
 @dev_required
 def dev_clear_db():
-    """⚠️ Limpiar toda la base de datos"""
+    """⚠️ LIMPIAR TODA LA BASE DE DATOS"""
     try:
         # Verificar confirmación
         confirm = request.headers.get('X-Confirm-Delete')
@@ -1037,10 +1064,33 @@ def dev_clear_db():
         
         return jsonify({
             'success': True,
-            'message': f'Base de datos limpiada. Eliminados: {counts["memories"]} memorias, {counts["conversations"]} conversaciones, {counts["logs"]} logs.'
+            'message': 'Base de datos completamente eliminada',
+            'deleted': counts
         })
     except Exception as e:
         db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/dev/sessions')
+@dev_required
+def dev_sessions():
+    """Listar sesiones activas"""
+    try:
+        sessions = []
+        for token, session in dev_auth.active_sessions.items():
+            sessions.append({
+                'username': session['username'],
+                'created_at': session['created_at'].isoformat(),
+                'expires_at': session['expires_at'].isoformat(),
+                'last_used': session['last_used'].isoformat(),
+                'token_preview': token[:8] + '...'
+            })
+        
+        return jsonify({
+            'active_sessions': len(sessions),
+            'sessions': sessions
+        })
+    except Exception as e:
         return jsonify({'error': str(e)}), 500
 
 @app.route('/uploads/<path:filename>')
