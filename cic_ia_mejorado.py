@@ -1,12 +1,13 @@
 """
 Cic_IA - Asistente Inteligente EVOLUTIVO
-Reflejo de curiosidad infinita, utilidad máxima
+Archivo principal - Versión modular
 """
 
 from flask import Flask, render_template, request, jsonify, send_from_directory
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.utils import secure_filename
 from datetime import datetime, date, timedelta
+from functools import wraps
 import os
 import json
 import random
@@ -16,6 +17,7 @@ import urllib.request
 import urllib.parse
 import re
 import hashlib
+import secrets
 import requests
 from bs4 import BeautifulSoup
 import logging
@@ -24,6 +26,7 @@ from sqlalchemy import select
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# ========== CONFIGURACIÓN ==========
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'cic-ia-secret-2024')
 
@@ -37,6 +40,10 @@ else:
 
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
+# Credenciales DESARROLLADOR - SOLO TÚ (desde variables de entorno)
+app.config['DEV_USERNAME'] = os.environ.get('DEV_USERNAME', 'admin')
+app.config['DEV_PASSWORD'] = os.environ.get('DEV_PASSWORD', 'CicDev2024!')
+
 UPLOAD_FOLDER = 'uploads'
 ALLOWED_EXTENSIONS = {'txt', 'pdf', 'png', 'jpg', 'jpeg', 'gif', 'doc', 'docx', 'py', 'js', 'html', 'css', 'json'}
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
@@ -46,7 +53,7 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 db = SQLAlchemy(app)
 
-# ============ MODELOS ============
+# ========== MODELOS ==========
 
 class Memory(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -78,6 +85,7 @@ class LearningLog(db.Model):
 class DeveloperSession(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     token = db.Column(db.String(64), unique=True)
+    username = db.Column(db.String(50))
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     last_access = db.Column(db.DateTime, default=datetime.utcnow)
 
@@ -101,18 +109,67 @@ with app.app_context():
     db.create_all()
     print("✅ Base de datos inicializada")
 
-DEV_PASSWORD_HASH = hashlib.sha256("CicDev2024!".encode()).hexdigest()
+# ========== SERVICIO DE AUTENTICACIÓN DESARROLLADOR ==========
 
-def verify_dev_token(token):
-    if not token:
-        return False
-    with app.app_context():
-        session = DeveloperSession.query.filter_by(token=token).first()
-        if session:
-            session.last_access = datetime.utcnow()
-            db.session.commit()
+class DevAuthService:
+    """Servicio de autenticación para modo desarrollador"""
+    
+    def __init__(self):
+        self.active_sessions = {}
+    
+    def verify_credentials(self, username, password):
+        """Verificar credenciales contra configuración"""
+        expected_user = app.config.get('DEV_USERNAME')
+        expected_pass = app.config.get('DEV_PASSWORD')
+        return username == expected_user and password == expected_pass
+    
+    def generate_token(self, username):
+        """Generar token seguro de sesión"""
+        token = secrets.token_urlsafe(32)
+        expiry = datetime.utcnow() + timedelta(hours=24)
+        
+        self.active_sessions[token] = {
+            'username': username,
+            'created_at': datetime.utcnow(),
+            'expires_at': expiry,
+            'last_used': datetime.utcnow()
+        }
+        return token
+    
+    def verify_token(self, token):
+        """Verificar si token es válido"""
+        if not token or token not in self.active_sessions:
+            return False
+        
+        session = self.active_sessions[token]
+        if datetime.utcnow() > session['expires_at']:
+            del self.active_sessions[token]
+            return False
+        
+        session['last_used'] = datetime.utcnow()
+        return True
+    
+    def revoke_token(self, token):
+        """Revocar token"""
+        if token in self.active_sessions:
+            del self.active_sessions[token]
             return True
-    return False
+        return False
+
+# Instancia global
+dev_auth = DevAuthService()
+
+def dev_required(f):
+    """Decorador para proteger rutas de desarrollador"""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        token = request.headers.get('X-Dev-Token')
+        if not token or not dev_auth.verify_token(token):
+            return jsonify({'error': 'No autorizado', 'code': 'INVALID_TOKEN'}), 401
+        return f(*args, **kwargs)
+    return decorated_function
+
+# ========== CLASES PRINCIPALES ==========
 
 class WebSearchEngine:
     @staticmethod
@@ -210,67 +267,32 @@ class CicIA:
         self.learning_active = True
         self.web_search_engine = WebSearchEngine()
         
-        # 50 TEMAS PARA AUTO-APRENDIZAJE - REFLEJO DE CURIOSIDAD INFINITA
         self.auto_learning_topics = [
-            # CIENCIA PROFUNDA (10)
-            'física cuántica avances 2024',
-            'biología sintética descubrimientos',
-            'neurociencia cognitiva',
-            'matemáticas teoría nuevas',
-            'química materiales revolucionarios',
-            'astronomía exoplanetas',
-            'paleontología fósiles recientes',
-            'genética edición CRISPR',
-            'psicología conducta humana',
-            'filosofía mente artificial',
-            
-            # TECNOLOGÍA (12)
-            'inteligencia artificial noticias 2024',
-            'machine learning avances',
-            'desarrollo software arquitectura',
-            'python programación novedades',
-            'código limpio mejores prácticas',
-            'DevOps CI/CD tendencias',
-            'blockchain aplicaciones reales',
-            'Internet de las cosas IoT',
-            'realidad virtual aumentada',
-            'ciberseguridad ética hacking',
-            'computación cuántica progreso',
-            'edge computing computación borde',
-            
-            # MUNDO Y SOCIEDAD (10)
-            'economía global tendencias',
-            'geopolítica análisis actual',
-            'cambio climático soluciones',
-            'educación innovación pedagógica',
-            'salud mental bienestar',
-            'arte inteligencia artificial',
-            'historia civilizaciones antiguas',
-            'lingüística evolución idiomas',
-            'derecho tecnología regulación',
-            'sociología cambios sociales',
-            
-            # DESARROLLO PERSONAL (10)
-            'productividad métodos eficaces',
-            'aprendizaje acelerado técnicas',
-            'creatividad innovación pensamiento',
-            'comunicación persuasión',
-            'liderazgo gestión equipos',
-            'finanzas personales inversión',
-            'negociación conflictos resolución',
-            'mindfulness atención plena',
-            'inteligencia emocional',
-            'emprendimiento startups casos éxito',
-            
-            # FUTURO (8)
-            'biotecnología longevidad',
-            'nanotecnología medicina',
-            'energía fusión nuclear',
-            'transporte eléctrico aviones',
-            'espacio colonización',
-            'metaverso evolución',
-            'robótica humanoides',
-            'transhumanismo mejoramiento',
+            'física cuántica avances 2024', 'biología sintética descubrimientos',
+            'neurociencia cognitiva', 'matemáticas teoría nuevas',
+            'química materiales revolucionarios', 'astronomía exoplanetas',
+            'paleontología fósiles recientes', 'genética edición CRISPR',
+            'psicología conducta humana', 'filosofía mente artificial',
+            'inteligencia artificial noticias 2024', 'machine learning avances',
+            'desarrollo software arquitectura', 'python programación novedades',
+            'código limpio mejores prácticas', 'DevOps CI/CD tendencias',
+            'blockchain aplicaciones reales', 'Internet de las cosas IoT',
+            'realidad virtual aumentada', 'ciberseguridad ética hacking',
+            'computación cuántica progreso', 'edge computing computación borde',
+            'economía global tendencias', 'geopolítica análisis actual',
+            'cambio climático soluciones', 'educación innovación pedagógica',
+            'salud mental bienestar', 'arte inteligencia artificial',
+            'historia civilizaciones antiguas', 'lingüística evolución idiomas',
+            'derecho tecnología regulación', 'sociología cambios sociales',
+            'productividad métodos eficaces', 'aprendizaje acelerado técnicas',
+            'creatividad innovación pensamiento', 'comunicación persuasión',
+            'liderazgo gestión equipos', 'finanzas personales inversión',
+            'negociación conflictos resolución', 'mindfulness atención plena',
+            'inteligencia emocional', 'emprendimiento startups casos éxito',
+            'biotecnología longevidad', 'nanotecnología medicina',
+            'energía fusión nuclear', 'transporte eléctrico aviones',
+            'espacio colonización', 'metaverso evolución',
+            'robótica humanoides', 'transhumanismo mejoramiento',
         ]
         
         with app.app_context():
@@ -294,6 +316,7 @@ class CicIA:
         print("🌐 Búsqueda web: ACTIVADA")
         print("🧠 Auto-aprendizaje: ACTIVADO (cada 3 horas)")
         print(f"🎯 Temas de aprendizaje: {len(self.auto_learning_topics)} categorías")
+        print("🔒 Modo Desarrollador: Protegido")
         print("=" * 70)
     
     def _get_today_count(self):
@@ -307,7 +330,7 @@ class CicIA:
     
     def _continuous_learning_loop(self):
         logger.info("🧠 Iniciando loop de auto-aprendizaje evolutivo...")
-        time.sleep(180)  # Primera ejecución a los 3 minutos
+        time.sleep(180)
         
         while self.learning_active:
             try:
@@ -316,7 +339,7 @@ class CicIA:
                 logger.error(f"Error en auto-aprendizaje: {e}")
             
             logger.info("⏰ Auto-aprendizaje: esperando 3 horas...")
-            time.sleep(10800)  # 3 HORAS
+            time.sleep(10800)
     
     def _perform_auto_learning(self):
         with app.app_context():
@@ -592,7 +615,6 @@ class CicIA:
                 'auto_learned': sum(log.auto_learned for log in recent_logs)
             }
             
-            # Temas más aprendidos
             topic_counts = {}
             for mem in Memory.query.filter(Memory.source == 'auto_learning').all():
                 topic = mem.topic or 'unknown'
@@ -611,6 +633,8 @@ class CicIA:
             }
 
 cic_ia = CicIA()
+
+# ========== RUTAS PÚBLICAS (USUARIO) ==========
 
 @app.route('/')
 def index():
@@ -736,36 +760,36 @@ def learn():
 
 @app.route('/api/teach', methods=['POST'])
 def teach():
-    """Enseñar a la IA manualmente (desde chat o modo desarrollador)"""
+    """Enseñar a la IA - puede usarse por usuario normal o desarrollador"""
     try:
         data = request.json
         text = data.get('text', '').strip()
         topic = data.get('topic', '').strip()
         source = data.get('source', 'user_taught')
         
-        # Verificar token de desarrollador (opcional pero recomendado)
+        # Verificar si es modo desarrollador
         token = request.headers.get('X-Dev-Token')
-        is_dev = verify_dev_token(token) if token else False
+        is_dev = dev_auth.verify_token(token) if token else False
         
         if not text:
             return jsonify({'error': 'Texto vacío'}), 400
         
-        # Si no hay tema, usar primeros 50 caracteres
         if not topic:
             topic = text[:50]
         
+        # Si es dev, usar source 'developer', si no, 'user_taught'
+        final_source = 'developer' if is_dev else source
+        
         with app.app_context():
-            # Crear memoria
             memory = Memory(
                 content=text,
-                source=source,
+                source=final_source,
                 topic=topic,
-                relevance_score=0.9 if source == 'user_taught' else 0.7,
+                relevance_score=0.9 if is_dev else 0.8,
                 access_count=0
             )
             db.session.add(memory)
             
-            # Si es modo desarrollador, registrar en evolución
             if is_dev:
                 evolution = KnowledgeEvolution(
                     topic=topic,
@@ -781,7 +805,7 @@ def teach():
                 'message': 'He aprendido lo que me enseñaste',
                 'memory_id': memory.id,
                 'topic': topic,
-                'source': source,
+                'source': final_source,
                 'is_dev_mode': is_dev
             })
             
@@ -825,21 +849,8 @@ def evolution_stats():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-@app.route('/api/evolution/learn-now', methods=['POST'])
-def force_learning():
-    token = request.headers.get('X-Dev-Token')
-    if not verify_dev_token(token):
-        return jsonify({'error': 'No autorizado'}), 403
-    
-    try:
-        threading.Thread(target=cic_ia._perform_auto_learning, daemon=True).start()
-        return jsonify({'message': '🤖 Auto-aprendizaje iniciado manualmente'})
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
 @app.route('/api/evolution/topics')
 def get_topics():
-    """Obtener lista de temas de aprendizaje"""
     return jsonify({
         'total': len(cic_ia.auto_learning_topics),
         'topics': cic_ia.auto_learning_topics,
@@ -852,97 +863,182 @@ def get_topics():
         }
     })
 
-# ========== NUEVOS ENDPOINTS PARA MODO DESARROLLADOR ==========
+# ========== RUTAS DESARROLLADOR (PROTEGIDAS) ==========
 
 @app.route('/api/dev/login', methods=['POST'])
 def dev_login():
     """Login para modo desarrollador"""
     try:
         data = request.json
-        password = data.get('password', '')
-        password_hash = hashlib.sha256(password.encode()).hexdigest()
+        username = data.get('username', '').strip()
+        password = data.get('password', '').strip()
         
-        if password_hash == DEV_PASSWORD_HASH:
-            token = hashlib.sha256(f"{password}{datetime.utcnow()}".encode()).hexdigest()[:32]
-            session = DeveloperSession(token=token)
-            db.session.add(session)
-            db.session.commit()
-            return jsonify({'success': True, 'token': token})
+        if not username or not password:
+            return jsonify({
+                'success': False,
+                'error': 'Usuario y contraseña requeridos'
+            }), 400
+        
+        if dev_auth.verify_credentials(username, password):
+            token = dev_auth.generate_token(username)
+            return jsonify({
+                'success': True,
+                'token': token,
+                'username': username,
+                'expires_in': '24h'
+            })
         else:
-            return jsonify({'success': False, 'error': 'Contraseña incorrecta'}), 401
+            return jsonify({
+                'success': False,
+                'error': 'Credenciales inválidas'
+            }), 401
+            
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+@app.route('/api/dev/logout', methods=['POST'])
+def dev_logout():
+    """Logout desarrollador"""
+    token = request.headers.get('X-Dev-Token')
+    if token:
+        dev_auth.revoke_token(token)
+    
+    return jsonify({'success': True, 'message': 'Sesión cerrada'})
 
 @app.route('/api/dev/verify')
 def dev_verify():
-    """Verificar si el token es válido"""
+    """Verificar sesión activa"""
     token = request.headers.get('X-Dev-Token')
-    return jsonify({'valid': verify_dev_token(token)})
-
-@app.route('/api/dev/logs')
-def dev_logs():
-    """Obtener logs detallados para desarrollador"""
-    token = request.headers.get('X-Dev-Token')
-    if not verify_dev_token(token):
-        return jsonify({'error': 'No autorizado'}), 403
+    session = dev_auth.active_sessions.get(token)
     
+    if session and dev_auth.verify_token(token):
+        return jsonify({
+            'valid': True,
+            'username': session['username'],
+            'expires_at': session['expires_at'].isoformat()
+        })
+    
+    return jsonify({'valid': False}), 401
+
+@app.route('/api/dev/memories/all')
+@dev_required
+def dev_memories_all():
+    """Obtener TODAS las memorias (solo dev)"""
     try:
-        with app.app_context():
-            return jsonify({
-                'database': {
-                    'memories': Memory.query.count(),
-                    'conversations': Conversation.query.count(),
-                    'learning_logs': LearningLog.query.count(),
-                    'web_searches': WebSearchCache.query.count(),
-                    'knowledge_evolution': KnowledgeEvolution.query.count()
-                },
-                'recent_memories': [{
-                    'id': m.id,
-                    'topic': m.topic,
-                    'source': m.source,
-                    'content': m.content[:200],
-                    'relevance': m.relevance_score,
-                    'created': m.created_at.isoformat()
-                } for m in Memory.query.order_by(Memory.created_at.desc()).limit(5).all()],
-                'recent_evolution': [{
-                    'id': e.id,
-                    'topic': e.topic,
-                    'action': e.action,
-                    'date': e.date.isoformat()
-                } for e in KnowledgeEvolution.query.order_by(KnowledgeEvolution.date.desc()).limit(5).all()]
-            })
+        page = request.args.get('page', 1, type=int)
+        per_page = request.args.get('per_page', 50, type=int)
+        
+        pagination = Memory.query.order_by(
+            Memory.created_at.desc()
+        ).paginate(page=page, per_page=per_page, error_out=False)
+        
+        return jsonify({
+            'memories': [{
+                'id': m.id,
+                'topic': m.topic,
+                'content': m.content,
+                'source': m.source,
+                'relevance': m.relevance_score,
+                'access_count': m.access_count,
+                'created_at': m.created_at.isoformat()
+            } for m in pagination.items],
+            'total': pagination.total,
+            'pages': pagination.pages,
+            'current_page': page
+        })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-@app.route('/api/dev/clear-db', methods=['POST'])
-def dev_clear_db():
-    """Limpiar toda la base de datos (solo desarrollador)"""
-    token = request.headers.get('X-Dev-Token')
-    if not verify_dev_token(token):
-        return jsonify({'error': 'No autorizado'}), 403
-    
+@app.route('/api/dev/stats/detailed')
+@dev_required
+def dev_stats_detailed():
+    """Estadísticas detalladas del sistema"""
     try:
-        with app.app_context():
-            # Guardar conteo antes de borrar
-            counts = {
-                'memories': Memory.query.count(),
-                'conversations': Conversation.query.count(),
-                'logs': LearningLog.query.count()
+        today = date.today()
+        week_ago = today - timedelta(days=7)
+        
+        stats = {
+            'general': {
+                'total_memories': Memory.query.count(),
+                'total_conversations': Conversation.query.count(),
+                'total_learning_logs': LearningLog.query.count(),
+                'active_sessions': len(dev_auth.active_sessions)
+            },
+            'by_source': {
+                'auto_learning': Memory.query.filter_by(source='auto_learning').count(),
+                'web_search': Memory.query.filter_by(source='web_search').count(),
+                'user_taught': Memory.query.filter_by(source='user_taught').count(),
+                'developer': Memory.query.filter_by(source='developer').count()
+            },
+            'today': {
+                'conversations': db.session.query(db.func.sum(LearningLog.count)).filter(
+                    LearningLog.date == today
+                ).scalar() or 0,
+                'auto_learned': db.session.query(db.func.sum(LearningLog.auto_learned)).filter(
+                    LearningLog.date == today
+                ).scalar() or 0
+            },
+            'this_week': {
+                'conversations': db.session.query(db.func.sum(LearningLog.count)).filter(
+                    LearningLog.date >= week_ago
+                ).scalar() or 0,
+                'web_searches': db.session.query(db.func.sum(LearningLog.web_searches)).filter(
+                    LearningLog.date >= week_ago
+                ).scalar() or 0
             }
-            
-            # Eliminar todo
-            Memory.query.delete()
-            Conversation.query.delete()
-            LearningLog.query.delete()
-            WebSearchCache.query.delete()
-            KnowledgeEvolution.query.delete()
-            DeveloperSession.query.delete()
-            
-            db.session.commit()
-            
+        }
+        
+        return jsonify(stats)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/dev/system/force-learning', methods=['POST'])
+@dev_required
+def dev_force_learning():
+    """Forzar aprendizaje inmediato"""
+    try:
+        threading.Thread(target=cic_ia._perform_auto_learning, daemon=True).start()
+        return jsonify({
+            'success': True,
+            'message': 'Ciclo de aprendizaje iniciado manualmente'
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/dev/system/clear-db', methods=['POST'])
+@dev_required
+def dev_clear_db():
+    """⚠️ Limpiar toda la base de datos"""
+    try:
+        # Verificar confirmación
+        confirm = request.headers.get('X-Confirm-Delete')
+        if confirm != 'DESTRUIR_TODO':
             return jsonify({
-                'message': f'Base de datos limpiada. Se eliminaron: {counts["memories"]} memorias, {counts["conversations"]} conversaciones, {counts["logs"]} logs.'
-            })
+                'error': 'Confirmación requerida',
+                'message': 'Agrega header X-Confirm-Delete: DESTRUIR_TODO'
+            }), 400
+        
+        # Contar antes de borrar
+        counts = {
+            'memories': Memory.query.count(),
+            'conversations': Conversation.query.count(),
+            'logs': LearningLog.query.count()
+        }
+        
+        # Eliminar todo
+        Memory.query.delete()
+        Conversation.query.delete()
+        LearningLog.query.delete()
+        WebSearchCache.query.delete()
+        KnowledgeEvolution.query.delete()
+        DeveloperSession.query.delete()
+        
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': f'Base de datos limpiada. Eliminados: {counts["memories"]} memorias, {counts["conversations"]} conversaciones, {counts["logs"]} logs.'
+        })
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
