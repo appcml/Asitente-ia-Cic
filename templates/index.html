@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cic_IA - Asistente Inteligente Evolutivo</title>
+    <title>Cic_IA - Asistente Inteligente</title>
     <style>
         * {
             margin: 0;
@@ -11,9 +11,18 @@
             box-sizing: border-box;
         }
 
+        :root {
+            --primary: #4ecca3;
+            --danger: #e94560;
+            --dark: #0f0f1e;
+            --sidebar: #1a1a2e;
+            --card: #16213e;
+            --border: #2d2d44;
+        }
+
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: #0f0f1e;
+            background: var(--dark);
             color: #fff;
             height: 100vh;
             overflow: hidden;
@@ -24,150 +33,174 @@
             height: 100vh;
         }
 
-        /* ========== PANEL IZQUIERDO ========== */
+        /* ========== SIDEBAR ========== */
         .sidebar {
-            width: 280px;
-            background: #1a1a2e;
+            width: 260px;
+            background: var(--sidebar);
             display: flex;
             flex-direction: column;
-            padding: 20px;
-            border-right: 1px solid #2d2d44;
+            padding: 15px;
+            border-right: 1px solid var(--border);
         }
 
         .new-chat-btn {
-            background: #4ecca3;
-            color: #1a1a2e;
+            background: var(--primary);
+            color: var(--sidebar);
             border: none;
-            padding: 15px;
-            border-radius: 10px;
-            font-size: 16px;
+            padding: 12px;
+            border-radius: 8px;
+            font-size: 14px;
             font-weight: bold;
             cursor: pointer;
-            margin-bottom: 25px;
+            margin-bottom: 15px;
             transition: all 0.3s;
         }
 
         .new-chat-btn:hover {
-            background: #3db892;
-            transform: translateY(-2px);
+            opacity: 0.9;
+            transform: translateY(-1px);
         }
 
-        /* HERRAMIENTAS - ARRIBA */
-        .section {
-            margin-bottom: 20px;
+        /* HERRAMIENTAS COMPACTAS */
+        .tools-section {
+            margin-bottom: 15px;
         }
 
         .section-title {
-            color: #4ecca3;
-            font-size: 11px;
+            color: var(--primary);
+            font-size: 10px;
             text-transform: uppercase;
             letter-spacing: 1px;
-            margin-bottom: 12px;
+            margin-bottom: 8px;
             opacity: 0.8;
         }
 
         .tool-item {
-            background: #16213e;
-            border-radius: 10px;
-            padding: 15px;
-            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 10px;
+            margin-bottom: 6px;
+            background: var(--card);
+            border-radius: 6px;
             cursor: pointer;
-            transition: all 0.3s;
-            border: 1px solid transparent;
+            transition: all 0.2s;
+            font-size: 12px;
         }
 
         .tool-item:hover {
             background: #0f3460;
-            border-color: #4ecca3;
-            transform: translateX(5px);
+            transform: translateX(3px);
         }
 
         .tool-icon {
-            font-size: 24px;
-            margin-bottom: 8px;
-            display: block;
+            font-size: 16px;
+        }
+
+        .tool-info {
+            flex: 1;
         }
 
         .tool-name {
             font-weight: 600;
-            font-size: 14px;
-            margin-bottom: 4px;
+            font-size: 12px;
         }
 
         .tool-desc {
-            font-size: 11px;
+            font-size: 10px;
             color: #888;
-            line-height: 1.4;
+            margin-top: 1px;
         }
 
-        /* HISTORIAL - ABAJO */
+        /* HISTORIAL */
         .history-section {
             flex: 1;
             overflow-y: auto;
-            margin-bottom: 20px;
+            margin-bottom: 10px;
         }
 
         .history-item {
-            padding: 12px;
-            margin-bottom: 8px;
-            background: #16213e;
-            border-radius: 8px;
+            padding: 8px 10px;
+            margin-bottom: 5px;
+            background: var(--card);
+            border-radius: 6px;
             cursor: pointer;
-            font-size: 13px;
-            transition: all 0.3s;
+            font-size: 11px;
+            transition: all 0.2s;
             display: flex;
             align-items: center;
-            gap: 10px;
+            gap: 8px;
         }
 
         .history-item:hover {
             background: #0f3460;
         }
 
-        .history-icon {
-            font-size: 16px;
-        }
-
         .history-text {
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
+            color: #ccc;
         }
 
-        /* MODO DESARROLLADOR */
-        .dev-mode-btn {
+        /* BOTÓN MODO DEV */
+        .dev-login-btn {
             margin-top: auto;
-            padding: 12px;
+            padding: 10px;
             background: transparent;
-            border: 2px dashed #e94560;
-            color: #e94560;
-            border-radius: 10px;
+            border: 1px dashed var(--danger);
+            color: var(--danger);
+            border-radius: 6px;
             cursor: pointer;
-            font-size: 13px;
-            font-weight: 600;
+            font-size: 11px;
             transition: all 0.3s;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
         }
 
-        .dev-mode-btn:hover {
-            background: #e94560;
+        .dev-login-btn:hover {
+            background: var(--danger);
             color: white;
         }
 
-        /* ========== PANEL CENTRAL ========== */
+        /* INDICADOR MODO DEV ACTIVO */
+        .dev-indicator {
+            display: none;
+            margin-top: auto;
+            padding: 10px;
+            background: var(--danger);
+            color: white;
+            border-radius: 6px;
+            font-size: 11px;
+            text-align: center;
+        }
+
+        .dev-indicator.active {
+            display: block;
+        }
+
+        .dev-indicator button {
+            margin-top: 8px;
+            padding: 5px 10px;
+            background: white;
+            color: var(--danger);
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 10px;
+            width: 100%;
+        }
+
+        /* ========== MAIN CONTENT ========== */
         .main-content {
             flex: 1;
             display: flex;
             flex-direction: column;
-            background: #0f0f1e;
+            background: var(--dark);
+            position: relative;
         }
 
         .header {
-            padding: 20px 30px;
-            border-bottom: 1px solid #2d2d44;
+            padding: 15px 20px;
+            border-bottom: 1px solid var(--border);
             display: flex;
             justify-content: space-between;
             align-items: center;
@@ -176,208 +209,156 @@
         .logo {
             display: flex;
             align-items: center;
-            gap: 12px;
+            gap: 10px;
         }
 
         .logo-icon {
-            font-size: 28px;
+            font-size: 24px;
         }
 
         .logo-text {
-            font-size: 20px;
+            font-size: 18px;
             font-weight: 700;
         }
 
         .logo-text span {
-            color: #4ecca3;
+            color: var(--primary);
         }
 
         .mode-selector {
             display: flex;
-            gap: 10px;
-            background: #1a1a2e;
-            padding: 5px;
-            border-radius: 8px;
+            gap: 5px;
+            background: var(--sidebar);
+            padding: 4px;
+            border-radius: 6px;
         }
 
         .mode-btn {
-            padding: 8px 16px;
+            padding: 6px 12px;
             border: none;
             background: transparent;
             color: #888;
             cursor: pointer;
-            border-radius: 6px;
-            font-size: 13px;
+            border-radius: 4px;
+            font-size: 12px;
             transition: all 0.3s;
         }
 
         .mode-btn.active {
-            background: #4ecca3;
-            color: #1a1a2e;
+            background: var(--primary);
+            color: var(--sidebar);
             font-weight: 600;
         }
 
-        /* ÁREA DE CHAT */
+        /* CHAT AREA CON SCROLL */
         .chat-area {
             flex: 1;
             overflow-y: auto;
-            padding: 30px;
+            padding: 20px;
+            scroll-behavior: smooth;
         }
 
         .welcome {
             text-align: center;
-            padding: 60px 20px;
+            padding: 40px 20px;
         }
 
         .welcome h1 {
-            font-size: 42px;
-            margin-bottom: 15px;
-            background: linear-gradient(135deg, #4ecca3, #3db892);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
+            font-size: 32px;
+            margin-bottom: 10px;
+            color: var(--primary);
         }
 
         .welcome p {
             color: #888;
-            font-size: 16px;
-            max-width: 500px;
-            margin: 0 auto 40px;
+            font-size: 14px;
+            max-width: 400px;
+            margin: 0 auto 30px;
         }
 
         .features-grid {
             display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 20px;
-            max-width: 800px;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 15px;
+            max-width: 700px;
             margin: 0 auto;
         }
 
         .feature-card {
-            background: #1a1a2e;
-            border-radius: 15px;
-            padding: 25px;
+            background: var(--sidebar);
+            border-radius: 10px;
+            padding: 15px;
             text-align: center;
-            border: 1px solid #2d2d44;
+            border: 1px solid var(--border);
             transition: all 0.3s;
         }
 
         .feature-card:hover {
-            border-color: #4ecca3;
-            transform: translateY(-5px);
+            border-color: var(--primary);
         }
 
         .feature-icon {
-            font-size: 40px;
-            margin-bottom: 15px;
+            font-size: 28px;
+            margin-bottom: 8px;
         }
 
         .feature-title {
-            font-size: 16px;
+            font-size: 12px;
             font-weight: 600;
-            margin-bottom: 8px;
-            color: #4ecca3;
+            color: var(--primary);
+            margin-bottom: 4px;
         }
 
         .feature-desc {
-            font-size: 12px;
+            font-size: 10px;
             color: #888;
-            line-height: 1.5;
-        }
-
-        /* INPUT AREA */
-        .input-area {
-            padding: 20px 30px;
-            border-top: 1px solid #2d2d44;
-        }
-
-        .input-container {
-            max-width: 800px;
-            margin: 0 auto;
-            position: relative;
-        }
-
-        .chat-input {
-            width: 100%;
-            padding: 18px 60px 18px 20px;
-            border-radius: 15px;
-            border: 1px solid #2d2d44;
-            background: #1a1a2e;
-            color: #fff;
-            font-size: 15px;
-            outline: none;
-            transition: all 0.3s;
-        }
-
-        .chat-input:focus {
-            border-color: #4ecca3;
-            box-shadow: 0 0 20px rgba(78, 204, 163, 0.1);
-        }
-
-        .send-btn {
-            position: absolute;
-            right: 8px;
-            top: 50%;
-            transform: translateY(-50%);
-            width: 40px;
-            height: 40px;
-            border-radius: 10px;
-            border: none;
-            background: #4ecca3;
-            color: #1a1a2e;
-            cursor: pointer;
-            font-size: 18px;
-            transition: all 0.3s;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .send-btn:hover {
-            background: #3db892;
-            transform: translateY(-50%) scale(1.05);
         }
 
         /* MENSAJES */
         .messages {
-            max-width: 800px;
+            max-width: 700px;
             margin: 0 auto;
-        }
-
-        .message {
-            margin-bottom: 25px;
             display: flex;
+            flex-direction: column;
             gap: 15px;
         }
 
+        .message {
+            display: flex;
+            gap: 10px;
+            max-width: 80%;
+        }
+
         .message.user {
+            align-self: flex-end;
             flex-direction: row-reverse;
         }
 
         .message-avatar {
-            width: 35px;
-            height: 35px;
+            width: 32px;
+            height: 32px;
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 18px;
+            font-size: 14px;
             flex-shrink: 0;
         }
 
         .message.user .message-avatar {
-            background: #4ecca3;
+            background: var(--primary);
         }
 
         .message.bot .message-avatar {
-            background: #e94560;
+            background: var(--danger);
         }
 
         .message-content {
-            background: #1a1a2e;
-            padding: 15px 20px;
-            border-radius: 15px;
-            max-width: 70%;
-            line-height: 1.6;
+            background: var(--sidebar);
+            padding: 12px 16px;
+            border-radius: 12px;
+            line-height: 1.5;
+            font-size: 14px;
         }
 
         .message.user .message-content {
@@ -385,266 +366,250 @@
         }
 
         .message-meta {
-            font-size: 11px;
+            font-size: 10px;
             color: #666;
-            margin-top: 8px;
+            margin-top: 5px;
+        }
+
+        /* INPUT AREA */
+        .input-area {
+            padding: 15px 20px;
+            border-top: 1px solid var(--border);
+        }
+
+        .input-container {
+            max-width: 700px;
+            margin: 0 auto;
+            position: relative;
+        }
+
+        .chat-input {
+            width: 100%;
+            padding: 14px 50px 14px 16px;
+            border-radius: 10px;
+            border: 1px solid var(--border);
+            background: var(--sidebar);
+            color: #fff;
+            font-size: 14px;
+            outline: none;
+        }
+
+        .chat-input:focus {
+            border-color: var(--primary);
+        }
+
+        .send-btn {
+            position: absolute;
+            right: 6px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
+            border: none;
+            background: var(--primary);
+            color: var(--sidebar);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* TYPING INDICATOR */
+        .typing {
+            display: flex;
+            gap: 4px;
+            padding: 8px 0;
+        }
+
+        .typing span {
+            width: 8px;
+            height: 8px;
+            background: var(--primary);
+            border-radius: 50%;
+            animation: typing 1s infinite;
+        }
+
+        .typing span:nth-child(2) { animation-delay: 0.2s; }
+        .typing span:nth-child(3) { animation-delay: 0.4s; }
+
+        @keyframes typing {
+            0%, 100% { opacity: 0.3; transform: scale(0.8); }
+            50% { opacity: 1; transform: scale(1); }
         }
 
         /* ========== PANEL DESARROLLADOR ========== */
         .dev-panel {
             position: fixed;
-            right: 0;
+            right: -400px;
             top: 0;
-            width: 450px;
+            width: 380px;
             height: 100vh;
-            background: #1a1a2e;
-            border-left: 1px solid #2d2d44;
+            background: var(--sidebar);
+            border-left: 1px solid var(--border);
             z-index: 1000;
             display: flex;
             flex-direction: column;
-            transform: translateX(100%);
-            transition: transform 0.3s;
+            transition: right 0.3s;
         }
 
         .dev-panel.open {
-            transform: translateX(0);
+            right: 0;
         }
 
         .dev-header {
-            padding: 25px;
-            border-bottom: 1px solid #2d2d44;
+            padding: 20px;
+            border-bottom: 1px solid var(--border);
             display: flex;
             justify-content: space-between;
             align-items: center;
+            background: var(--danger);
         }
 
         .dev-header h2 {
+            font-size: 16px;
             display: flex;
             align-items: center;
-            gap: 10px;
-            color: #e94560;
+            gap: 8px;
         }
 
         .close-dev {
             background: none;
             border: none;
-            color: #888;
-            font-size: 24px;
+            color: white;
+            font-size: 20px;
             cursor: pointer;
-        }
-
-        .close-dev:hover {
-            color: #fff;
         }
 
         .dev-content {
             flex: 1;
             overflow-y: auto;
-            padding: 25px;
+            padding: 15px;
         }
 
         .dev-section {
-            margin-bottom: 30px;
-            padding: 20px;
-            background: #16213e;
-            border-radius: 12px;
-            border: 1px solid #2d2d44;
+            margin-bottom: 20px;
+            padding: 15px;
+            background: var(--card);
+            border-radius: 8px;
         }
 
         .dev-section h3 {
-            color: #4ecca3;
-            margin-bottom: 15px;
+            color: var(--primary);
+            margin-bottom: 12px;
+            font-size: 13px;
             display: flex;
             align-items: center;
-            gap: 8px;
-            font-size: 14px;
+            gap: 6px;
         }
 
-        /* FORMULARIO ENSEÑAR */
-        .teach-form textarea {
+        /* FORMULARIOS DEV */
+        .dev-input, .dev-textarea {
             width: 100%;
-            height: 120px;
-            padding: 12px;
-            border-radius: 8px;
-            border: 1px solid #2d2d44;
-            background: #0f0f1e;
+            padding: 10px;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+            background: var(--dark);
             color: #fff;
             font-family: inherit;
-            font-size: 14px;
+            font-size: 13px;
+            margin-bottom: 8px;
+        }
+
+        .dev-textarea {
+            height: 100px;
             resize: vertical;
-            margin-bottom: 10px;
         }
 
-        .teach-form textarea:focus {
-            outline: none;
-            border-color: #4ecca3;
-        }
-
-        .teach-form input {
+        .dev-btn {
             width: 100%;
-            padding: 12px;
-            border-radius: 8px;
-            border: 1px solid #2d2d44;
-            background: #0f0f1e;
-            color: #fff;
-            margin-bottom: 12px;
-        }
-
-        .teach-btn {
-            width: 100%;
-            padding: 12px;
-            background: #4ecca3;
-            color: #1a1a2e;
+            padding: 10px;
             border: none;
-            border-radius: 8px;
+            border-radius: 6px;
+            font-size: 12px;
             font-weight: 600;
             cursor: pointer;
             transition: all 0.3s;
         }
 
-        .teach-btn:hover {
-            background: #3db892;
+        .dev-btn.primary {
+            background: var(--primary);
+            color: var(--sidebar);
         }
 
-        .teach-result {
-            margin-top: 12px;
-            padding: 12px;
-            border-radius: 8px;
-            font-size: 13px;
+        .dev-btn.danger {
+            background: var(--danger);
+            color: white;
         }
 
-        .teach-result.success {
-            background: rgba(78, 204, 163, 0.2);
-            color: #4ecca3;
+        .dev-btn.secondary {
+            background: var(--border);
+            color: white;
         }
 
-        .teach-result.error {
-            background: rgba(233, 69, 96, 0.2);
-            color: #e94560;
-        }
-
-        /* ESTADÍSTICAS */
+        /* STATS GRID */
         .stats-grid {
             display: grid;
             grid-template-columns: repeat(2, 1fr);
-            gap: 12px;
-            margin-bottom: 15px;
+            gap: 8px;
+            margin-bottom: 10px;
         }
 
         .stat-box {
-            background: #0f0f1e;
-            padding: 15px;
-            border-radius: 10px;
+            background: var(--dark);
+            padding: 12px;
+            border-radius: 6px;
             text-align: center;
         }
 
         .stat-number {
-            font-size: 28px;
+            font-size: 24px;
             font-weight: 700;
-            color: #4ecca3;
+            color: var(--primary);
         }
 
         .stat-label {
-            font-size: 11px;
+            font-size: 10px;
             color: #888;
-            margin-top: 5px;
+            margin-top: 3px;
         }
 
-        .refresh-btn {
-            width: 100%;
-            padding: 10px;
-            background: #0f3460;
-            color: #fff;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 13px;
-        }
-
-        .refresh-btn:hover {
-            background: #1a4a7a;
-        }
-
-        /* MEMORIAS */
+        /* MEMORIES LIST */
         .memories-list {
-            max-height: 300px;
+            max-height: 200px;
             overflow-y: auto;
-            background: #0f0f1e;
-            border-radius: 8px;
-            padding: 10px;
-            margin-bottom: 12px;
+            background: var(--dark);
+            border-radius: 6px;
+            padding: 8px;
+            margin-bottom: 10px;
         }
 
         .memory-item {
-            padding: 12px;
-            margin-bottom: 8px;
-            background: #16213e;
-            border-radius: 8px;
-            font-size: 12px;
+            padding: 10px;
+            margin-bottom: 6px;
+            background: var(--card);
+            border-radius: 6px;
+            font-size: 11px;
         }
 
         .memory-item strong {
-            color: #4ecca3;
+            color: var(--primary);
             display: block;
-            margin-bottom: 5px;
+            margin-bottom: 4px;
+            font-size: 12px;
         }
 
         .memory-item p {
             color: #ccc;
             line-height: 1.4;
-            margin-bottom: 5px;
+            margin-bottom: 4px;
         }
 
         .memory-item small {
             color: #666;
         }
 
-        .load-btn {
-            width: 100%;
-            padding: 10px;
-            background: #0f3460;
-            color: #fff;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-        }
-
-        /* ACCIONES */
-        .action-btn {
-            width: 100%;
-            padding: 14px;
-            border: none;
-            border-radius: 10px;
-            font-weight: 600;
-            cursor: pointer;
-            margin-bottom: 12px;
-            transition: all 0.3s;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-        }
-
-        .action-btn.primary {
-            background: #4ecca3;
-            color: #1a1a2e;
-        }
-
-        .action-btn.primary:hover {
-            background: #3db892;
-            transform: translateY(-2px);
-        }
-
-        .action-btn.danger {
-            background: #e94560;
-            color: #fff;
-        }
-
-        .action-btn.danger:hover {
-            background: #d1344e;
-        }
-
-        /* MODAL CONTRASEÑA */
+        /* MODAL LOGIN */
         .modal-overlay {
             position: fixed;
             top: 0;
@@ -652,85 +617,92 @@
             width: 100%;
             height: 100%;
             background: rgba(0,0,0,0.9);
-            display: flex;
+            display: none;
             justify-content: center;
             align-items: center;
             z-index: 2000;
-            opacity: 0;
-            visibility: hidden;
-            transition: all 0.3s;
         }
 
         .modal-overlay.show {
-            opacity: 1;
-            visibility: visible;
+            display: flex;
         }
 
         .modal-box {
-            background: #1a1a2e;
-            padding: 40px;
-            border-radius: 20px;
-            text-align: center;
-            max-width: 400px;
-            width: 90%;
-            border: 1px solid #2d2d44;
+            background: var(--sidebar);
+            padding: 30px;
+            border-radius: 12px;
+            width: 320px;
+            border: 1px solid var(--border);
         }
 
         .modal-box h3 {
-            color: #e94560;
-            margin-bottom: 10px;
-            font-size: 24px;
+            color: var(--danger);
+            margin-bottom: 5px;
+            font-size: 18px;
         }
 
         .modal-box p {
             color: #888;
-            margin-bottom: 25px;
-        }
-
-        .password-input {
-            width: 100%;
-            padding: 15px;
-            border-radius: 10px;
-            border: 1px solid #2d2d44;
-            background: #0f0f1e;
-            color: #fff;
-            font-size: 16px;
-            text-align: center;
+            font-size: 12px;
             margin-bottom: 20px;
         }
 
-        .password-input:focus {
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-group label {
+            display: block;
+            font-size: 11px;
+            color: #888;
+            margin-bottom: 5px;
+            text-transform: uppercase;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 12px;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+            background: var(--dark);
+            color: #fff;
+            font-size: 14px;
+        }
+
+        .form-group input:focus {
             outline: none;
-            border-color: #4ecca3;
+            border-color: var(--primary);
         }
 
         .modal-buttons {
             display: flex;
-            gap: 12px;
+            gap: 10px;
+            margin-top: 20px;
         }
 
         .modal-btn {
             flex: 1;
             padding: 12px;
             border: none;
-            border-radius: 8px;
+            border-radius: 6px;
             cursor: pointer;
+            font-size: 12px;
             font-weight: 600;
         }
 
         .modal-btn.primary {
-            background: #4ecca3;
-            color: #1a1a2e;
+            background: var(--primary);
+            color: var(--sidebar);
         }
 
         .modal-btn.secondary {
-            background: #2d2d44;
-            color: #fff;
+            background: var(--card);
+            color: #888;
         }
 
         .error-msg {
-            color: #e94560;
-            font-size: 13px;
+            color: var(--danger);
+            font-size: 12px;
             margin-top: 10px;
             display: none;
         }
@@ -741,20 +713,20 @@
 
         /* SCROLLBAR */
         ::-webkit-scrollbar {
-            width: 8px;
+            width: 6px;
         }
 
         ::-webkit-scrollbar-track {
-            background: #0f0f1e;
+            background: var(--dark);
         }
 
         ::-webkit-scrollbar-thumb {
-            background: #2d2d44;
-            border-radius: 4px;
+            background: var(--border);
+            border-radius: 3px;
         }
 
         ::-webkit-scrollbar-thumb:hover {
-            background: #4ecca3;
+            background: var(--primary);
         }
 
         .hidden {
@@ -764,59 +736,71 @@
 </head>
 <body>
     <div class="container">
-        <!-- ========== PANEL IZQUIERDO ========== -->
-        <aside class="sidebar">
+        <!-- ========== SIDEBAR ========== -->
+        <aside class="sidebar" id="sidebar">
             <button class="new-chat-btn" onclick="newChat()">+ Nuevo chat</button>
             
-            <!-- HERRAMIENTAS - ARRIBA -->
-            <div class="section">
+            <!-- HERRAMIENTAS -->
+            <div class="tools-section">
                 <div class="section-title">Herramientas</div>
                 
-                <div class="tool-item" onclick="openTool('web')">
+                <div class="tool-item" onclick="useTool('web')">
                     <span class="tool-icon">🌐</span>
-                    <div class="tool-name">Búsqueda Web</div>
-                    <div class="tool-desc">Investiga en internet automáticamente</div>
+                    <div class="tool-info">
+                        <div class="tool-name">Búsqueda Web</div>
+                        <div class="tool-desc">Investiga en internet</div>
+                    </div>
                 </div>
                 
-                <div class="tool-item" onclick="openTool('docs')">
+                <div class="tool-item" onclick="useTool('docs')">
                     <span class="tool-icon">📎</span>
-                    <div class="tool-name">Documentos</div>
-                    <div class="tool-desc">Procesa PDFs, imágenes, Word y más</div>
+                    <div class="tool-info">
+                        <div class="tool-name">Documentos</div>
+                        <div class="tool-desc">PDFs, imágenes, Word</div>
+                    </div>
                 </div>
                 
-                <div class="tool-item" onclick="openTool('semantic')">
+                <div class="tool-item" onclick="useTool('semantic')">
                     <span class="tool-icon">🧠</span>
-                    <div class="tool-name">Análisis Semántico</div>
-                    <div class="tool-desc">Comprensión profunda del lenguaje</div>
+                    <div class="tool-info">
+                        <div class="tool-name">Análisis</div>
+                        <div class="tool-desc">Comprensión profunda</div>
+                    </div>
                 </div>
                 
-                <div class="tool-item" onclick="openTool('learning')">
+                <div class="tool-item" onclick="useTool('learning')">
                     <span class="tool-icon">📈</span>
-                    <div class="tool-name">Aprendizaje Continuo</div>
-                    <div class="tool-desc">Mejora constantemente con cada interacción</div>
+                    <div class="tool-info">
+                        <div class="tool-name">Aprendizaje</div>
+                        <div class="tool-desc">Mejora continua</div>
+                    </div>
                 </div>
             </div>
             
-            <!-- HISTORIAL - ABAJO -->
-            <div class="section history-section">
+            <!-- HISTORIAL -->
+            <div class="history-section" id="history-list">
                 <div class="section-title">Historial</div>
-                <div id="history-list">
-                    <!-- Se llena dinámicamente -->
-                </div>
+                <!-- Se llena dinámicamente -->
             </div>
             
-            <!-- MODO DESARROLLADOR -->
-            <button class="dev-mode-btn" onclick="openDevMode()">
-                🔒 Modo Desarrollador
+            <!-- BOTÓN LOGIN DEV / INDICADOR -->
+            <button class="dev-login-btn" id="dev-login-btn" onclick="openDevLogin()">
+                🔒 Acceso Desarrollador
             </button>
+            
+            <div class="dev-indicator" id="dev-indicator">
+                <div>🔴 MODO DESARROLLADOR</div>
+                <small>Usuario: <span id="dev-username">-</span></small>
+                <button onclick="switchToUserMode()">Cambiar a Modo Usuario</button>
+            </div>
         </aside>
 
-        <!-- ========== PANEL CENTRAL ========== -->
-        <main class="main-content">
+        <!-- ========== MAIN CONTENT ========== -->
+        <main class="main-content" id="main-content">
             <header class="header">
                 <div class="logo">
                     <span class="logo-icon">🤖</span>
-                    <div class="logo-text">Cic_IA <span>Mejorado</span></div>
+                    <div class="logo-text">Cic_IA <span id="mode-label">Chat</span></div>
                 </div>
                 
                 <div class="mode-selector">
@@ -827,36 +811,36 @@
             </header>
             
             <div class="chat-area" id="chat-area">
-                <!-- PANTALLA DE BIENVENIDA -->
+                <!-- BIENVENIDA -->
                 <div class="welcome" id="welcome-screen">
                     <h1>Cic_IA Mejorado</h1>
-                    <p>Asistente inteligente con búsqueda web, aprendizaje continuo y análisis semántico</p>
+                    <p>Asistente inteligente con búsqueda web y aprendizaje continuo</p>
                     
                     <div class="features-grid">
                         <div class="feature-card">
                             <div class="feature-icon">🌐</div>
                             <div class="feature-title">Búsqueda Web</div>
-                            <div class="feature-desc">Investiga en internet automáticamente</div>
+                            <div class="feature-desc">Investiga automáticamente</div>
                         </div>
                         <div class="feature-card">
                             <div class="feature-icon">📎</div>
                             <div class="feature-title">Documentos</div>
-                            <div class="feature-desc">Procesa PDFs, imágenes, Word y más</div>
+                            <div class="feature-desc">Procesa archivos</div>
                         </div>
                         <div class="feature-card">
                             <div class="feature-icon">🧠</div>
-                            <div class="feature-title">Análisis Semántico</div>
-                            <div class="feature-desc">Comprensión profunda del lenguaje</div>
+                            <div class="feature-title">Análisis</div>
+                            <div class="feature-desc">Comprensión profunda</div>
                         </div>
                         <div class="feature-card">
                             <div class="feature-icon">📈</div>
-                            <div class="feature-title">Aprendizaje Continuo</div>
-                            <div class="feature-desc">Mejora constantemente con cada interacción</div>
+                            <div class="feature-title">Aprendizaje</div>
+                            <div class="feature-desc">Mejora continua</div>
                         </div>
                     </div>
                 </div>
                 
-                <!-- MENSAJES DEL CHAT -->
+                <!-- MENSAJES -->
                 <div class="messages hidden" id="messages-container"></div>
             </div>
             
@@ -875,96 +859,124 @@
     <div class="dev-panel" id="dev-panel">
         <div class="dev-header">
             <h2>🔧 Modo Desarrollador</h2>
-            <button class="close-dev" onclick="closeDevMode()">✕</button>
+            <button class="close-dev" onclick="closeDevPanel()">✕</button>
         </div>
         
         <div class="dev-content">
-            <!-- ENSEÑAR MANUALMENTE -->
+            <!-- ENSEÑAR -->
             <div class="dev-section">
                 <h3>📝 Enseñar a la IA</h3>
-                <div class="teach-form">
-                    <textarea id="teach-text" placeholder="Escribe aquí lo que quieres que la IA aprenda..."></textarea>
-                    <input type="text" id="teach-topic" placeholder="Tema (opcional, ej: Python, Ciencia, Historia...)">
-                    <button class="teach-btn" onclick="teachAI()">💾 Guardar en Memoria</button>
-                    <div class="teach-result hidden" id="teach-result"></div>
-                </div>
+                <textarea class="dev-textarea" id="teach-text" 
+                          placeholder="Contenido a aprender..."></textarea>
+                <input type="text" class="dev-input" id="teach-topic" 
+                       placeholder="Tema (opcional)">
+                <button class="dev-btn primary" onclick="teachAI()">
+                    💾 Guardar en Memoria
+                </button>
+                <div class="error-msg" id="teach-result"></div>
             </div>
             
             <!-- ESTADÍSTICAS -->
             <div class="dev-section">
-                <h3>📊 Estadísticas Detalladas</h3>
+                <h3>📊 Estadísticas</h3>
                 <div class="stats-grid">
                     <div class="stat-box">
                         <div class="stat-number" id="stat-total">0</div>
-                        <div class="stat-label">Total Memorias</div>
+                        <div class="stat-label">Memorias</div>
                     </div>
                     <div class="stat-box">
                         <div class="stat-number" id="stat-auto">0</div>
-                        <div class="stat-label">Auto-Aprendidas</div>
+                        <div class="stat-label">Auto</div>
                     </div>
                     <div class="stat-box">
                         <div class="stat-number" id="stat-user">0</div>
-                        <div class="stat-label">Enseñadas por Ti</div>
+                        <div class="stat-label">Usuario</div>
                     </div>
                     <div class="stat-box">
                         <div class="stat-number" id="stat-web">0</div>
-                        <div class="stat-label">Búsquedas Web</div>
+                        <div class="stat-label">Web</div>
                     </div>
                 </div>
-                <button class="refresh-btn" onclick="refreshStats()">🔄 Actualizar Estadísticas</button>
+                <button class="dev-btn secondary" onclick="refreshStats()">
+                    🔄 Actualizar
+                </button>
             </div>
             
-            <!-- VER MEMORIAS -->
+            <!-- MEMORIAS -->
             <div class="dev-section">
-                <h3>🔍 Ver Memorias Recientes</h3>
+                <h3>🔍 Memorias Recientes</h3>
                 <div class="memories-list" id="memories-list">
-                    <p style="color: #666; text-align: center;">Presiona cargar para ver memorias...</p>
+                    <p style="color: #666; text-align: center; font-size: 11px;">
+                        Presiona cargar...
+                    </p>
                 </div>
-                <button class="load-btn" onclick="loadMemories()">📋 Cargar Memorias</button>
+                <button class="dev-btn secondary" onclick="loadMemories()">
+                    📋 Cargar
+                </button>
             </div>
             
             <!-- ACCIONES -->
             <div class="dev-section">
-                <h3>⚡ Acciones de Desarrollo</h3>
-                <button class="action-btn primary" onclick="forceLearning()">
-                    🚀 Forzar Aprendizaje Ahora
+                <h3>⚡ Acciones</h3>
+                <button class="dev-btn primary" onclick="forceLearning()" 
+                        style="margin-bottom: 8px;">
+                    🚀 Forzar Aprendizaje
                 </button>
-                <button class="action-btn danger" onclick="clearDatabase()">
-                    🗑️ Limpiar Base de Datos
+                <button class="dev-btn danger" onclick="clearDatabase()">
+                    🗑️ Limpiar Todo
                 </button>
             </div>
         </div>
     </div>
 
-    <!-- ========== MODAL CONTRASEÑA ========== -->
-    <div class="modal-overlay" id="password-modal">
+    <!-- ========== MODAL LOGIN DESARROLLADOR ========== -->
+    <div class="modal-overlay" id="dev-login-modal">
         <div class="modal-box">
-            <h3>🔒 Acceso Restringido</h3>
-            <p>Solo el desarrollador puede acceder a esta área</p>
-            <input type="password" class="password-input" id="dev-password" 
-                   placeholder="Ingresa la contraseña">
-            <div class="error-msg" id="password-error">Contraseña incorrecta</div>
+            <h3>🔒 Acceso Desarrollador</h3>
+            <p>Ingresa tus credenciales</p>
+            
+            <div class="form-group">
+                <label>Usuario</label>
+                <input type="text" id="login-username" placeholder="admin">
+            </div>
+            
+            <div class="form-group">
+                <label>Contraseña</label>
+                <input type="password" id="login-password" placeholder="••••••••">
+            </div>
+            
+            <div class="error-msg" id="login-error">Credenciales incorrectas</div>
+            
             <div class="modal-buttons">
-                <button class="modal-btn primary" onclick="verifyPassword()">Ingresar</button>
-                <button class="modal-btn secondary" onclick="closePasswordModal()">Cancelar</button>
+                <button class="modal-btn primary" onclick="devLogin()">Ingresar</button>
+                <button class="modal-btn secondary" onclick="closeDevLogin()">Cancelar</button>
             </div>
         </div>
     </div>
 
-    <!-- JAVASCRIPT -->
     <script>
         // ========== VARIABLES GLOBALES ==========
-        let devToken = null;
         let currentMode = 'balanced';
+        let isDevMode = false;
+        let devToken = null;
+        let devUsername = null;
         let conversationHistory = [];
+
+        // Credenciales de desarrollador (en producción esto debe estar en el backend)
+        const DEV_CREDENTIALS = {
+            'admin': 'CicDev2024!',
+            'dev': 'CicDev2024!'
+        };
 
         // ========== FUNCIONES BÁSICAS ==========
         function setMode(mode) {
             currentMode = mode;
             document.querySelectorAll('.mode-btn').forEach(btn => {
                 btn.classList.remove('active');
+                if (btn.textContent.toLowerCase().includes(mode)) {
+                    btn.classList.add('active');
+                }
             });
-            event.target.classList.add('active');
         }
 
         function newChat() {
@@ -980,35 +992,34 @@
             }
         }
 
-        function openTool(tool) {
+        function useTool(tool) {
             const messages = {
-                'web': '🔍 Modo Búsqueda Web activado. Pregúntame sobre cualquier tema actual y buscaré en internet.',
-                'docs': '📎 Función de Documentos: Puedes subir archivos PDF, Word o imágenes para analizarlos.',
-                'semantic': '🧠 Análisis Semántico activado. Puedo analizar el significado profundo de textos complejos.',
-                'learning': '📈 Aprendizaje Continuo: La IA mejora automáticamente cada 3 horas investigando 50 temas diferentes.'
+                'web': '🔍 Búsqueda Web activada. Pregúntame sobre cualquier tema actual.',
+                'docs': '📎 Función Documentos: Puedes subir archivos para analizar.',
+                'semantic': '🧠 Análisis Semántico activado. Puedo analizar textos complejos.',
+                'learning': '📈 Aprendizaje Continuo: Mejoro automáticamente cada 3 horas.'
             };
             
             addMessage('bot', messages[tool] || 'Herramienta seleccionada');
+            showChat();
+        }
+
+        function showChat() {
             document.getElementById('welcome-screen').classList.add('hidden');
             document.getElementById('messages-container').classList.remove('hidden');
         }
 
-        // ========== CHAT ==========
+        // ========== CHAT CON SCROLL AUTOMÁTICO ==========
         async function sendMessage() {
             const input = document.getElementById('chat-input');
             const message = input.value.trim();
             
             if (!message) return;
             
-            // Ocultar bienvenida, mostrar chat
-            document.getElementById('welcome-screen').classList.add('hidden');
-            document.getElementById('messages-container').classList.remove('hidden');
-            
-            // Agregar mensaje del usuario
+            showChat();
             addMessage('user', message);
             input.value = '';
             
-            // Mostrar indicador de carga
             const loadingId = addLoadingMessage();
             
             try {
@@ -1022,23 +1033,21 @@
                 });
                 
                 const data = await response.json();
-                
-                // Eliminar indicador de carga
                 document.getElementById(loadingId).remove();
                 
-                // Agregar respuesta del bot
                 let responseText = data.response;
                 if (data.sources_used && data.sources_used.includes('web_search')) {
-                    responseText += '\n\n🌐 *Información obtenida de búsqueda web*';
+                    responseText += '\n\n🌐 *Información de búsqueda web*';
                 }
-                addMessage('bot', responseText);
                 
-                // Actualizar historial
-                updateHistory(message, responseText);
+                addMessage('bot', responseText);
+                updateHistory(message);
+                scrollToBottom();
                 
             } catch (error) {
                 document.getElementById(loadingId).remove();
-                addMessage('bot', '❌ Error al procesar tu mensaje. Intenta de nuevo.');
+                addMessage('bot', '❌ Error al procesar. Intenta de nuevo.');
+                scrollToBottom();
             }
         }
 
@@ -1048,7 +1057,7 @@
             messageDiv.className = `message ${sender}`;
             
             const avatar = sender === 'user' ? '👤' : '🤖';
-            const bg = sender === 'user' ? '#4ecca3' : '#e94560';
+            const bg = sender === 'user' ? 'var(--primary)' : 'var(--danger)';
             
             messageDiv.innerHTML = `
                 <div class="message-avatar" style="background: ${bg}">${avatar}</div>
@@ -1059,7 +1068,7 @@
             `;
             
             container.appendChild(messageDiv);
-            container.scrollTop = container.scrollHeight;
+            scrollToBottom();
         }
 
         function addLoadingMessage() {
@@ -1069,116 +1078,128 @@
             div.id = id;
             div.className = 'message bot';
             div.innerHTML = `
-                <div class="message-avatar" style="background: #e94560">🤖</div>
+                <div class="message-avatar" style="background: var(--danger)">🤖</div>
                 <div class="message-content">
-                    <span class="typing">⏳ Pensando...</span>
+                    <div class="typing">
+                        <span></span><span></span><span></span>
+                    </div>
                 </div>
             `;
             container.appendChild(div);
-            container.scrollTop = container.scrollHeight;
+            scrollToBottom();
             return id;
         }
 
-        function updateHistory(userMsg, botMsg) {
+        function scrollToBottom() {
+            const chatArea = document.getElementById('chat-area');
+            chatArea.scrollTop = chatArea.scrollHeight;
+        }
+
+        function updateHistory(message) {
             const historyList = document.getElementById('history-list');
             const item = document.createElement('div');
             item.className = 'history-item';
             item.innerHTML = `
-                <span class="history-icon">💬</span>
-                <span class="history-text">${userMsg.substring(0, 30)}...</span>
+                <span>💬</span>
+                <span class="history-text">${message.substring(0, 25)}...</span>
             `;
-            item.onclick = () => loadConversation(userMsg, botMsg);
-            historyList.insertBefore(item, historyList.firstChild);
+            item.onclick = () => loadConversation(message);
+            historyList.insertBefore(item, historyList.children[1]);
         }
 
-        function loadConversation(userMsg, botMsg) {
-            document.getElementById('welcome-screen').classList.add('hidden');
-            document.getElementById('messages-container').classList.remove('hidden');
+        function loadConversation(message) {
+            showChat();
             document.getElementById('messages-container').innerHTML = '';
-            addMessage('user', userMsg);
-            addMessage('bot', botMsg);
+            addMessage('user', message);
+            addMessage('bot', 'Conversación cargada del historial.');
         }
 
         // ========== MODO DESARROLLADOR ==========
-        function openDevMode() {
-            if (devToken) {
-                document.getElementById('dev-panel').classList.add('open');
-                refreshStats();
+        function openDevLogin() {
+            if (isDevMode) {
+                openDevPanel();
+                return;
+            }
+            document.getElementById('dev-login-modal').classList.add('show');
+            document.getElementById('login-username').value = '';
+            document.getElementById('login-password').value = '';
+            document.getElementById('login-error').classList.remove('show');
+        }
+
+        function closeDevLogin() {
+            document.getElementById('dev-login-modal').classList.remove('show');
+        }
+
+        async function devLogin() {
+            const username = document.getElementById('login-username').value;
+            const password = document.getElementById('login-password').value;
+            
+            // Validar credenciales
+            if (DEV_CREDENTIALS[username] === password) {
+                // Login exitoso
+                isDevMode = true;
+                devUsername = username;
+                devToken = btoa(username + ':' + Date.now());
+                
+                closeDevLogin();
+                activateDevMode();
+                openDevPanel();
             } else {
-                document.getElementById('password-modal').classList.add('show');
-                document.getElementById('dev-password').value = '';
-                document.getElementById('password-error').classList.remove('show');
+                document.getElementById('login-error').classList.add('show');
             }
         }
 
-        function closeDevMode() {
+        function activateDevMode() {
+            // Cambiar UI
+            document.getElementById('dev-login-btn').classList.add('hidden');
+            document.getElementById('dev-indicator').classList.add('active');
+            document.getElementById('dev-username').textContent = devUsername;
+            document.getElementById('mode-label').textContent = 'Dev';
+            document.getElementById('mode-label').style.color = 'var(--danger)';
+        }
+
+        function switchToUserMode() {
+            isDevMode = false;
+            closeDevPanel();
+            
+            // Restaurar UI
+            document.getElementById('dev-login-btn').classList.remove('hidden');
+            document.getElementById('dev-indicator').classList.remove('active');
+            document.getElementById('mode-label').textContent = 'Chat';
+            document.getElementById('mode-label').style.color = 'var(--primary)';
+            
+            // Limpiar token
+            devToken = null;
+            devUsername = null;
+        }
+
+        function openDevPanel() {
+            if (!isDevMode) {
+                openDevLogin();
+                return;
+            }
+            document.getElementById('dev-panel').classList.add('open');
+            refreshStats();
+        }
+
+        function closeDevPanel() {
             document.getElementById('dev-panel').classList.remove('open');
         }
 
-        function closePasswordModal() {
-            document.getElementById('password-modal').classList.remove('show');
-        }
-
-        // SHA256 para verificar contraseña
-        async function sha256(message) {
-            const encoder = new TextEncoder();
-            const data = encoder.encode(message);
-            const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-            const hashArray = Array.from(new Uint8Array(hashBuffer));
-            return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-        }
-
-        async function verifyPassword() {
-            const password = document.getElementById('dev-password').value;
-            const hash = await sha256(password);
-            
-            // Hash de "CicDev2024!"
-            const correctHash = 'a8f5f167f44f4964e6c998dee827110c9a0c5e1e7c5c5e1e7c5c5e1e7c5c5e1e';
-            
-            if (hash === correctHash) {
-                try {
-                    const response = await fetch('/api/dev/login', {
-                        method: 'POST',
-                        headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify({password: password})
-                    });
-                    
-                    const data = await response.json();
-                    
-                    if (data.success) {
-                        devToken = data.token;
-                        document.getElementById('password-modal').classList.remove('show');
-                        document.getElementById('dev-panel').classList.add('open');
-                        refreshStats();
-                    } else {
-                        document.getElementById('password-error').classList.add('show');
-                    }
-                } catch (e) {
-                    // Fallback si el endpoint no existe
-                    devToken = hash.substring(0, 32);
-                    document.getElementById('password-modal').classList.remove('show');
-                    document.getElementById('dev-panel').classList.add('open');
-                    refreshStats();
-                }
-            } else {
-                document.getElementById('password-error').classList.add('show');
-            }
-        }
-
-        // ========== FUNCIONES DE DESARROLLADOR ==========
+        // ========== FUNCIONES DESARROLLADOR ==========
         async function teachAI() {
             const text = document.getElementById('teach-text').value.trim();
             const topic = document.getElementById('teach-topic').value.trim() || 'manual';
             const resultDiv = document.getElementById('teach-result');
             
             if (!text) {
-                resultDiv.className = 'teach-result error show';
-                resultDiv.textContent = '❌ Escribe algo para enseñar';
+                resultDiv.className = 'error-msg show';
+                resultDiv.textContent = '❌ Escribe contenido';
                 return;
             }
             
-            resultDiv.className = 'teach-result show';
-            resultDiv.innerHTML = '⏳ Guardando...';
+            resultDiv.className = '';
+            resultDiv.textContent = '⏳ Guardando...';
             
             try {
                 const response = await fetch('/api/teach', {
@@ -1187,31 +1208,24 @@
                         'Content-Type': 'application/json',
                         'X-Dev-Token': devToken
                     },
-                    body: JSON.stringify({
-                        text: text,
-                        topic: topic
-                    })
+                    body: JSON.stringify({text, topic})
                 });
                 
                 const data = await response.json();
                 
-                if (data.error) {
-                    throw new Error(data.error);
-                }
+                if (data.error) throw new Error(data.error);
                 
-                resultDiv.className = 'teach-result success show';
-                resultDiv.innerHTML = `✅ ${data.message}`;
+                resultDiv.className = '';
+                resultDiv.style.color = 'var(--primary)';
+                resultDiv.textContent = '✅ Guardado';
                 
-                // Limpiar formulario
                 document.getElementById('teach-text').value = '';
                 document.getElementById('teach-topic').value = '';
-                
-                // Actualizar estadísticas
                 refreshStats();
                 
             } catch (error) {
-                resultDiv.className = 'teach-result error show';
-                resultDiv.innerHTML = `❌ Error: ${error.message}`;
+                resultDiv.className = 'error-msg show';
+                resultDiv.textContent = '❌ Error: ' + error.message;
             }
         }
 
@@ -1220,90 +1234,80 @@
                 const response = await fetch('/api/evolution/stats', {
                     headers: {'X-Dev-Token': devToken}
                 });
-                
                 const data = await response.json();
                 
                 document.getElementById('stat-total').textContent = data.total_memories || 0;
                 document.getElementById('stat-auto').textContent = data.by_source?.auto_learning || 0;
                 document.getElementById('stat-user').textContent = data.by_source?.user_taught || 0;
                 document.getElementById('stat-web').textContent = data.by_source?.web_search || 0;
-                
             } catch (e) {
-                console.error('Error cargando estadísticas:', e);
+                console.error('Error stats:', e);
             }
         }
 
         async function loadMemories() {
-            const listDiv = document.getElementById('memories-list');
-            listDiv.innerHTML = '<p style="color: #666; text-align: center;">⏳ Cargando...</p>';
+            const list = document.getElementById('memories-list');
+            list.innerHTML = '<p style="color: #666; text-align: center;">⏳...</p>';
             
             try {
                 const response = await fetch('/api/memories', {
                     headers: {'X-Dev-Token': devToken}
                 });
-                
                 const memories = await response.json();
                 
                 if (memories.length === 0) {
-                    listDiv.innerHTML = '<p style="color: #666; text-align: center;">No hay memorias aún</p>';
+                    list.innerHTML = '<p style="color: #666; text-align: center;">Sin memorias</p>';
                     return;
                 }
                 
-                listDiv.innerHTML = memories.map(m => `
+                list.innerHTML = memories.map(m => `
                     <div class="memory-item">
                         <strong>${m.topic || 'Sin título'}</strong>
-                        <p>${m.content?.substring(0, 100) || 'Sin contenido'}...</p>
-                        <small>Fuente: ${m.source} | Relevancia: ${m.relevance || 0.5}</small>
+                        <p>${m.content?.substring(0, 80) || '...'}...</p>
+                        <small>${m.source} | ${m.relevance || 0.5}</small>
                     </div>
                 `).join('');
-                
             } catch (e) {
-                listDiv.innerHTML = '<p style="color: #e94560; text-align: center;">❌ Error al cargar</p>';
+                list.innerHTML = '<p style="color: var(--danger); text-align: center;">Error</p>';
             }
         }
 
         async function forceLearning() {
-            if (!confirm('🚀 ¿Forzar una ronda de aprendizaje ahora?')) return;
+            if (!confirm('¿Forzar aprendizaje ahora?')) return;
             
             try {
                 const response = await fetch('/api/evolution/learn-now', {
                     method: 'POST',
                     headers: {'X-Dev-Token': devToken}
                 });
-                
                 const data = await response.json();
                 alert('✅ ' + data.message);
                 refreshStats();
-                
             } catch (e) {
-                alert('❌ Error: ' + e.message);
+                alert('❌ Error');
             }
         }
 
         async function clearDatabase() {
-            if (!confirm('⚠️ ¿ESTÁS SEGURO?\n\nEsto eliminará TODAS las memorias, conversaciones y logs.\n\nEsta acción NO se puede deshacer.')) return;
-            
-            if (!confirm('🔴 CONFIRMACIÓN FINAL\n\nEscribe "BORRAR TODO" en tu próximo mensaje para confirmar.\n\n¿Continuar?')) return;
+            if (!confirm('⚠️ ¿BORRAR TODO? Esta acción no se puede deshacer.')) return;
+            if (!confirm('🔴 CONFIRMACIÓN FINAL: ¿Eliminar todas las memorias?')) return;
             
             try {
                 const response = await fetch('/api/dev/clear-db', {
                     method: 'POST',
                     headers: {'X-Dev-Token': devToken}
                 });
-                
                 const data = await response.json();
                 alert('🗑️ ' + data.message);
                 refreshStats();
-                document.getElementById('memories-list').innerHTML = '<p style="color: #666; text-align: center;">Base de datos vacía</p>';
-                
             } catch (e) {
-                alert('❌ Error: ' + e.message);
+                alert('❌ Error');
             }
         }
 
-        // Cargar historial al inicio
+        // Inicializar
         window.onload = function() {
-            // Aquí podrías cargar el historial real desde el servidor
+            // Cargar historial si existe
         };
     </script>
 </body>
