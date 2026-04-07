@@ -1,6 +1,7 @@
 """
 Cic_IA - Asistente Inteligente EVOLUTIVO
-Archivo principal simplificado - Versión Modular
+Archivo principal - Versión 6.4.2 Compatible
+Auto-aprendizaje cada 2 horas + Forzado manual
 """
 
 from flask import Flask
@@ -169,51 +170,69 @@ def dev_required(f):
 class WebSearchEngine:
     @staticmethod
     def search_duckduckgo(query, max_results=5):
+        """
+        Búsqueda en DuckDuckGo usando la API moderna (v6.x)
+        Compatible con duckduckgo-search >= 6.0
+        """
         try:
             try:
                 from duckduckgo_search import DDGS
                 results = []
-                # ✅ API MODERNA (duckduckgo-search >= 6.0)
-                with DDGS() as ddgs:
-                    for result in ddgs.text(query, max_results=max_results):
-                        results.append({
-                            'title': result.get('title'),
-                            'url': result.get('href'),
-                            'snippet': result.get('body'),
-                            'source': 'duckduckgo'
-                        })
+                
+                # ✅ API CORRECTA PARA VERSIÓN 6.4.2
+                ddgs = DDGS()
+                search_results = ddgs.text(query, max_results=max_results)
+                
+                for result in search_results:
+                    results.append({
+                        'title': result.get('title', ''),
+                        'url': result.get('href', ''),
+                        'snippet': result.get('body', ''),
+                        'source': 'duckduckgo'
+                    })
+                
+                logger.info(f"🔍 Búsqueda exitosa: '{query}' - {len(results)} resultados")
                 return results
-            except ImportError:
-                logger.warning("duckduckgo-search no instalada, usando fallback")
+                
+            except ImportError as ie:
+                logger.warning(f"duckduckgo-search no instalada: {ie}")
                 return WebSearchEngine._search_fallback(query, max_results)
+                
         except Exception as e:
-            logger.error(f"Error en búsqueda DuckDuckGo: {e}")
+            logger.error(f"❌ Error en búsqueda DuckDuckGo: {e}")
             return []
     
     @staticmethod
     def _search_fallback(query, max_results=5):
+        """Método fallback usando scraping directo"""
         try:
             url = f"https://html.duckduckgo.com/?q={urllib.parse.quote(query)}"
-            headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+            }
             response = requests.get(url, headers=headers, timeout=10)
             soup = BeautifulSoup(response.content, 'html.parser')
             results = []
+            
             for result in soup.find_all('div', class_='result')[:max_results]:
                 try:
                     title_elem = result.find('a', class_='result__a')
                     snippet_elem = result.find('a', class_='result__snippet')
                     if title_elem and snippet_elem:
                         results.append({
-                            'title': title_elem.get_text(),
+                            'title': title_elem.get_text(strip=True),
                             'url': title_elem.get('href', ''),
-                            'snippet': snippet_elem.get_text(),
-                            'source': 'duckduckgo'
+                            'snippet': snippet_elem.get_text(strip=True),
+                            'source': 'duckduckgo_fallback'
                         })
                 except:
                     continue
+            
+            logger.info(f"🔍 Fallback exitoso: '{query}' - {len(results)} resultados")
             return results
+            
         except Exception as e:
-            logger.error(f"Error en fallback de búsqueda: {e}")
+            logger.error(f"❌ Error en fallback: {e}")
             return []
 
 # ========== CLASE PRINCIPAL CIC_IA ==========
@@ -222,7 +241,9 @@ class CicIA:
     def __init__(self):
         self.learning_active = True
         self.web_search_engine = WebSearchEngine()
+        self.current_learning_topic = None  # Tema personalizado para aprendizaje
         
+        # 50 TEMAS PARA AUTO-APRENDIZAJE (selección aleatoria)
         self.auto_learning_topics = [
             'física cuántica avances 2024',
             'biología sintética descubrimientos',
@@ -284,6 +305,7 @@ class CicIA:
                 'auto_learned_total': self._get_auto_learned_total()
             }
         
+        # Iniciar hilos de auto-aprendizaje
         threading.Thread(target=self._auto_learn_loop, daemon=True).start()
         threading.Thread(target=self._auto_web_search_loop, daemon=True).start()
         threading.Thread(target=self._continuous_learning_loop, daemon=True).start()
@@ -295,7 +317,7 @@ class CicIA:
         logger.info(f"📈 Aprendidos hoy: {self.stats['today_learned']}")
         logger.info(f"🤖 Auto-aprendidos total: {self.stats['auto_learned_total']}")
         logger.info("🌐 Búsqueda web: ACTIVADA")
-        logger.info("🧠 Auto-aprendizaje: ACTIVADO (cada 15 minutos)")
+        logger.info("🧠 Auto-aprendizaje: ACTIVADO (cada 2 horas)")
         logger.info(f"🎯 Temas de aprendizaje: {len(self.auto_learning_topics)} categorías")
         logger.info("=" * 70)
     
@@ -308,35 +330,74 @@ class CicIA:
         total = db.session.query(db.func.sum(LearningLog.auto_learned)).scalar()
         return int(total) if total else 0
     
+    def set_custom_topic(self, topic):
+        """
+        Establece un tema personalizado para el próximo aprendizaje.
+        Si se establece, se usará este en lugar de uno aleatorio.
+        """
+        self.current_learning_topic = topic
+        logger.info(f"📌 Tema personalizado establecido: '{topic}'")
+        return True
+    
+    def clear_custom_topic(self):
+        """Limpia el tema personalizado"""
+        self.current_learning_topic = None
+        logger.info("📌 Tema personalizado limpiado")
+        return True
+    
+    # ⏰ CAMBIO: De 15 minutos a 2 horas (7200 segundos)
     def _continuous_learning_loop(self):
+        """
+        Loop principal de auto-aprendizaje evolutivo.
+        Se ejecuta cada 2 horas para no saturar el servidor.
+        """
         logger.info("🧠 Iniciando loop de auto-aprendizaje evolutivo...")
-        time.sleep(180)
+        logger.info("⏰ Primer ciclo en 5 minutos...")
+        time.sleep(300)  # 5 minutos inicial
         
         while self.learning_active:
             try:
                 self._perform_auto_learning()
             except Exception as e:
-                logger.error(f"Error en auto-aprendizaje: {e}")
+                logger.error(f"❌ Error en auto-aprendizaje: {e}")
             
-            logger.info("⏰ Auto-aprendizaje: esperando 15 minutos...")
-            time.sleep(900)
+            # ⏰ CAMBIO PRINCIPAL: 2 horas = 7200 segundos
+            logger.info("⏰ Auto-aprendizaje: esperando 2 horas...")
+            time.sleep(7200)
     
-    def _perform_auto_learning(self):
+    def _perform_auto_learning(self, custom_topic=None):
+        """
+        Realiza una sesión de aprendizaje automático.
+        
+        Args:
+            custom_topic: Tema específico para aprender (opcional).
+                         Si no se proporciona, usa el tema personalizado o uno aleatorio.
+        """
         with app.app_context():
-            topic = random.choice(self.auto_learning_topics)
+            # Determinar qué tema aprender
+            if custom_topic:
+                topic = custom_topic
+            elif self.current_learning_topic:
+                topic = self.current_learning_topic
+                self.current_learning_topic = None  # Limpiar después de usar
+            else:
+                topic = random.choice(self.auto_learning_topics)
+            
             logger.info(f"🤖 Auto-aprendizaje: investigando '{topic}'")
             
+            # Realizar búsqueda
             results = self.web_search_engine.search_duckduckgo(topic, max_results=3)
             
             if not results:
-                logger.warning(f"No se encontraron resultados para '{topic}'")
-                return
+                logger.warning(f"⚠️ No se encontraron resultados para '{topic}'")
+                return False
             
             learned_count = 0
             
             for result in results:
                 try:
-                    content_preview = result['snippet'][:100]
+                    # Verificar si ya existe contenido similar
+                    content_preview = result['snippet'][:100] if result['snippet'] else ''
                     exists = Memory.query.filter(
                         Memory.content.ilike(f'%{content_preview}%')
                     ).first()
@@ -345,6 +406,7 @@ class CicIA:
                         logger.info(f"⏭️ Ya conocido: {result['title'][:50]}...")
                         continue
                     
+                    # Verificar si la URL ya existe
                     url_exists = Memory.query.filter(
                         Memory.content.contains(result['url'])
                     ).first()
@@ -353,6 +415,7 @@ class CicIA:
                         logger.info(f"⏭️ URL conocida: {result['url'][:50]}...")
                         continue
                     
+                    # Crear nueva memoria
                     memory = Memory(
                         content=f"{result['title']}\n\n{result['snippet']}\n\nFuente: {result['url']}",
                         source='auto_learning',
@@ -363,10 +426,11 @@ class CicIA:
                     db.session.add(memory)
                     learned_count += 1
                     
+                    # Registrar evolución del conocimiento
                     evolution = KnowledgeEvolution(
                         topic=topic,
                         action='learned',
-                        new_content=result['snippet'][:200],
+                        new_content=result['snippet'][:200] if result['snippet'] else '',
                         source='auto_learning'
                     )
                     db.session.add(evolution)
@@ -374,12 +438,14 @@ class CicIA:
                     logger.info(f"✅ Aprendido: {result['title'][:60]}...")
                     
                 except Exception as e:
-                    logger.error(f"Error procesando resultado: {e}")
+                    logger.error(f"❌ Error procesando resultado: {e}")
                     continue
             
+            # Guardar cambios si se aprendió algo
             if learned_count > 0:
                 db.session.commit()
                 
+                # Actualizar estadísticas
                 today = date.today()
                 log = LearningLog.query.filter_by(date=today).first()
                 if not log:
@@ -391,10 +457,29 @@ class CicIA:
                 db.session.commit()
                 
                 logger.info(f"🎉 Sesión completada: {learned_count} nuevos conocimientos")
+                return True
             else:
                 logger.info("📝 Sin novedades en esta ronda")
+                return False
+    
+    def force_learning(self, topic=None):
+        """
+        Fuerza un ciclo de aprendizaje inmediato.
+        Puede usarse desde el panel de desarrollador.
+        
+        Args:
+            topic: Tema específico para aprender (opcional)
+        """
+        logger.info(f"⚡ Forzando aprendizaje manual{' - Tema: ' + topic if topic else ''}")
+        threading.Thread(
+            target=self._perform_auto_learning,
+            args=(topic,),
+            daemon=True
+        ).start()
+        return True
     
     def _auto_web_search_loop(self):
+        """Limpia caché de búsquedas expiradas cada hora"""
         while self.learning_active:
             try:
                 with app.app_context():
@@ -408,10 +493,11 @@ class CicIA:
                     if len(expired) > 0:
                         logger.info(f"🧹 Cache limpiado: {len(expired)} entradas")
             except Exception as e:
-                logger.error(f"Error limpiando cache: {e}")
+                logger.error(f"❌ Error limpiando cache: {e}")
             time.sleep(3600)
     
     def _auto_learn_loop(self):
+        """Actualiza scores de relevancia cada hora"""
         while self.learning_active:
             try:
                 with app.app_context():
@@ -420,17 +506,20 @@ class CicIA:
                         mem.relevance_score = min(1.0, mem.relevance_score + (mem.access_count * 0.01))
                     db.session.commit()
             except Exception as e:
-                logger.error(f"Error en auto-learn: {e}")
+                logger.error(f"❌ Error en auto-learn: {e}")
             time.sleep(3600)
     
     def chat(self, user_input, mode='balanced', attachment_info=None):
+        """Procesa mensajes del usuario"""
         input_lower = user_input.lower().strip()
         
+        # Preguntas de fecha/hora
         if self._is_date_time_question(input_lower):
             response = self._get_dynamic_date_response(input_lower)
             return self._save_conversation(user_input, response, 'system_time', 
                                          attachment_info=attachment_info)
         
+        # Buscar mejor tema en knowledge base
         best_topic = self._find_best_topic(input_lower)
         
         with app.app_context():
@@ -458,6 +547,7 @@ class CicIA:
                     response = random.choice(KNOWLEDGE_BASE['default']['respuestas']).format(tema=tema)
                     sources_used.append('learning')
             
+            # Ajustar respuesta según modo
             if mode == 'fast':
                 response = response.split('.')[0] + '.' if '.' in response else response[:100]
             elif mode == 'complete':
@@ -469,22 +559,27 @@ class CicIA:
                                          sources_used=sources_used)
     
     def _search_and_learn(self, query):
+        """Busca en web y guarda en memoria"""
         try:
             with app.app_context():
+                # Verificar caché
                 cached = WebSearchCache.query.filter_by(query=query).first()
                 if cached and cached.expires_at > datetime.utcnow():
                     return cached.results
                 
+                # Realizar búsqueda
                 results = self.web_search_engine.search_duckduckgo(query, max_results=3)
                 
                 if not results:
                     return None
                 
+                # Construir resumen
                 summary = ""
                 for i, result in enumerate(results, 1):
                     summary += f"{i}. **{result['title']}**\n"
                     summary += f"   {result['snippet']}\n\n"
                     
+                    # Guardar en memoria
                     memory = Memory(
                         content=result['snippet'],
                         source='web_search',
@@ -493,6 +588,7 @@ class CicIA:
                     )
                     db.session.add(memory)
                 
+                # Guardar en caché
                 cache_entry = WebSearchCache(
                     query=query,
                     results={'summary': summary},
@@ -503,10 +599,11 @@ class CicIA:
                 
                 return {'summary': summary}
         except Exception as e:
-            logger.error(f"Error en búsqueda web: {e}")
+            logger.error(f"❌ Error en búsqueda web: {e}")
             return None
     
     def _find_best_topic(self, text):
+        """Encuentra el mejor tema en knowledge base"""
         best_score = 0
         best_topic = 'default'
         for topic, data in KNOWLEDGE_BASE.items():
@@ -519,6 +616,7 @@ class CicIA:
         return best_topic if best_score >= 2 else None
     
     def _find_relevant_memories(self, text, memories):
+        """Encuentra memorias relevantes"""
         relevant = []
         text_words = set(text.split())
         for mem in memories:
@@ -531,6 +629,7 @@ class CicIA:
     
     def _save_conversation(self, user_msg, bot_resp, source, 
                           attachment_info=None, memories_count=0, sources_used=None):
+        """Guarda conversación en base de datos"""
         with app.app_context():
             conv = Conversation(
                 user_message=user_msg,
@@ -541,6 +640,7 @@ class CicIA:
             )
             db.session.add(conv)
             
+            # Actualizar contador diario
             today = date.today()
             log = LearningLog.query.filter_by(date=today).first()
             if not log:
@@ -562,10 +662,12 @@ class CicIA:
         }
     
     def _is_date_time_question(self, text):
+        """Detecta preguntas de fecha/hora"""
         keywords = ['qué día', 'qué hora', 'fecha', 'hora actual', 'hoy es']
         return any(kw in text for kw in keywords)
     
     def _get_dynamic_date_response(self, text):
+        """Genera respuesta de fecha/hora dinámica"""
         now = datetime.now()
         dias = ['lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo']
         meses = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
@@ -577,6 +679,7 @@ class CicIA:
         return f"{fecha}\n{hora}"
     
     def get_learning_stats(self):
+        """Obtiene estadísticas de aprendizaje"""
         with app.app_context():
             total_memories = Memory.query.count()
             by_source = {
@@ -595,6 +698,7 @@ class CicIA:
                 'auto_learned': sum(log.auto_learned for log in recent_logs)
             }
             
+            # Top temas aprendidos
             topic_counts = {}
             for mem in Memory.query.filter(Memory.source == 'auto_learning').all():
                 topic = mem.topic or 'unknown'
@@ -607,9 +711,11 @@ class CicIA:
                 'by_source': by_source,
                 'last_7_days': weekly_stats,
                 'top_topics': top_topics,
-                'learning_frequency': 'cada 15 minutos',
+                'learning_frequency': 'cada 2 horas',
                 'total_topics_available': len(self.auto_learning_topics),
-                'evolution_ready': True
+                'evolution_ready': True,
+                'custom_topic_pending': self.current_learning_topic is not None,
+                'custom_topic': self.current_learning_topic
             }
 
 # ========== KNOWLEDGE BASE ==========
@@ -643,7 +749,7 @@ KNOWLEDGE_BASE = {
     'cic_ia': {
         'respuestas': [
             "Soy Cic_IA, una inteligencia artificial evolutiva creada para aprender, asistir y crecer contigo.",
-            "Cic_IA aprende cada 15 minutos de 50 temas distintos: ciencia, tecnología, sociedad y futuro."
+            "Cic_IA aprende automáticamente cada 2 horas sobre 50 temas distintos: ciencia, tecnología, sociedad y futuro."
         ],
         'keywords': ['quién eres', 'qué eres', 'cic_ia', 'tu nombre', 'presentación']
     },
@@ -656,6 +762,7 @@ KNOWLEDGE_BASE = {
     }
 }
 
+# Instancia global
 cic_ia = CicIA()
 
 # ========== RUTAS PÚBLICAS ==========
@@ -673,8 +780,8 @@ def health_check():
     return jsonify({
         'status': 'healthy',
         'timestamp': datetime.utcnow().isoformat(),
-        'version': '3.0_evolutiva',
-        'features': ['chat', 'web_search', 'auto_learning', 'memory', 'evolution', '50_topics']
+        'version': '3.1_evolutiva',
+        'features': ['chat', 'web_search', 'auto_learning', 'memory', 'evolution', '50_topics', 'custom_topics']
     })
 
 @app.route('/api/chat', methods=['POST'])
@@ -730,7 +837,7 @@ def status():
             stats = cic_ia.get_learning_stats()
             
             return jsonify({
-                'stage': 'v3.0_evolutiva',
+                'stage': 'v3.1_evolutiva',
                 'total_memories': stats['total_memories'],
                 'total_conversations': Conversation.query.count(),
                 'today_learned': log.count if log else 0,
@@ -738,10 +845,10 @@ def status():
                 'web_searches_today': log.web_searches if log else 0,
                 'db_size': 'PostgreSQL' if database_url else 'SQLite',
                 'auto_learning_active': True,
-                'learning_frequency': 'cada 15 minutos',
+                'learning_frequency': 'cada 2 horas',
                 'total_topics': len(cic_ia.auto_learning_topics),
                 'learning_stats': stats,
-                'features': ['chat', 'web_search', 'auto_learning', 'memory', 'evolution', '50_topics', 'attachments']
+                'features': ['chat', 'web_search', 'auto_learning', 'memory', 'evolution', '50_topics', 'attachments', 'custom_topics']
             })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -911,15 +1018,77 @@ def dev_verify():
         })
     return jsonify({'valid': False}), 401
 
+# 🎯 NUEVO: Endpoint para establecer tema personalizado
+@app.route('/api/dev/learning/set-topic', methods=['POST'])
+@dev_required
+def dev_set_learning_topic():
+    """
+    Establece un tema específico para el próximo auto-aprendizaje.
+    El tema se usará en el próximo ciclo automático o al forzar aprendizaje.
+    """
+    try:
+        data = request.json
+        topic = data.get('topic', '').strip()
+        
+        if not topic:
+            return jsonify({
+                'success': False,
+                'error': 'Debes proporcionar un tema'
+            }), 400
+        
+        cic_ia.set_custom_topic(topic)
+        
+        return jsonify({
+            'success': True,
+            'message': f'📌 Tema establecido: "{topic}"',
+            'topic': topic,
+            'note': 'Se usará en el próximo ciclo de aprendizaje'
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# 🎯 NUEVO: Endpoint para limpiar tema personalizado
+@app.route('/api/dev/learning/clear-topic', methods=['POST'])
+@dev_required
+def dev_clear_learning_topic():
+    """Limpia el tema personalizado establecido"""
+    try:
+        cic_ia.clear_custom_topic()
+        return jsonify({
+            'success': True,
+            'message': 'Tema personalizado eliminado'
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# 🎯 MEJORADO: Forzar aprendizaje con tema opcional
 @app.route('/api/evolution/learn-now', methods=['POST'])
 @dev_required
 def evolution_learn_now():
+    """
+    Fuerza un ciclo de aprendizaje inmediato.
+    Opcionalmente puede recibir un tema específico en el body.
+    """
     try:
-        threading.Thread(target=cic_ia._perform_auto_learning, daemon=True).start()
+        data = request.json or {}
+        topic = data.get('topic', '').strip() or None
+        
+        # Si hay tema en la petición, usarlo; si no, usar el tema personalizado
+        if topic:
+            cic_ia.set_custom_topic(topic)
+        
+        # Ejecutar aprendizaje en hilo separado
+        threading.Thread(
+            target=cic_ia._perform_auto_learning,
+            args=(topic,),
+            daemon=True
+        ).start()
+        
         return jsonify({
             'success': True,
-            'message': '🤖 Auto-aprendizaje iniciado manualmente',
-            'started_at': datetime.utcnow().isoformat()
+            'message': f'🤖 Auto-aprendizaje iniciado manualmente{f" sobre '{topic}'" if topic else ""}',
+            'started_at': datetime.utcnow().isoformat(),
+            'topic': topic or cic_ia.current_learning_topic or 'aleatorio'
         })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -927,15 +1096,8 @@ def evolution_learn_now():
 @app.route('/api/dev/system/force-learning', methods=['POST'])
 @dev_required
 def dev_force_learning():
-    try:
-        threading.Thread(target=cic_ia._perform_auto_learning, daemon=True).start()
-        return jsonify({
-            'success': True,
-            'message': 'Ciclo de aprendizaje iniciado',
-            'started_at': datetime.utcnow().isoformat()
-        })
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+    """Endpoint alternativo para forzar aprendizaje"""
+    return evolution_learn_now()
 
 @app.route('/api/dev/memories/all')
 @dev_required
@@ -1012,6 +1174,12 @@ def dev_stats_detailed():
                 'web_searches': db.session.query(db.func.sum(LearningLog.web_searches)).filter(
                     LearningLog.date >= week_ago
                 ).scalar() or 0
+            },
+            'learning': {
+                'frequency': 'cada 2 horas',
+                'custom_topic_pending': cic_ia.current_learning_topic is not None,
+                'custom_topic': cic_ia.current_learning_topic,
+                'total_available_topics': len(cic_ia.auto_learning_topics)
             }
         }
         
