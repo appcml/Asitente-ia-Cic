@@ -698,7 +698,7 @@ class CicIA:
             except Exception as e:
                 logger.error(f"❌ Error en cola manual: {e}")
             
-            time.sleep(300)  # Revisar cada 5 minutos
+            time.sleep(300)
     
     def _auto_web_search_loop(self):
         while self.learning_active:
@@ -789,14 +789,11 @@ class CicIA:
         relevant = []
         for mem in memories:
             relevance = self.neural_net.predict_relevance(query, mem.content)
-            if relevance > 0.6:  # Umbral de relevancia
+            if relevance > 0.6:
                 relevant.append((mem, relevance))
                 mem.access_count += 1
         
-        # Ordenar por relevancia
         relevant.sort(key=lambda x: x[1], reverse=True)
-        
-        # Guardar cambios
         db.session.commit()
         
         return [mem for mem, _ in relevant[:5]]
@@ -937,7 +934,6 @@ class CicIA:
             
             top_topics = sorted(topic_counts.items(), key=lambda x: x[1], reverse=True)[:5]
             
-            # Estadísticas de cola manual
             manual_pending = ManualLearningQueue.query.filter_by(status='pending').count()
             manual_completed = ManualLearningQueue.query.filter_by(status='completed').count()
             
@@ -1265,13 +1261,6 @@ def dev_manual_learning():
     """
     Endpoint para agregar contenido manual a la cola de aprendizaje.
     Este es el botón "Forzar Aprendizaje Manual" del panel de desarrollador.
-    
-    Body: {
-        "content": "Texto completo a aprender...",
-        "topic": "Tema del contenido",
-        "source_url": "URL de origen (opcional)",
-        "priority": 1-3 (1=normal, 2=alta, 3=urgente)
-    }
     """
     try:
         data = request.json
@@ -1470,9 +1459,14 @@ def evolution_learn_now():
             daemon=True
         ).start()
         
+        # ✅ CORREGIDO: Usar concatenación de strings en lugar de f-string anidada
+        message_text = f'🤖 Auto-aprendizaje iniciado manualmente'
+        if topic:
+            message_text += f' sobre "{topic}"'
+        
         return jsonify({
             'success': True,
-            'message': f'🤖 Auto-aprendizaje iniciado manualmente{f" sobre '{topic}'" if topic else ""}',
+            'message': message_text,
             'started_at': datetime.utcnow().isoformat(),
             'topic': topic or cic_ia.current_learning_topic or 'aleatorio'
         })
