@@ -12,7 +12,7 @@ psycopg2-binary==2.9.7  # Para PostgreSQL
 requests==2.31.0
 beautifulsoup4==4.12.2
 lxml==4.9.3
-duckduckgo-search==3.9.10  # Búsqueda en DuckDuckGo
+duckduckgo-search>=6.0
 
 # Procesamiento de Documentos
 PyPDF2==3.0.1
