@@ -312,7 +312,7 @@ class CicIA:
         print(f"📈 Aprendidos hoy: {self.stats['today_learned']}")
         print(f"🤖 Auto-aprendidos total: {self.stats['auto_learned_total']}")
         print("🌐 Búsqueda web: ACTIVADA")
-        print("🧠 Auto-aprendizaje: ACTIVADO (cada 3 horas)")
+        print("🧠 Auto-aprendizaje: ACTIVADO (cada 15 minutos)")
         print(f"🎯 Temas de aprendizaje: {len(self.auto_learning_topics)} categorías")
         print("=" * 70)
     
@@ -325,9 +325,10 @@ class CicIA:
         total = db.session.query(db.func.sum(LearningLog.auto_learned)).scalar()
         return int(total) if total else 0
     
+    # ⬇️⬇️⬇️ CAMBIO 2: INTERVALO CORREGIDO A 15 MINUTOS ⬇️⬇️⬇️
     def _continuous_learning_loop(self):
         logger.info("🧠 Iniciando loop de auto-aprendizaje evolutivo...")
-        time.sleep(180)
+        time.sleep(180)  # 3 minutos inicial
         
         while self.learning_active:
             try:
@@ -335,8 +336,9 @@ class CicIA:
             except Exception as e:
                 logger.error(f"Error en auto-aprendizaje: {e}")
             
-            logger.info("⏰ Auto-aprendizaje: esperando 3 horas...")
-            time.sleep(10800)
+            # CAMBIO: De 3 horas (10800) a 15 minutos (900) para Render gratuito
+            logger.info("⏰ Auto-aprendizaje: esperando 15 minutos...")
+            time.sleep(900)  # 15 minutos
     
     def _perform_auto_learning(self):
         with app.app_context():
@@ -624,7 +626,7 @@ class CicIA:
                 'by_source': by_source,
                 'last_7_days': weekly_stats,
                 'top_topics': top_topics,
-                'learning_frequency': 'cada 3 horas',
+                'learning_frequency': 'cada 15 minutos',
                 'total_topics_available': len(self.auto_learning_topics),
                 'evolution_ready': True
             }
@@ -660,7 +662,7 @@ KNOWLEDGE_BASE = {
     'cic_ia': {
         'respuestas': [
             "Soy Cic_IA, una inteligencia artificial evolutiva creada para aprender, asistir y crecer contigo.",
-            "Cic_IA aprende cada 3 horas de 50 temas distintos: ciencia, tecnología, sociedad y futuro."
+            "Cic_IA aprende cada 15 minutos de 50 temas distintos: ciencia, tecnología, sociedad y futuro."
         ],
         'keywords': ['quién eres', 'qué eres', 'cic_ia', 'tu nombre', 'presentación']
     },
@@ -756,7 +758,7 @@ def status():
                 'web_searches_today': log.web_searches if log else 0,
                 'db_size': 'PostgreSQL' if database_url else 'SQLite',
                 'auto_learning_active': True,
-                'learning_frequency': 'cada 3 horas',
+                'learning_frequency': 'cada 15 minutos',
                 'total_topics': len(cic_ia.auto_learning_topics),
                 'learning_stats': stats,
                 'features': ['chat', 'web_search', 'auto_learning', 'memory', 'evolution', '50_topics', 'attachments']
@@ -933,6 +935,35 @@ def dev_verify():
         })
     return jsonify({'valid': False}), 401
 
+# ⬇️⬇️⬇️ CAMBIO 1: AGREGAR RUTA /api/evolution/learn-now ⬇️⬇️⬇️
+@app.route('/api/evolution/learn-now', methods=['POST'])
+@dev_required
+def evolution_learn_now():
+    """Forzar aprendizaje - endpoint para el frontend"""
+    try:
+        threading.Thread(target=cic_ia._perform_auto_learning, daemon=True).start()
+        return jsonify({
+            'success': True,
+            'message': '🤖 Auto-aprendizaje iniciado manualmente',
+            'started_at': datetime.utcnow().isoformat()
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/dev/system/force-learning', methods=['POST'])
+@dev_required
+def dev_force_learning():
+    """Forzar aprendizaje inmediato - endpoint alternativo"""
+    try:
+        threading.Thread(target=cic_ia._perform_auto_learning, daemon=True).start()
+        return jsonify({
+            'success': True,
+            'message': 'Ciclo de aprendizaje iniciado',
+            'started_at': datetime.utcnow().isoformat()
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/dev/memories/all')
 @dev_required
 def dev_memories_all():
@@ -1015,20 +1046,6 @@ def dev_stats_detailed():
         }
         
         return jsonify(stats)
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/api/dev/system/force-learning', methods=['POST'])
-@dev_required
-def dev_force_learning():
-    """Forzar aprendizaje inmediato"""
-    try:
-        threading.Thread(target=cic_ia._perform_auto_learning, daemon=True).start()
-        return jsonify({
-            'success': True,
-            'message': 'Ciclo de aprendizaje iniciado',
-            'started_at': datetime.utcnow().isoformat()
-        })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
