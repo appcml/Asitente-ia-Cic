@@ -50,7 +50,7 @@ app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
 
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-# Credenciales DESARROLLADOR - SOLO TÚ (desde variables de entorno o defaults para desarrollo)
+# Credenciales DESARROLLADOR
 DEV_USERNAME = os.environ.get('DEV_USERNAME', 'admin')
 DEV_PASSWORD = os.environ.get('DEV_PASSWORD', 'CicDev2024!')
 
@@ -117,17 +117,13 @@ with app.app_context():
 # ========== SERVICIO DE AUTENTICACIÓN ==========
 
 class DevAuthService:
-    """Servicio de autenticación para modo desarrollador"""
-    
     def __init__(self):
         self.active_sessions = {}
     
     def verify_credentials(self, username, password):
-        """Verificar credenciales del desarrollador"""
         return username == DEV_USERNAME and password == DEV_PASSWORD
     
     def generate_token(self, username):
-        """Generar token de sesión"""
         import secrets
         token = secrets.token_urlsafe(32)
         self.active_sessions[token] = {
@@ -139,7 +135,6 @@ class DevAuthService:
         return token
     
     def verify_token(self, token):
-        """Verificar si token es válido"""
         if not token or token not in self.active_sessions:
             return False
         
@@ -152,17 +147,14 @@ class DevAuthService:
         return True
     
     def revoke_token(self, token):
-        """Revocar token"""
         if token in self.active_sessions:
             del self.active_sessions[token]
             return True
         return False
 
-# Instancia global
 dev_auth = DevAuthService()
 
 def dev_required(f):
-    """Decorador para rutas de desarrollador"""
     from functools import wraps
     @wraps(f)
     def decorated_function(*args, **kwargs):
@@ -181,6 +173,7 @@ class WebSearchEngine:
             try:
                 from duckduckgo_search import DDGS
                 results = []
+                # ✅ API MODERNA (duckduckgo-search >= 6.0)
                 with DDGS() as ddgs:
                     for result in ddgs.text(query, max_results=max_results):
                         results.append({
@@ -230,9 +223,7 @@ class CicIA:
         self.learning_active = True
         self.web_search_engine = WebSearchEngine()
         
-        # 50 TEMAS PARA AUTO-APRENDIZAJE
         self.auto_learning_topics = [
-            # CIENCIA PROFUNDA (10)
             'física cuántica avances 2024',
             'biología sintética descubrimientos',
             'neurociencia cognitiva',
@@ -243,8 +234,6 @@ class CicIA:
             'genética edición CRISPR',
             'psicología conducta humana',
             'filosofía mente artificial',
-            
-            # TECNOLOGÍA (12)
             'inteligencia artificial noticias 2024',
             'machine learning avances',
             'desarrollo software arquitectura',
@@ -257,8 +246,6 @@ class CicIA:
             'ciberseguridad ética hacking',
             'computación cuántica progreso',
             'edge computing computación borde',
-            
-            # MUNDO Y SOCIEDAD (10)
             'economía global tendencias',
             'geopolítica análisis actual',
             'cambio climático soluciones',
@@ -269,8 +256,6 @@ class CicIA:
             'lingüística evolución idiomas',
             'derecho tecnología regulación',
             'sociología cambios sociales',
-            
-            # DESARROLLO PERSONAL (10)
             'productividad métodos eficaces',
             'aprendizaje acelerado técnicas',
             'creatividad innovación pensamiento',
@@ -281,8 +266,6 @@ class CicIA:
             'mindfulness atención plena',
             'inteligencia emocional',
             'emprendimiento startups casos éxito',
-            
-            # FUTURO (8)
             'biotecnología longevidad',
             'nanotecnología medicina',
             'energía fusión nuclear',
@@ -325,10 +308,9 @@ class CicIA:
         total = db.session.query(db.func.sum(LearningLog.auto_learned)).scalar()
         return int(total) if total else 0
     
-    # ⬇️⬇️⬇️ CAMBIO 2: INTERVALO CORREGIDO A 15 MINUTOS ⬇️⬇️⬇️
     def _continuous_learning_loop(self):
         logger.info("🧠 Iniciando loop de auto-aprendizaje evolutivo...")
-        time.sleep(180)  # 3 minutos inicial
+        time.sleep(180)
         
         while self.learning_active:
             try:
@@ -336,9 +318,8 @@ class CicIA:
             except Exception as e:
                 logger.error(f"Error en auto-aprendizaje: {e}")
             
-            # CAMBIO: De 3 horas (10800) a 15 minutos (900) para Render gratuito
             logger.info("⏰ Auto-aprendizaje: esperando 15 minutos...")
-            time.sleep(900)  # 15 minutos
+            time.sleep(900)
     
     def _perform_auto_learning(self):
         with app.app_context():
@@ -675,10 +656,9 @@ KNOWLEDGE_BASE = {
     }
 }
 
-# Instancia global
 cic_ia = CicIA()
 
-# ========== RUTAS PÚBLICAS (USUARIOS) ==========
+# ========== RUTAS PÚBLICAS ==========
 
 @app.route('/')
 def index():
@@ -804,7 +784,6 @@ def learn():
 
 @app.route('/api/teach', methods=['POST'])
 def teach():
-    """Enseñar a la IA - Público pero con bonus si es dev"""
     try:
         data = request.json
         text = data.get('text', '').strip()
@@ -888,11 +867,10 @@ def evolution_stats():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-# ========== RUTAS DESARROLLADOR (PROTEGIDAS) ==========
+# ========== RUTAS DESARROLLADOR ==========
 
 @app.route('/api/dev/login', methods=['POST'])
 def dev_login():
-    """Login para modo desarrollador"""
     try:
         data = request.json
         username = data.get('username', '').strip()
@@ -916,7 +894,6 @@ def dev_login():
 
 @app.route('/api/dev/logout', methods=['POST'])
 def dev_logout():
-    """Logout desarrollador"""
     token = request.headers.get('X-Dev-Token')
     if token:
         dev_auth.revoke_token(token)
@@ -924,7 +901,6 @@ def dev_logout():
 
 @app.route('/api/dev/verify')
 def dev_verify():
-    """Verificar sesión activa"""
     token = request.headers.get('X-Dev-Token')
     if dev_auth.verify_token(token):
         session = dev_auth.active_sessions.get(token)
@@ -935,11 +911,9 @@ def dev_verify():
         })
     return jsonify({'valid': False}), 401
 
-# ⬇️⬇️⬇️ CAMBIO 1: AGREGAR RUTA /api/evolution/learn-now ⬇️⬇️⬇️
 @app.route('/api/evolution/learn-now', methods=['POST'])
 @dev_required
 def evolution_learn_now():
-    """Forzar aprendizaje - endpoint para el frontend"""
     try:
         threading.Thread(target=cic_ia._perform_auto_learning, daemon=True).start()
         return jsonify({
@@ -953,7 +927,6 @@ def evolution_learn_now():
 @app.route('/api/dev/system/force-learning', methods=['POST'])
 @dev_required
 def dev_force_learning():
-    """Forzar aprendizaje inmediato - endpoint alternativo"""
     try:
         threading.Thread(target=cic_ia._perform_auto_learning, daemon=True).start()
         return jsonify({
@@ -967,7 +940,6 @@ def dev_force_learning():
 @app.route('/api/dev/memories/all')
 @dev_required
 def dev_memories_all():
-    """Todas las memorias (paginado)"""
     try:
         page = request.args.get('page', 1, type=int)
         per_page = request.args.get('per_page', 50, type=int)
@@ -996,7 +968,6 @@ def dev_memories_all():
 @app.route('/api/dev/memories/<int:id>', methods=['DELETE'])
 @dev_required
 def dev_delete_memory(id):
-    """Eliminar memoria específica"""
     try:
         memory = Memory.query.get_or_404(id)
         db.session.delete(memory)
@@ -1009,7 +980,6 @@ def dev_delete_memory(id):
 @app.route('/api/dev/stats/detailed')
 @dev_required
 def dev_stats_detailed():
-    """Estadísticas detalladas del sistema"""
     try:
         today = date.today()
         week_ago = today - timedelta(days=7)
@@ -1052,9 +1022,7 @@ def dev_stats_detailed():
 @app.route('/api/dev/system/clear-db', methods=['POST'])
 @dev_required
 def dev_clear_db():
-    """⚠️ LIMPIAR TODA LA BASE DE DATOS"""
     try:
-        # Verificar confirmación
         confirm = request.headers.get('X-Confirm-Delete')
         if confirm != 'DESTRUIR_TODO':
             return jsonify({
@@ -1062,14 +1030,12 @@ def dev_clear_db():
                 'message': 'Agrega header X-Confirm-Delete: DESTRUIR_TODO'
             }), 400
         
-        # Contar antes de borrar
         counts = {
             'memories': Memory.query.count(),
             'conversations': Conversation.query.count(),
             'logs': LearningLog.query.count()
         }
         
-        # Eliminar todo
         Memory.query.delete()
         Conversation.query.delete()
         LearningLog.query.delete()
@@ -1091,7 +1057,6 @@ def dev_clear_db():
 @app.route('/api/dev/sessions')
 @dev_required
 def dev_sessions():
-    """Listar sesiones activas"""
     try:
         sessions = []
         for token, session in dev_auth.active_sessions.items():
