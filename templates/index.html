@@ -18,6 +18,7 @@
             --sidebar: #1a1a2e;
             --card: #16213e;
             --border: #2d2d44;
+            --warning: #f39c12;
         }
 
         body {
@@ -501,7 +502,7 @@
             gap: 6px;
         }
 
-        .dev-input, .dev-textarea {
+        .dev-input, .dev-textarea, .dev-select {
             width: 100%;
             padding: 10px;
             border-radius: 6px;
@@ -518,6 +519,10 @@
             resize: vertical;
         }
 
+        .dev-select {
+            cursor: pointer;
+        }
+
         .dev-btn {
             width: 100%;
             padding: 10px;
@@ -527,11 +532,17 @@
             font-weight: 600;
             cursor: pointer;
             transition: all 0.3s;
+            margin-bottom: 8px;
         }
 
         .dev-btn.primary {
             background: var(--primary);
             color: var(--sidebar);
+        }
+
+        .dev-btn.warning {
+            background: var(--warning);
+            color: var(--dark);
         }
 
         .dev-btn.danger {
@@ -542,6 +553,11 @@
         .dev-btn.secondary {
             background: var(--border);
             color: white;
+        }
+
+        .dev-btn:hover {
+            opacity: 0.9;
+            transform: translateY(-1px);
         }
 
         .stats-grid {
@@ -654,7 +670,7 @@
             text-transform: uppercase;
         }
 
-        .form-group input {
+        .form-group input, .form-group textarea, .form-group select {
             width: 100%;
             padding: 12px;
             border-radius: 6px;
@@ -662,6 +678,11 @@
             background: var(--dark);
             color: #fff;
             font-size: 14px;
+        }
+
+        .form-group textarea {
+            min-height: 100px;
+            resize: vertical;
         }
 
         .modal-buttons {
@@ -690,6 +711,11 @@
             color: #888;
         }
 
+        .modal-btn.warning {
+            background: var(--warning);
+            color: var(--dark);
+        }
+
         .error-msg {
             color: var(--danger);
             font-size: 12px;
@@ -698,6 +724,17 @@
         }
 
         .error-msg.show {
+            display: block;
+        }
+
+        .success-msg {
+            color: var(--primary);
+            font-size: 12px;
+            margin-top: 10px;
+            display: none;
+        }
+
+        .success-msg.show {
             display: block;
         }
 
@@ -849,6 +886,7 @@
         </div>
         
         <div class="dev-content">
+            <!-- 📝 ENSEÑAR A LA IA (Guardar en Memoria) -->
             <div class="dev-section">
                 <h3>📝 Enseñar a la IA</h3>
                 <textarea class="dev-textarea" id="teach-text" 
@@ -861,6 +899,7 @@
                 <div class="error-msg" id="teach-result"></div>
             </div>
             
+            <!-- 📊 ESTADÍSTICAS -->
             <div class="dev-section">
                 <h3>📊 Estadísticas</h3>
                 <div class="stats-grid">
@@ -886,6 +925,7 @@
                 </button>
             </div>
             
+            <!-- 🔍 MEMORIAS RECIENTES -->
             <div class="dev-section">
                 <h3>🔍 Memorias Recientes</h3>
                 <div class="memories-list" id="memories-list">
@@ -898,12 +938,29 @@
                 </button>
             </div>
             
+            <!-- ⚡ ACCIONES -->
             <div class="dev-section">
                 <h3>⚡ Acciones</h3>
-                <button class="dev-btn primary" onclick="forceLearning()" 
+                
+                <!-- 🚀 BOTÓN 1: Forzar Aprendizaje Automático (Web) -->
+                <button class="dev-btn primary" onclick="forceAutoLearning()" 
                         style="margin-bottom: 8px;">
-                    🚀 Forzar Aprendizaje
+                    🚀 Forzar Aprendizaje (Web)
                 </button>
+                <small style="color: #888; display: block; margin-bottom: 12px; font-size: 10px;">
+                    Busca y aprende automáticamente de internet
+                </small>
+                
+                <!-- 🎯 BOTÓN 2: Forzar Aprendizaje Manual (NUEVO) -->
+                <button class="dev-btn warning" onclick="openManualLearningModal()" 
+                        style="margin-bottom: 8px;">
+                    ✍️ Forzar Aprendizaje Manual
+                </button>
+                <small style="color: #888; display: block; margin-bottom: 12px; font-size: 10px;">
+                    Tú proporcionas el contenido a aprender
+                </small>
+                
+                <!-- 🗑️ BOTÓN 3: Limpiar Todo -->
                 <button class="dev-btn danger" onclick="clearDatabase()">
                     🗑️ Limpiar Todo
                 </button>
@@ -932,6 +989,48 @@
             <div class="modal-buttons">
                 <button class="modal-btn primary" onclick="devLogin()">Ingresar</button>
                 <button class="modal-btn secondary" onclick="closeDevLogin()">Cancelar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 🎯 NUEVO MODAL: Forzar Aprendizaje Manual -->
+    <div class="modal-overlay" id="manual-learning-modal">
+        <div class="modal-box" style="width: 450px; max-height: 80vh; overflow-y: auto;">
+            <h3>✍️ Forzar Aprendizaje Manual</h3>
+            <p>Ingresa el contenido que quieres que la IA aprenda</p>
+            
+            <div class="form-group">
+                <label>Contenido *</label>
+                <textarea id="manual-content" placeholder="Escribe aquí el contenido completo que quieres que la IA aprenda...
+                
+Ejemplo: El cambio climático es el fenómeno de aumento de la temperatura global causado principalmente por la acumulación de gases de efecto invernadero en la atmósfera..."></textarea>
+            </div>
+            
+            <div class="form-group">
+                <label>Tema *</label>
+                <input type="text" id="manual-topic" placeholder="Ej: Cambio climático, Inteligencia Artificial, etc.">
+            </div>
+            
+            <div class="form-group">
+                <label>URL Fuente (opcional)</label>
+                <input type="text" id="manual-url" placeholder="https://ejemplo.com/articulo">
+            </div>
+            
+            <div class="form-group">
+                <label>Prioridad</label>
+                <select id="manual-priority" style="width: 100%; padding: 12px; border-radius: 6px; border: 1px solid var(--border); background: var(--dark); color: #fff;">
+                    <option value="1">🟢 Normal - Procesar cuando sea posible</option>
+                    <option value="2">🟡 Alta - Procesar pronto</option>
+                    <option value="3">🔴 Urgente - Procesar inmediatamente</option>
+                </select>
+            </div>
+            
+            <div class="error-msg" id="manual-error"></div>
+            <div class="success-msg" id="manual-success"></div>
+            
+            <div class="modal-buttons">
+                <button class="modal-btn warning" onclick="submitManualLearning()">📥 Agregar a Cola</button>
+                <button class="modal-btn secondary" onclick="closeManualLearningModal()">Cancelar</button>
             </div>
         </div>
     </div>
@@ -969,7 +1068,7 @@
                 'web': '🔍 Búsqueda Web activada. Pregunta sobre cualquier tema actual.',
                 'docs': '📎 Puedes subir PDFs, imágenes o Word para analizar.',
                 'semantic': '🧠 Análisis profundo activado.',
-                'learning': '📈 Aprendizaje continuo activo (cada 3 horas).'
+                'learning': '📈 Aprendizaje continuo activo (cada 2 horas).'
             };
             addMessage('bot', msgs[tool]);
             showChat();
@@ -1240,19 +1339,110 @@
             }
         }
 
-        async function forceLearning() {
-            if (!confirm('¿Forzar aprendizaje ahora?')) return;
+        // 🚀 BOTÓN 1: Forzar Aprendizaje Automático (Web)
+        async function forceAutoLearning() {
+            if (!confirm('¿Forzar aprendizaje automático ahora?\n\nLa IA buscará información en internet sobre un tema aleatorio.')) return;
             
             try {
                 const res = await fetch('/api/dev/system/force-learning', {
                     method: 'POST',
-                    headers: {'X-Dev-Token': devToken}
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Dev-Token': devToken
+                    },
+                    body: JSON.stringify({})  // Tema aleatorio
                 });
                 const data = await res.json();
-                alert(data.success ? '✅ ' + data.message : '❌ Error');
+                alert(data.success ? '✅ ' + data.message : '❌ Error: ' + (data.error || 'Desconocido'));
                 refreshStats();
             } catch (e) {
-                alert('❌ Error de conexión');
+                alert('❌ Error de conexión: ' + e.message);
+            }
+        }
+
+        // 🎯 BOTÓN 2: Forzar Aprendizaje Manual - Abrir Modal
+        function openManualLearningModal() {
+            document.getElementById('manual-learning-modal').classList.add('show');
+            document.getElementById('manual-content').value = '';
+            document.getElementById('manual-topic').value = '';
+            document.getElementById('manual-url').value = '';
+            document.getElementById('manual-priority').value = '1';
+            document.getElementById('manual-error').classList.remove('show');
+            document.getElementById('manual-success').classList.remove('show');
+        }
+
+        function closeManualLearningModal() {
+            document.getElementById('manual-learning-modal').classList.remove('show');
+        }
+
+        // 🎯 Enviar Aprendizaje Manual
+        async function submitManualLearning() {
+            const content = document.getElementById('manual-content').value.trim();
+            const topic = document.getElementById('manual-topic').value.trim();
+            const url = document.getElementById('manual-url').value.trim();
+            const priority = document.getElementById('manual-priority').value;
+            const errorDiv = document.getElementById('manual-error');
+            const successDiv = document.getElementById('manual-success');
+
+            // Validaciones
+            if (!content) {
+                errorDiv.textContent = '❌ Debes ingresar el contenido a aprender';
+                errorDiv.classList.add('show');
+                successDiv.classList.remove('show');
+                return;
+            }
+
+            if (!topic) {
+                errorDiv.textContent = '❌ Debes especificar un tema';
+                errorDiv.classList.add('show');
+                successDiv.classList.remove('show');
+                return;
+            }
+
+            errorDiv.classList.remove('show');
+            successDiv.textContent = '⏳ Enviando...';
+            successDiv.classList.add('show');
+
+            try {
+                const res = await fetch('/api/dev/learning/manual', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Dev-Token': devToken
+                    },
+                    body: JSON.stringify({
+                        content: content,
+                        topic: topic,
+                        source_url: url || null,
+                        priority: parseInt(priority)
+                    })
+                });
+
+                const data = await res.json();
+
+                if (data.success) {
+                    successDiv.textContent = '✅ ' + data.message;
+                    successDiv.classList.add('show');
+                    errorDiv.classList.remove('show');
+                    
+                    // Limpiar formulario después de 2 segundos
+                    setTimeout(() => {
+                        document.getElementById('manual-content').value = '';
+                        document.getElementById('manual-topic').value = '';
+                        document.getElementById('manual-url').value = '';
+                        closeManualLearningModal();
+                    }, 2000);
+                    
+                    refreshStats();
+                } else {
+                    errorDiv.textContent = '❌ Error: ' + (data.error || 'Desconocido');
+                    errorDiv.classList.add('show');
+                    successDiv.classList.remove('show');
+                }
+            } catch (e) {
+                errorDiv.textContent = '❌ Error de conexión: ' + e.message;
+                errorDiv.classList.add('show');
+                successDiv.classList.remove('show');
             }
         }
 
@@ -1273,6 +1463,18 @@
                 refreshStats();
             } catch (e) {
                 alert('❌ Error');
+            }
+        }
+
+        // Cerrar modales al hacer clic fuera
+        window.onclick = function(event) {
+            const loginModal = document.getElementById('dev-login-modal');
+            const manualModal = document.getElementById('manual-learning-modal');
+            if (event.target === loginModal) {
+                closeDevLogin();
+            }
+            if (event.target === manualModal) {
+                closeManualLearningModal();
             }
         }
     </script>
