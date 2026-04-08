@@ -1036,12 +1036,27 @@ Ejemplo: El cambio climático es el fenómeno de aumento de la temperatura globa
     </div>
 
     <script>
-        // Variables globales
+        // ==========================================
+        // VARIABLES GLOBALES
+        // ==========================================
         let currentMode = 'balanced';
         let isDevMode = false;
-        let devToken = null;
-        let devUsername = null;
+        let devToken = localStorage.getItem('cic_ia_dev_token') || null;
+        let devUsername = localStorage.getItem('cic_ia_dev_username') || null;
 
+        // ==========================================
+        // INICIALIZACIÓN
+        // ==========================================
+        document.addEventListener('DOMContentLoaded', function() {
+            // Si hay token guardado, verificar que siga válido
+            if (devToken) {
+                verifyDevToken();
+            }
+        });
+
+        // ==========================================
+        // FUNCIONES DE CHAT
+        // ==========================================
         function setMode(mode) {
             currentMode = mode;
             document.querySelectorAll('.mode-btn').forEach(btn => {
@@ -1172,7 +1187,42 @@ Ejemplo: El cambio climático es el fenómeno de aumento de la temperatura globa
             addMessage('bot', 'Conversación cargada del historial.');
         }
 
-        // MODO DESARROLLADOR
+        // ==========================================
+        // MODO DESARROLLADOR - MEJORADO
+        // ==========================================
+        async function verifyDevToken() {
+            try {
+                const res = await fetch('/api/dev/verify', {
+                    headers: {'X-Dev-Token': devToken}
+                });
+                
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.valid) {
+                        isDevMode = true;
+                        devUsername = data.username;
+                        activateDevMode();
+                        return;
+                    }
+                }
+                
+                // Token inválido, limpiar
+                clearDevSession();
+                
+            } catch (e) {
+                console.error('Error verificando token:', e);
+                clearDevSession();
+            }
+        }
+
+        function clearDevSession() {
+            devToken = null;
+            devUsername = null;
+            localStorage.removeItem('cic_ia_dev_token');
+            localStorage.removeItem('cic_ia_dev_username');
+            isDevMode = false;
+        }
+
         function openDevLogin() {
             if (isDevMode) {
                 openDevPanel();
@@ -1202,9 +1252,13 @@ Ejemplo: El cambio climático es el fenómeno de aumento de la temperatura globa
                 const data = await res.json();
                 
                 if (data.success) {
-                    isDevMode = true;
+                    // ✅ GUARDAR EN LOCALSTORAGE
                     devToken = data.token;
                     devUsername = data.username;
+                    localStorage.setItem('cic_ia_dev_token', devToken);
+                    localStorage.setItem('cic_ia_dev_username', devUsername);
+                    
+                    isDevMode = true;
                     closeDevLogin();
                     activateDevMode();
                     openDevPanel();
@@ -1220,29 +1274,33 @@ Ejemplo: El cambio climático es el fenómeno de aumento de la temperatura globa
         function activateDevMode() {
             document.getElementById('dev-login-btn').classList.add('hidden');
             document.getElementById('dev-indicator').classList.add('active');
-            document.getElementById('dev-username').textContent = devUsername;
+            document.getElementById('dev-username').textContent = devUsername || 'Admin';
             document.getElementById('mode-label').textContent = 'DEV';
             document.getElementById('mode-label').style.color = 'var(--danger)';
         }
 
-        function switchToUserMode() {
-            fetch('/api/dev/logout', {
-                method: 'POST',
-                headers: {'X-Dev-Token': devToken}
-            }).catch(() => {});
+        async function switchToUserMode() {
+            if (devToken) {
+                try {
+                    await fetch('/api/dev/logout', {
+                        method: 'POST',
+                        headers: {'X-Dev-Token': devToken}
+                    });
+                } catch (e) {
+                    console.error('Error en logout:', e);
+                }
+            }
             
-            isDevMode = false;
+            clearDevSession();
             closeDevPanel();
             document.getElementById('dev-login-btn').classList.remove('hidden');
             document.getElementById('dev-indicator').classList.remove('active');
             document.getElementById('mode-label').textContent = 'Chat';
             document.getElementById('mode-label').style.color = 'var(--primary)';
-            devToken = null;
-            devUsername = null;
         }
 
         function openDevPanel() {
-            if (!isDevMode) {
+            if (!isDevMode || !devToken) {
                 openDevLogin();
                 return;
             }
@@ -1254,8 +1312,12 @@ Ejemplo: El cambio climático es el fenómeno de aumento de la temperatura globa
             document.getElementById('dev-panel').classList.remove('open');
         }
 
-        // FUNCIONES DEV
+        // ==========================================
+        // FUNCIONES DEV - CON VERIFICACIÓN DE TOKEN
+        // ==========================================
         async function teachAI() {
+            if (!checkDevAuth()) return;
+            
             const text = document.getElementById('teach-text').value.trim();
             const topic = document.getElementById('teach-topic').value.trim() || 'manual';
             const result = document.getElementById('teach-result');
@@ -1280,6 +1342,12 @@ Ejemplo: El cambio climático es el fenómeno de aumento de la temperatura globa
                     body: JSON.stringify({text, topic, source: 'developer'})
                 });
                 
+                // ✅ MANEJAR ERROR 401
+                if (res.status === 401) {
+                    handleAuthError();
+                    return;
+                }
+                
                 const data = await res.json();
                 
                 if (data.error) throw new Error(data.error);
@@ -1297,10 +1365,18 @@ Ejemplo: El cambio climático es el fenómeno de aumento de la temperatura globa
         }
 
         async function refreshStats() {
+            if (!checkDevAuth()) return;
+            
             try {
                 const res = await fetch('/api/dev/stats/detailed', {
                     headers: {'X-Dev-Token': devToken}
                 });
+                
+                if (res.status === 401) {
+                    handleAuthError();
+                    return;
+                }
+                
                 const data = await res.json();
                 
                 document.getElementById('stat-total').textContent = data.general?.total_memories || 0;
@@ -1313,6 +1389,8 @@ Ejemplo: El cambio climático es el fenómeno de aumento de la temperatura globa
         }
 
         async function loadMemories() {
+            if (!checkDevAuth()) return;
+            
             const list = document.getElementById('memories-list');
             list.innerHTML = '<p style="color: #666; text-align: center;">⏳...</p>';
 
@@ -1320,6 +1398,12 @@ Ejemplo: El cambio climático es el fenómeno de aumento de la temperatura globa
                 const res = await fetch('/api/dev/memories/all?per_page=10', {
                     headers: {'X-Dev-Token': devToken}
                 });
+                
+                if (res.status === 401) {
+                    handleAuthError();
+                    return;
+                }
+                
                 const data = await res.json();
                 
                 if (!data.memories?.length) {
@@ -1341,6 +1425,8 @@ Ejemplo: El cambio climático es el fenómeno de aumento de la temperatura globa
 
         // 🚀 BOTÓN 1: Forzar Aprendizaje Automático (Web)
         async function forceAutoLearning() {
+            if (!checkDevAuth()) return;
+            
             if (!confirm('¿Forzar aprendizaje automático ahora?\n\nLa IA buscará información en internet sobre un tema aleatorio.')) return;
             
             try {
@@ -1350,8 +1436,14 @@ Ejemplo: El cambio climático es el fenómeno de aumento de la temperatura globa
                         'Content-Type': 'application/json',
                         'X-Dev-Token': devToken
                     },
-                    body: JSON.stringify({})  // Tema aleatorio
+                    body: JSON.stringify({})
                 });
+                
+                if (res.status === 401) {
+                    handleAuthError();
+                    return;
+                }
+                
                 const data = await res.json();
                 alert(data.success ? '✅ ' + data.message : '❌ Error: ' + (data.error || 'Desconocido'));
                 refreshStats();
@@ -1362,6 +1454,11 @@ Ejemplo: El cambio climático es el fenómeno de aumento de la temperatura globa
 
         // 🎯 BOTÓN 2: Forzar Aprendizaje Manual - Abrir Modal
         function openManualLearningModal() {
+            if (!checkDevAuth()) {
+                openDevLogin();
+                return;
+            }
+            
             document.getElementById('manual-learning-modal').classList.add('show');
             document.getElementById('manual-content').value = '';
             document.getElementById('manual-topic').value = '';
@@ -1375,8 +1472,10 @@ Ejemplo: El cambio climático es el fenómeno de aumento de la temperatura globa
             document.getElementById('manual-learning-modal').classList.remove('show');
         }
 
-        // 🎯 Enviar Aprendizaje Manual
+        // 🎯 Enviar Aprendizaje Manual - CORREGIDO
         async function submitManualLearning() {
+            if (!checkDevAuth()) return;
+            
             const content = document.getElementById('manual-content').value.trim();
             const topic = document.getElementById('manual-topic').value.trim();
             const url = document.getElementById('manual-url').value.trim();
@@ -1418,6 +1517,12 @@ Ejemplo: El cambio climático es el fenómeno de aumento de la temperatura globa
                     })
                 });
 
+                // ✅ MANEJAR ERROR 401
+                if (res.status === 401) {
+                    handleAuthError();
+                    return;
+                }
+
                 const data = await res.json();
 
                 if (data.success) {
@@ -1447,6 +1552,8 @@ Ejemplo: El cambio climático es el fenómeno de aumento de la temperatura globa
         }
 
         async function clearDatabase() {
+            if (!checkDevAuth()) return;
+            
             if (!confirm('⚠️ ¿BORRAR TODA LA BASE DE DATOS?')) return;
             if (!confirm('🔴 ¿CONFIRMAS? Esta acción NO se puede deshacer.')) return;
             
@@ -1458,12 +1565,45 @@ Ejemplo: El cambio climático es el fenómeno de aumento de la temperatura globa
                         'X-Confirm-Delete': 'DESTRUIR_TODO'
                     }
                 });
+                
+                if (res.status === 401) {
+                    handleAuthError();
+                    return;
+                }
+                
                 const data = await res.json();
                 alert(data.success ? '🗑️ ' + data.message : '❌ ' + data.error);
                 refreshStats();
             } catch (e) {
                 alert('❌ Error');
             }
+        }
+
+        // ==========================================
+        // FUNCIONES AUXILIARES
+        // ==========================================
+        
+        // ✅ VERIFICAR AUTENTICACIÓN
+        function checkDevAuth() {
+            if (!isDevMode || !devToken) {
+                alert('⚠️ Sesión expirada. Por favor inicia sesión nuevamente.');
+                openDevLogin();
+                return false;
+            }
+            return true;
+        }
+
+        // ✅ MANEJAR ERROR DE AUTENTICACIÓN
+        function handleAuthError() {
+            clearDevSession();
+            document.getElementById('dev-panel').classList.remove('open');
+            document.getElementById('dev-login-btn').classList.remove('hidden');
+            document.getElementById('dev-indicator').classList.remove('active');
+            document.getElementById('mode-label').textContent = 'Chat';
+            document.getElementById('mode-label').style.color = 'var(--primary)';
+            
+            alert('⚠️ Tu sesión ha expirado. Por favor inicia sesión nuevamente.');
+            openDevLogin();
         }
 
         // Cerrar modales al hacer clic fuera
