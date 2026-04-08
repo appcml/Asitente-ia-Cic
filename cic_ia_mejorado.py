@@ -1,7 +1,6 @@
 """
 Cic_IA - Asistente Inteligente EVOLUTIVO con RED NEURONAL
-Archivo principal - Versión 6.4.3 COMPLETO Y CORREGIDO
-Auto-aprendizaje cada 2 horas + Forzado manual + ML
+Versión 6.4.4 - CORREGIDA Y FUNCIONAL
 """
 
 from flask import Flask
@@ -45,7 +44,6 @@ else:
 
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-# Configuración de uploads
 UPLOAD_FOLDER = 'uploads'
 ALLOWED_EXTENSIONS = {'txt', 'pdf', 'png', 'jpg', 'jpeg', 'gif', 'doc', 'docx', 'py', 'js', 'html', 'css', 'json'}
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
@@ -53,14 +51,12 @@ app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
 
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-# Credenciales DESARROLLADOR
 DEV_USERNAME = os.environ.get('DEV_USERNAME', 'admin')
 DEV_PASSWORD = os.environ.get('DEV_PASSWORD', 'CicDev2024!')
 
-# Inicializar SQLAlchemy
 db = SQLAlchemy(app)
 
-# ========== MODELOS BASE DE DATOS ==========
+# ========== MODELOS ==========
 
 class Memory(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -113,7 +109,6 @@ class KnowledgeEvolution(db.Model):
     source = db.Column(db.String(50))
 
 class ManualLearningQueue(db.Model):
-    """Cola de aprendizaje manual pendiente"""
     id = db.Column(db.Integer, primary_key=True)
     content = db.Column(db.Text, nullable=False)
     topic = db.Column(db.String(200))
@@ -123,10 +118,8 @@ class ManualLearningQueue(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     processed_at = db.Column(db.DateTime)
 
-# Crear tablas
 with app.app_context():
     db.create_all()
-    print("✅ Base de datos inicializada")
 
 # ========== KNOWLEDGE BASE (DEFINIDO ANTES DE USARSE) ==========
 
@@ -168,16 +161,9 @@ KNOWLEDGE_BASE = {
     }
 }
 
-# ========== RED NEURONAL PARA CIC_IA ==========
+# ========== RED NEURONAL ==========
 
 class CicNeuralNetwork:
-    """
-    Red Neuronal integrada para Cic_IA.
-    Usa MLPClassifier de scikit-learn para:
-    - Clasificación de intenciones del usuario
-    - Predicción de relevancia de respuestas
-    """
-    
     def __init__(self):
         self.model_intent = None
         self.model_relevance = None
@@ -190,11 +176,9 @@ class CicNeuralNetwork:
         self._load_or_create_models()
     
     def _ensure_model_dir(self):
-        """Crea directorio para modelos si no existe"""
         os.makedirs('models', exist_ok=True)
     
     def _load_or_create_models(self):
-        """Carga modelos existentes o crea nuevos"""
         try:
             if os.path.exists(self.model_path):
                 with open(self.model_path, 'rb') as f:
@@ -211,7 +195,6 @@ class CicNeuralNetwork:
             self._create_new_models()
     
     def _create_new_models(self):
-        """Crea nuevos modelos de red neuronal"""
         try:
             from sklearn.neural_network import MLPClassifier
             from sklearn.feature_extraction.text import TfidfVectorizer
@@ -243,7 +226,6 @@ class CicNeuralNetwork:
             self.model_intent = None
     
     def train(self, texts, labels):
-        """Entrena la red neuronal con nuevos datos"""
         if self.model_intent is None:
             return False
         
@@ -261,7 +243,6 @@ class CicNeuralNetwork:
             return False
     
     def predict_intent(self, text):
-        """Predice la intención del usuario"""
         if not self.is_trained or self.model_intent is None:
             return {'intent': 'unknown', 'confidence': 0.0}
         
@@ -275,7 +256,6 @@ class CicNeuralNetwork:
             return {'intent': 'unknown', 'confidence': 0.0}
     
     def predict_relevance(self, query, memory_content):
-        """Predice qué tan relevante es una memoria para una consulta"""
         if not self.is_trained or self.model_relevance is None:
             return 0.5
         
@@ -289,7 +269,6 @@ class CicNeuralNetwork:
             return 0.5
     
     def _save_models(self):
-        """Guarda los modelos entrenados"""
         try:
             with open(self.model_path, 'wb') as f:
                 pickle.dump({
@@ -303,7 +282,6 @@ class CicNeuralNetwork:
             logger.error(f"Error guardando modelos: {e}")
     
     def get_stats(self):
-        """Retorna estadísticas de la red neuronal"""
         return {
             'is_trained': self.is_trained,
             'training_samples': len(self.training_data),
@@ -312,10 +290,9 @@ class CicNeuralNetwork:
             'layers_relevance': [64, 32] if self.model_relevance else []
         }
 
-# Instancia global de red neuronal
 neural_net = CicNeuralNetwork()
 
-# ========== SERVICIO DE AUTENTICACIÓN ==========
+# ========== AUTENTICACIÓN ==========
 
 class DevAuthService:
     def __init__(self):
@@ -437,56 +414,31 @@ class CicIA:
         self.neural_net = neural_net
         
         self.auto_learning_topics = [
-            'física cuántica avances 2024',
-            'biología sintética descubrimientos',
-            'neurociencia cognitiva',
-            'matemáticas teoría nuevas',
-            'química materiales revolucionarios',
-            'astronomía exoplanetas',
-            'paleontología fósiles recientes',
-            'genética edición CRISPR',
-            'psicología conducta humana',
-            'filosofía mente artificial',
-            'inteligencia artificial noticias 2024',
-            'machine learning avances',
-            'desarrollo software arquitectura',
-            'python programación novedades',
-            'código limpio mejores prácticas',
-            'DevOps CI/CD tendencias',
-            'blockchain aplicaciones reales',
-            'Internet de las cosas IoT',
-            'realidad virtual aumentada',
-            'ciberseguridad ética hacking',
-            'computación cuántica progreso',
-            'edge computing computación borde',
-            'economía global tendencias',
-            'geopolítica análisis actual',
-            'cambio climático soluciones',
-            'educación innovación pedagógica',
-            'salud mental bienestar',
-            'arte inteligencia artificial',
-            'historia civilizaciones antiguas',
-            'lingüística evolución idiomas',
-            'derecho tecnología regulación',
-            'sociología cambios sociales',
-            'productividad métodos eficaces',
-            'aprendizaje acelerado técnicas',
-            'creatividad innovación pensamiento',
-            'comunicación persuasión',
-            'liderazgo gestión equipos',
-            'finanzas personales inversión',
-            'negociación conflictos resolución',
-            'mindfulness atención plena',
-            'inteligencia emocional',
-            'emprendimiento startups casos éxito',
-            'biotecnología longevidad',
-            'nanotecnología medicina',
-            'energía fusión nuclear',
-            'transporte eléctrico aviones',
-            'espacio colonización',
-            'metaverso evolución',
-            'robótica humanoides',
-            'transhumanismo mejoramiento',
+            'física cuántica avances 2024', 'biología sintética descubrimientos',
+            'neurociencia cognitiva', 'matemáticas teoría nuevas',
+            'química materiales revolucionarios', 'astronomía exoplanetas',
+            'paleontología fósiles recientes', 'genética edición CRISPR',
+            'psicología conducta humana', 'filosofía mente artificial',
+            'inteligencia artificial noticias 2024', 'machine learning avances',
+            'desarrollo software arquitectura', 'python programación novedades',
+            'código limpio mejores prácticas', 'DevOps CI/CD tendencias',
+            'blockchain aplicaciones reales', 'Internet de las cosas IoT',
+            'realidad virtual aumentada', 'ciberseguridad ética hacking',
+            'computación cuántica progreso', 'edge computing computación borde',
+            'economía global tendencias', 'geopolítica análisis actual',
+            'cambio climático soluciones', 'educación innovación pedagógica',
+            'salud mental bienestar', 'arte inteligencia artificial',
+            'historia civilizaciones antiguas', 'lingüística evolución idiomas',
+            'derecho tecnología regulación', 'sociología cambios sociales',
+            'productividad métodos eficaces', 'aprendizaje acelerado técnicas',
+            'creatividad innovación pensamiento', 'comunicación persuasión',
+            'liderazgo gestión equipos', 'finanzas personales inversión',
+            'negociación conflictos resolución', 'mindfulness atención plena',
+            'inteligencia emocional', 'emprendimiento startups casos éxito',
+            'biotecnología longevidad', 'nanotecnología medicina',
+            'energía fusión nuclear', 'transporte eléctrico aviones',
+            'espacio colonización', 'metaverso evolución',
+            'robótica humanoides', 'transhumanismo mejoramiento',
         ]
         
         with app.app_context():
@@ -629,7 +581,6 @@ class CicIA:
                 return False
     
     def add_manual_learning(self, content, topic=None, source_url=None, priority=1):
-        """Agrega contenido manual a la cola de aprendizaje"""
         try:
             with app.app_context():
                 queue_item = ManualLearningQueue(
@@ -649,7 +600,6 @@ class CicIA:
             return {'success': False, 'error': str(e)}
     
     def _process_manual_learning_queue(self):
-        """Procesa la cola de aprendizaje manual cada 5 minutos"""
         while self.learning_active:
             try:
                 with app.app_context():
@@ -735,12 +685,9 @@ class CicIA:
                 logger.error(f"❌ Error en auto-learn: {e}")
             time.sleep(3600)
     
-    # ========== FUNCIÓN DE CHAT PRINCIPAL (CORREGIDA) ==========
+    # ✅ CORREGIDO: Función renombrada de chat() a process_chat()
     def process_chat(self, user_input, mode='balanced', attachment_info=None):
-        """
-        Procesa el mensaje del usuario y genera una respuesta.
-        Esta es la función principal de chat que reemplaza el endpoint anterior.
-        """
+        """Procesa el mensaje del usuario y genera una respuesta."""
         input_lower = user_input.lower().strip()
         
         # Verificar si es pregunta de fecha/hora
@@ -805,7 +752,6 @@ class CicIA:
                                          intent=intent_info.get('intent', 'unknown'))
     
     def _find_relevant_memories_neural(self, query, memories):
-        """Usa la red neuronal para encontrar memorias relevantes"""
         relevant = []
         for mem in memories:
             relevance = self.neural_net.predict_relevance(query, mem.content)
@@ -819,10 +765,8 @@ class CicIA:
         return [mem for mem, _ in relevant[:5]]
     
     def _search_and_learn(self, query):
-        """Busca en web y guarda en memoria"""
         try:
             with app.app_context():
-                # Verificar cache
                 cached = WebSearchCache.query.filter_by(query=query).first()
                 if cached and cached.expires_at > datetime.utcnow():
                     return cached.results
@@ -837,7 +781,6 @@ class CicIA:
                     summary += f"{i}. **{result['title']}**\n"
                     summary += f"   {result['snippet']}\n\n"
                     
-                    # Guardar en memoria
                     memory = Memory(
                         content=result['snippet'],
                         source='web_search',
@@ -846,7 +789,6 @@ class CicIA:
                     )
                     db.session.add(memory)
                 
-                # Guardar en cache
                 cache_entry = WebSearchCache(
                     query=query,
                     results={'summary': summary},
@@ -861,7 +803,6 @@ class CicIA:
             return None
     
     def _find_best_topic(self, text):
-        """Encuentra el mejor tema en la knowledge base"""
         best_score = 0
         best_topic = 'default'
         for topic, data in KNOWLEDGE_BASE.items():
@@ -874,7 +815,6 @@ class CicIA:
         return best_topic if best_score >= 2 else None
     
     def _find_relevant_memories(self, text, memories):
-        """Encuentra memorias relevantes por similitud de palabras"""
         relevant = []
         text_words = set(text.split())
         for mem in memories:
@@ -887,7 +827,6 @@ class CicIA:
     
     def _save_conversation(self, user_msg, bot_resp, source, 
                           attachment_info=None, memories_count=0, sources_used=None, intent='unknown'):
-        """Guarda la conversación en la base de datos"""
         with app.app_context():
             conv = Conversation(
                 user_message=user_msg,
@@ -898,7 +837,6 @@ class CicIA:
             )
             db.session.add(conv)
             
-            # Actualizar log de aprendizaje
             today = date.today()
             log = LearningLog.query.filter_by(date=today).first()
             if not log:
@@ -921,12 +859,10 @@ class CicIA:
         }
     
     def _is_date_time_question(self, text):
-        """Detecta si es pregunta de fecha u hora"""
         keywords = ['qué día', 'qué hora', 'fecha', 'hora actual', 'hoy es', 'dia es', 'día es']
         return any(kw in text for kw in keywords)
     
     def _get_dynamic_date_response(self, text):
-        """Genera respuesta de fecha/hora dinámica"""
         now = datetime.now()
         dias = ['lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo']
         meses = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
@@ -938,7 +874,6 @@ class CicIA:
         return f"{fecha}\n{hora}"
     
     def get_learning_stats(self):
-        """Obtiene estadísticas de aprendizaje"""
         with app.app_context():
             total_memories = Memory.query.count()
             by_source = {
@@ -985,7 +920,7 @@ class CicIA:
                 }
             }
 
-# Instancia global de CicIA
+# Instancia global
 cic_ia = CicIA()
 
 # ========== RUTAS PÚBLICAS ==========
@@ -1007,10 +942,10 @@ def health_check():
         'features': ['chat', 'web_search', 'auto_learning', 'memory', 'evolution', '50_topics', 'neural_network', 'manual_learning']
     })
 
-# ✅ CORREGIDO: Endpoint de chat con nombre único
+# ✅ CORREGIDO: Endpoint renombrado a api_chat para evitar conflicto
 @app.route('/api/chat', methods=['POST'])
 def api_chat():
-    """Endpoint principal de chat - CORREGIDO"""
+    """Endpoint principal de chat"""
     try:
         data = request.json
         message = data.get('message', '').strip()
@@ -1019,12 +954,15 @@ def api_chat():
         if not message:
             return jsonify({'error': 'Mensaje vacío'}), 400
         
-        # Usar la instancia global cic_ia para procesar el chat
+        # ✅ CORREGIDO: Llamar a process_chat en lugar de chat
         result = cic_ia.process_chat(message, mode=mode)
         return jsonify(result)
     except Exception as e:
         logger.error(f"❌ Error en endpoint /api/chat: {e}")
-        return jsonify({'error': str(e), 'response': 'Lo siento, ocurrió un error procesando tu mensaje.'}), 500
+        return jsonify({
+            'error': str(e), 
+            'response': 'Lo siento, ocurrió un error procesando tu mensaje. Por favor intenta de nuevo.'
+        }), 500
 
 @app.route('/api/web-search', methods=['POST'])
 def web_search():
@@ -1246,24 +1184,18 @@ def dev_verify():
         })
     return jsonify({'valid': False}), 401
 
-# 🎯 CORREGIDO: Forzar Aprendizaje Manual
 @app.route('/api/dev/learning/manual', methods=['POST'])
 @dev_required
 def dev_manual_learning():
-    """
-    Endpoint para agregar contenido manual a la cola de aprendizaje.
-    """
     try:
         data = request.get_json()
         
-        # ✅ CORREGIDO: Manejar caso donde data es None
         if not data:
             return jsonify({
                 'success': False,
                 'error': 'No se recibieron datos'
             }), 400
         
-        # ✅ CORREGIDO: Usar or '' para evitar None
         content = (data.get('content') or '').strip()
         topic = (data.get('topic') or '').strip()
         source_url = (data.get('source_url') or '').strip() or None
@@ -1278,7 +1210,6 @@ def dev_manual_learning():
         if not topic:
             topic = content[:50] + '...' if len(content) > 50 else content
         
-        # Validar prioridad
         try:
             priority = int(priority)
             if priority not in [1, 2, 3]:
@@ -1314,7 +1245,6 @@ def dev_manual_learning():
 @app.route('/api/dev/learning/manual/queue', methods=['GET'])
 @dev_required
 def dev_manual_learning_queue():
-    """Obtiene el estado de la cola de aprendizaje manual"""
     try:
         with app.app_context():
             pending = ManualLearningQueue.query.filter_by(status='pending').count()
@@ -1349,7 +1279,6 @@ def dev_manual_learning_queue():
 @app.route('/api/dev/neural/train', methods=['POST'])
 @dev_required
 def dev_train_neural_network():
-    """Entrena la red neuronal con datos de conversaciones previas"""
     try:
         with app.app_context():
             conversations = Conversation.query.order_by(
@@ -1398,7 +1327,6 @@ def dev_train_neural_network():
 @app.route('/api/dev/neural/stats', methods=['GET'])
 @dev_required
 def dev_neural_stats():
-    """Obtiene estadísticas de la red neuronal"""
     return jsonify(neural_net.get_stats())
 
 @app.route('/api/dev/learning/set-topic', methods=['POST'])
@@ -1453,7 +1381,6 @@ def evolution_learn_now():
             daemon=True
         ).start()
         
-        # ✅ CORREGIDO: Sin f-string anidada
         message_text = '🤖 Auto-aprendizaje iniciado manualmente'
         if topic:
             message_text += f' sobre "{topic}"'
