@@ -1,6 +1,6 @@
 """
 Cic_IA - Asistente Inteligente EVOLUTIVO con RED NEURONAL
-Archivo principal - Versión 6.4.2 Compatible + Neural Network
+Archivo principal - Versión 6.4.3 COMPLETO Y CORREGIDO
 Auto-aprendizaje cada 2 horas + Forzado manual + ML
 """
 
@@ -128,6 +128,46 @@ with app.app_context():
     db.create_all()
     print("✅ Base de datos inicializada")
 
+# ========== KNOWLEDGE BASE (DEFINIDO ANTES DE USARSE) ==========
+
+KNOWLEDGE_BASE = {
+    'ia': {
+        'respuestas': [
+            "La Inteligencia Artificial (IA) es la simulación de procesos de inteligencia humana por sistemas informáticos.",
+            "IA permite a las máquinas aprender, razonar y resolver problemas de manera autónoma."
+        ],
+        'keywords': ['inteligencia artificial', 'ia', 'ai', 'machine learning', 'deep learning']
+    },
+    'python': {
+        'respuestas': [
+            "Python es el lenguaje líder en IA por su sintaxis clara y bibliotecas como TensorFlow y PyTorch.",
+            "Python fue creado por Guido van Rossum y es ideal para prototipado rápido."
+        ],
+        'keywords': ['python', 'programación', 'código', 'desarrollo']
+    },
+    'hola': {
+        'respuestas': [
+            "¡Hola! Soy Cic_IA, tu asistente inteligente con red neuronal integrada. ¿En qué puedo ayudarte hoy?",
+            "¡Bienvenido! Estoy lista para aprender y asistirte con mi red neuronal."
+        ],
+        'keywords': ['hola', 'buenas', 'hey', 'saludos']
+    },
+    'cic_ia': {
+        'respuestas': [
+            "Soy Cic_IA, una inteligencia artificial evolutiva con red neuronal integrada para mejorar mis respuestas.",
+            "Cic_IA aprende automáticamente cada 2 horas y usa una red neuronal para entender mejor tus preguntas."
+        ],
+        'keywords': ['quién eres', 'qué eres', 'cic_ia', 'tu nombre', 'presentación']
+    },
+    'default': {
+        'respuestas': [
+            "Interesante tema sobre '{tema}'. Voy a investigar en internet para darte la mejor respuesta.",
+            "Estoy aprendiendo sobre '{tema}'. Déjame buscar información actualizada para ti."
+        ],
+        'keywords': []
+    }
+}
+
 # ========== RED NEURONAL PARA CIC_IA ==========
 
 class CicNeuralNetwork:
@@ -223,7 +263,7 @@ class CicNeuralNetwork:
     def predict_intent(self, text):
         """Predice la intención del usuario"""
         if not self.is_trained or self.model_intent is None:
-            return 'unknown'
+            return {'intent': 'unknown', 'confidence': 0.0}
         
         try:
             X = self.vectorizer.transform([text])
@@ -695,20 +735,29 @@ class CicIA:
                 logger.error(f"❌ Error en auto-learn: {e}")
             time.sleep(3600)
     
-    def chat(self, user_input, mode='balanced', attachment_info=None):
+    # ========== FUNCIÓN DE CHAT PRINCIPAL (CORREGIDA) ==========
+    def process_chat(self, user_input, mode='balanced', attachment_info=None):
+        """
+        Procesa el mensaje del usuario y genera una respuesta.
+        Esta es la función principal de chat que reemplaza el endpoint anterior.
+        """
         input_lower = user_input.lower().strip()
         
+        # Verificar si es pregunta de fecha/hora
         if self._is_date_time_question(input_lower):
             response = self._get_dynamic_date_response(input_lower)
             return self._save_conversation(user_input, response, 'system_time', 
                                          attachment_info=attachment_info)
         
+        # Predecir intención con red neuronal
         intent_info = self.neural_net.predict_intent(user_input)
         logger.info(f"🧠 Intención detectada: {intent_info}")
         
+        # Buscar mejor tema en knowledge base
         best_topic = self._find_best_topic(input_lower)
         
         with app.app_context():
+            # Buscar memorias relevantes
             memories = Memory.query.all()
             
             if self.neural_net.is_trained:
@@ -717,14 +766,19 @@ class CicIA:
                 relevant_memories = self._find_relevant_memories(input_lower, memories)
             
             sources_used = []
+            response = ""
             
+            # Generar respuesta basada en knowledge base
             if best_topic and best_topic != 'default':
-                response = random.choice(KNOWLEDGE_BASE[best_topic]['respuestas'])
+                respuestas = KNOWLEDGE_BASE[best_topic]['respuestas']
+                response = random.choice(respuestas)
                 sources_used.append('knowledge_base')
+            # Usar memorias relevantes si existen
             elif relevant_memories:
                 mem = relevant_memories[0]
                 response = f"Basándome en mi conocimiento: {mem.content[:300]}"
                 sources_used.append(f"memory_{mem.source}")
+            # Buscar en web si no hay información local
             else:
                 tema = user_input[:40] if len(user_input) > 5 else "este tema"
                 web_results = self._search_and_learn(user_input)
@@ -734,9 +788,11 @@ class CicIA:
                     response += web_results['summary']
                     sources_used.append('web_search')
                 else:
-                    response = random.choice(KNOWLEDGE_BASE['default']['respuestas']).format(tema=tema)
+                    respuestas_default = KNOWLEDGE_BASE['default']['respuestas']
+                    response = random.choice(respuestas_default).format(tema=tema)
                     sources_used.append('learning')
             
+            # Ajustar respuesta según modo
             if mode == 'fast':
                 response = response.split('.')[0] + '.' if '.' in response else response[:100]
             elif mode == 'complete':
@@ -763,8 +819,10 @@ class CicIA:
         return [mem for mem, _ in relevant[:5]]
     
     def _search_and_learn(self, query):
+        """Busca en web y guarda en memoria"""
         try:
             with app.app_context():
+                # Verificar cache
                 cached = WebSearchCache.query.filter_by(query=query).first()
                 if cached and cached.expires_at > datetime.utcnow():
                     return cached.results
@@ -779,6 +837,7 @@ class CicIA:
                     summary += f"{i}. **{result['title']}**\n"
                     summary += f"   {result['snippet']}\n\n"
                     
+                    # Guardar en memoria
                     memory = Memory(
                         content=result['snippet'],
                         source='web_search',
@@ -787,6 +846,7 @@ class CicIA:
                     )
                     db.session.add(memory)
                 
+                # Guardar en cache
                 cache_entry = WebSearchCache(
                     query=query,
                     results={'summary': summary},
@@ -801,6 +861,7 @@ class CicIA:
             return None
     
     def _find_best_topic(self, text):
+        """Encuentra el mejor tema en la knowledge base"""
         best_score = 0
         best_topic = 'default'
         for topic, data in KNOWLEDGE_BASE.items():
@@ -813,6 +874,7 @@ class CicIA:
         return best_topic if best_score >= 2 else None
     
     def _find_relevant_memories(self, text, memories):
+        """Encuentra memorias relevantes por similitud de palabras"""
         relevant = []
         text_words = set(text.split())
         for mem in memories:
@@ -825,6 +887,7 @@ class CicIA:
     
     def _save_conversation(self, user_msg, bot_resp, source, 
                           attachment_info=None, memories_count=0, sources_used=None, intent='unknown'):
+        """Guarda la conversación en la base de datos"""
         with app.app_context():
             conv = Conversation(
                 user_message=user_msg,
@@ -835,6 +898,7 @@ class CicIA:
             )
             db.session.add(conv)
             
+            # Actualizar log de aprendizaje
             today = date.today()
             log = LearningLog.query.filter_by(date=today).first()
             if not log:
@@ -857,10 +921,12 @@ class CicIA:
         }
     
     def _is_date_time_question(self, text):
-        keywords = ['qué día', 'qué hora', 'fecha', 'hora actual', 'hoy es']
+        """Detecta si es pregunta de fecha u hora"""
+        keywords = ['qué día', 'qué hora', 'fecha', 'hora actual', 'hoy es', 'dia es', 'día es']
         return any(kw in text for kw in keywords)
     
     def _get_dynamic_date_response(self, text):
+        """Genera respuesta de fecha/hora dinámica"""
         now = datetime.now()
         dias = ['lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo']
         meses = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
@@ -872,6 +938,7 @@ class CicIA:
         return f"{fecha}\n{hora}"
     
     def get_learning_stats(self):
+        """Obtiene estadísticas de aprendizaje"""
         with app.app_context():
             total_memories = Memory.query.count()
             by_source = {
@@ -918,50 +985,7 @@ class CicIA:
                 }
             }
 
-# ========== KNOWLEDGE BASE ==========
-
-KNOWLEDGE_BASE = {
-    'ia': {
-        'respuestas': [
-            "La Inteligencia Artificial (IA) es la simulación de procesos de inteligencia humana por sistemas informáticos.",
-            "IA permite a las máquinas aprender, razonar y resolver problemas de manera autónoma."
-        ],
-        'keywords': ['inteligencia artificial', 'ia', 'ai', 'machine learning', 'deep learning']
-    },
-    'python': {
-        'respuestas': [
-            "Python es el lenguaje líder en IA por su sintaxis clara y bibliotecas como TensorFlow y PyTorch.",
-            "Python fue creado por Guido van Rossum y es ideal para prototipado rápido."
-        ],
-        'keywords': ['python', 'programación', 'código', 'desarrollo']
-    },
-    'hola': {
-        'respuestas': [
-            "¡Hola! Soy Cic_IA, tu asistente inteligente con red neuronal integrada. ¿En qué puedo ayudarte hoy?",
-            "¡Bienvenido! Estoy lista para aprender y asistirte con mi red neuronal."
-        ],
-        'keywords': ['hola', 'buenas', 'hey', 'saludos']
-    },
-    'fecha_hora': {
-        'respuestas': ['DYNAMIC_DATE'],
-        'keywords': ['qué día', 'qué hora', 'fecha', 'hora actual', 'hoy es']
-    },
-    'cic_ia': {
-        'respuestas': [
-            "Soy Cic_IA, una inteligencia artificial evolutiva con red neuronal integrada para mejorar mis respuestas.",
-            "Cic_IA aprende automáticamente cada 2 horas y usa una red neuronal para entender mejor tus preguntas."
-        ],
-        'keywords': ['quién eres', 'qué eres', 'cic_ia', 'tu nombre', 'presentación']
-    },
-    'default': {
-        'respuestas': [
-            "Interesante tema sobre '{tema}'. Voy a investigar en internet para darte la mejor respuesta.",
-            "Estoy aprendiendo sobre '{tema}'. Déjame buscar información actualizada para ti."
-        ],
-        'keywords': []
-    }
-}
-
+# Instancia global de CicIA
 cic_ia = CicIA()
 
 # ========== RUTAS PÚBLICAS ==========
@@ -979,12 +1003,14 @@ def health_check():
     return jsonify({
         'status': 'healthy',
         'timestamp': datetime.utcnow().isoformat(),
-        'version': '4.0_neural',
+        'version': '4.0_neural_fixed',
         'features': ['chat', 'web_search', 'auto_learning', 'memory', 'evolution', '50_topics', 'neural_network', 'manual_learning']
     })
 
+# ✅ CORREGIDO: Endpoint de chat con nombre único
 @app.route('/api/chat', methods=['POST'])
-def chat():
+def api_chat():
+    """Endpoint principal de chat - CORREGIDO"""
     try:
         data = request.json
         message = data.get('message', '').strip()
@@ -993,10 +1019,12 @@ def chat():
         if not message:
             return jsonify({'error': 'Mensaje vacío'}), 400
         
-        result = cic_ia.chat(message, mode=mode)
+        # Usar la instancia global cic_ia para procesar el chat
+        result = cic_ia.process_chat(message, mode=mode)
         return jsonify(result)
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        logger.error(f"❌ Error en endpoint /api/chat: {e}")
+        return jsonify({'error': str(e), 'response': 'Lo siento, ocurrió un error procesando tu mensaje.'}), 500
 
 @app.route('/api/web-search', methods=['POST'])
 def web_search():
@@ -1036,7 +1064,7 @@ def status():
             stats = cic_ia.get_learning_stats()
             
             return jsonify({
-                'stage': 'v4.0_neural',
+                'stage': 'v4.0_neural_fixed',
                 'total_memories': stats['total_memories'],
                 'total_conversations': Conversation.query.count(),
                 'today_learned': log.count if log else 0,
