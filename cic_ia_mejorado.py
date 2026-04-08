@@ -118,8 +118,8 @@ class ManualLearningQueue(db.Model):
     content = db.Column(db.Text, nullable=False)
     topic = db.Column(db.String(200))
     source_url = db.Column(db.String(500))
-    priority = db.Column(db.Integer, default=1)  # 1=normal, 2=alta, 3=urgente
-    status = db.Column(db.String(50), default='pending')  # pending, processing, completed, failed
+    priority = db.Column(db.Integer, default=1)
+    status = db.Column(db.String(50), default='pending')
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     processed_at = db.Column(db.DateTime)
 
@@ -136,7 +136,6 @@ class CicNeuralNetwork:
     Usa MLPClassifier de scikit-learn para:
     - Clasificación de intenciones del usuario
     - Predicción de relevancia de respuestas
-    - Mejora de selección de memorias
     """
     
     def __init__(self):
@@ -177,7 +176,6 @@ class CicNeuralNetwork:
             from sklearn.neural_network import MLPClassifier
             from sklearn.feature_extraction.text import TfidfVectorizer
             
-            # Modelo para clasificación de intenciones (3 capas ocultas)
             self.model_intent = MLPClassifier(
                 hidden_layer_sizes=(128, 64, 32),
                 activation='relu',
@@ -188,7 +186,6 @@ class CicNeuralNetwork:
                 validation_fraction=0.1
             )
             
-            # Modelo para predicción de relevancia (2 capas)
             self.model_relevance = MLPClassifier(
                 hidden_layer_sizes=(64, 32),
                 activation='tanh',
@@ -206,44 +203,25 @@ class CicNeuralNetwork:
             self.model_intent = None
     
     def train(self, texts, labels):
-        """
-        Entrena la red neuronal con nuevos datos.
-        
-        Args:
-            texts: Lista de textos (preguntas/mensajes)
-            labels: Lista de etiquetas (intenciones)
-        """
+        """Entrena la red neuronal con nuevos datos"""
         if self.model_intent is None:
             return False
         
         try:
-            # Vectorizar textos
             X = self.vectorizer.fit_transform(texts)
-            
-            # Entrenar modelo de intenciones
             self.model_intent.fit(X, labels)
-            
             self.is_trained = True
             self.training_data = texts
             self.labels = labels
-            
-            # Guardar modelo
             self._save_models()
-            
             logger.info(f"🧠 Red neuronal entrenada con {len(texts)} ejemplos")
             return True
-            
         except Exception as e:
             logger.error(f"Error entrenando red neuronal: {e}")
             return False
     
     def predict_intent(self, text):
-        """
-        Predice la intención del usuario.
-        
-        Returns:
-            str: Intención predicha o 'unknown' si no está entrenada
-        """
+        """Predice la intención del usuario"""
         if not self.is_trained or self.model_intent is None:
             return 'unknown'
         
@@ -257,20 +235,14 @@ class CicNeuralNetwork:
             return {'intent': 'unknown', 'confidence': 0.0}
     
     def predict_relevance(self, query, memory_content):
-        """
-        Predice qué tan relevante es una memoria para una consulta.
-        
-        Returns:
-            float: Score de relevancia entre 0 y 1
-        """
+        """Predice qué tan relevante es una memoria para una consulta"""
         if not self.is_trained or self.model_relevance is None:
             return 0.5
         
         try:
-            # Combinar query y contenido
             combined = f"{query} {memory_content}"
             X = self.vectorizer.transform([combined])
-            relevance = self.model_relevance.predict_proba(X)[0][1]  # Clase positiva
+            relevance = self.model_relevance.predict_proba(X)[0][1]
             return float(relevance)
         except Exception as e:
             logger.error(f"Error prediciendo relevancia: {e}")
@@ -617,10 +589,7 @@ class CicIA:
                 return False
     
     def add_manual_learning(self, content, topic=None, source_url=None, priority=1):
-        """
-        Agrega contenido manual a la cola de aprendizaje.
-        Esta es la función para el botón "Forzar Aprendizaje Manual".
-        """
+        """Agrega contenido manual a la cola de aprendizaje"""
         try:
             with app.app_context():
                 queue_item = ManualLearningQueue(
@@ -653,7 +622,6 @@ class CicIA:
                             item.status = 'processing'
                             db.session.commit()
                             
-                            # Verificar duplicados
                             exists = Memory.query.filter(
                                 Memory.content.ilike(f'%{item.content[:100]}%')
                             ).first()
@@ -665,7 +633,6 @@ class CicIA:
                                 logger.info(f"⏭️ Contenido manual ya existente: {item.topic}")
                                 continue
                             
-                            # Crear memoria
                             memory = Memory(
                                 content=f"{item.content}\n\nFuente: {item.source_url or 'Aprendizaje manual'}",
                                 source='manual_learning',
@@ -675,7 +642,6 @@ class CicIA:
                             )
                             db.session.add(memory)
                             
-                            # Registrar evolución
                             evolution = KnowledgeEvolution(
                                 topic=item.topic,
                                 action='manual_learned',
@@ -737,7 +703,6 @@ class CicIA:
             return self._save_conversation(user_input, response, 'system_time', 
                                          attachment_info=attachment_info)
         
-        # Usar red neuronal para clasificar intención
         intent_info = self.neural_net.predict_intent(user_input)
         logger.info(f"🧠 Intención detectada: {intent_info}")
         
@@ -746,7 +711,6 @@ class CicIA:
         with app.app_context():
             memories = Memory.query.all()
             
-            # Usar red neuronal para rankear memorias si está entrenada
             if self.neural_net.is_trained:
                 relevant_memories = self._find_relevant_memories_neural(user_input, memories)
             else:
@@ -1254,19 +1218,27 @@ def dev_verify():
         })
     return jsonify({'valid': False}), 401
 
-# 🎯 NUEVO: Forzar Aprendizaje Manual (con contenido personalizado)
+# 🎯 CORREGIDO: Forzar Aprendizaje Manual
 @app.route('/api/dev/learning/manual', methods=['POST'])
 @dev_required
 def dev_manual_learning():
     """
     Endpoint para agregar contenido manual a la cola de aprendizaje.
-    Este es el botón "Forzar Aprendizaje Manual" del panel de desarrollador.
     """
     try:
-        data = request.json
-        content = data.get('content', '').strip()
-        topic = data.get('topic', '').strip()
-        source_url = data.get('source_url', '').strip() or None
+        data = request.get_json()
+        
+        # ✅ CORREGIDO: Manejar caso donde data es None
+        if not data:
+            return jsonify({
+                'success': False,
+                'error': 'No se recibieron datos'
+            }), 400
+        
+        # ✅ CORREGIDO: Usar or '' para evitar None
+        content = (data.get('content') or '').strip()
+        topic = (data.get('topic') or '').strip()
+        source_url = (data.get('source_url') or '').strip() or None
         priority = data.get('priority', 1)
         
         if not content:
@@ -1276,10 +1248,14 @@ def dev_manual_learning():
             }), 400
         
         if not topic:
-            topic = content[:50] + '...'
+            topic = content[:50] + '...' if len(content) > 50 else content
         
         # Validar prioridad
-        if priority not in [1, 2, 3]:
+        try:
+            priority = int(priority)
+            if priority not in [1, 2, 3]:
+                priority = 1
+        except (ValueError, TypeError):
             priority = 1
         
         result = cic_ia.add_manual_learning(
@@ -1304,9 +1280,9 @@ def dev_manual_learning():
             }), 500
             
     except Exception as e:
+        logger.error(f"Error en manual learning: {e}")
         return jsonify({'error': str(e)}), 500
 
-# 🎯 NUEVO: Ver cola de aprendizaje manual
 @app.route('/api/dev/learning/manual/queue', methods=['GET'])
 @dev_required
 def dev_manual_learning_queue():
@@ -1318,7 +1294,6 @@ def dev_manual_learning_queue():
             completed = ManualLearningQueue.query.filter_by(status='completed').count()
             failed = ManualLearningQueue.query.filter_by(status='failed').count()
             
-            # Últimos 10 items
             recent = ManualLearningQueue.query.order_by(
                 ManualLearningQueue.created_at.desc()
             ).limit(10).all()
@@ -1343,17 +1318,12 @@ def dev_manual_learning_queue():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-# 🎯 NUEVO: Entrenar red neuronal
 @app.route('/api/dev/neural/train', methods=['POST'])
 @dev_required
 def dev_train_neural_network():
-    """
-    Entrena la red neuronal con datos de conversaciones previas.
-    Requiere al menos 10 conversaciones para entrenar.
-    """
+    """Entrena la red neuronal con datos de conversaciones previas"""
     try:
         with app.app_context():
-            # Obtener conversaciones recientes para entrenamiento
             conversations = Conversation.query.order_by(
                 Conversation.timestamp.desc()
             ).limit(100).all()
@@ -1365,9 +1335,7 @@ def dev_train_neural_network():
                     'current': len(conversations)
                 }), 400
             
-            # Preparar datos de entrenamiento
             texts = [conv.user_message for conv in conversations]
-            # Etiquetas simples basadas en palabras clave
             labels = []
             for text in texts:
                 text_lower = text.lower()
@@ -1380,7 +1348,6 @@ def dev_train_neural_network():
                 else:
                     labels.append('statement')
             
-            # Entrenar
             success = neural_net.train(texts, labels)
             
             if success:
@@ -1400,7 +1367,6 @@ def dev_train_neural_network():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-# 🎯 NUEVO: Estadísticas de red neuronal
 @app.route('/api/dev/neural/stats', methods=['GET'])
 @dev_required
 def dev_neural_stats():
@@ -1412,7 +1378,7 @@ def dev_neural_stats():
 def dev_set_learning_topic():
     try:
         data = request.json
-        topic = data.get('topic', '').strip()
+        topic = (data.get('topic') or '').strip()
         
         if not topic:
             return jsonify({
@@ -1447,8 +1413,8 @@ def dev_clear_learning_topic():
 @dev_required
 def evolution_learn_now():
     try:
-        data = request.json or {}
-        topic = data.get('topic', '').strip() or None
+        data = request.get_json() or {}
+        topic = (data.get('topic') or '').strip() or None
         
         if topic:
             cic_ia.set_custom_topic(topic)
@@ -1459,8 +1425,8 @@ def evolution_learn_now():
             daemon=True
         ).start()
         
-        # ✅ CORREGIDO: Usar concatenación de strings en lugar de f-string anidada
-        message_text = f'🤖 Auto-aprendizaje iniciado manualmente'
+        # ✅ CORREGIDO: Sin f-string anidada
+        message_text = '🤖 Auto-aprendizaje iniciado manualmente'
         if topic:
             message_text += f' sobre "{topic}"'
         
