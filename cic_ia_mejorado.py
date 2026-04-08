@@ -1,11 +1,9 @@
 """
-Cic_IA - Asistente Inteligente EVOLUTIVO con RED NEURONAL
-Versión 6.5.0 - CORREGIDA: chat responses, auto-learning counter, keyword matching
+Cic_IA v7.0 - Asistente Inteligente EVOLUTIVO
+Versión mejorada con Auto-Aprendizaje, Feedback y Curiosidad
 """
 
-from flask import Flask
-from flask_sqlalchemy import SQLAlchemy
-from flask import render_template, request, jsonify, send_from_directory
+from flask import Flask, render_template, request, jsonify, send_from_directory
 from werkzeug.utils import secure_filename
 from datetime import datetime, date, timedelta
 import os
@@ -13,16 +11,19 @@ import json
 import random
 import threading
 import time
-import urllib.request
-import urllib.parse
 import re
-import hashlib
-import requests
-from bs4 import BeautifulSoup
 import logging
-import pickle
-import numpy as np
-from sqlalchemy import select
+
+# NUEVOS IMPORTS (tus archivos creados)
+from models import db, init_database, Memory, Conversation, LearningLog, FeedbackLog
+from models import CuriosityGap, TrainingBatch, DeveloperSession, WebSearchCache
+from models import KnowledgeEvolution, ManualLearningQueue, WorkingMemorySnapshot
+from neural_engine import CicNeuralEngine
+from feedback_system import SatisfactionDetector, FeedbackCollector
+from curiosity_engine import CuriosityEngine, ConceptExtractor
+from working_memory import WorkingMemory
+
+# ... resto de tu código actual ...
 
 # Configuración de logging
 logging.basicConfig(level=logging.INFO)
