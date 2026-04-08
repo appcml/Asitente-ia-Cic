@@ -444,10 +444,17 @@ class CicIA:
         self.learning_active = True
         self.web_search_engine = WebSearchEngine()
         self.current_learning_topic = None
-        self.neural_net = neural_net
-        # Contador en memoria para reflejar auto-aprendizaje de sesión actual
+        
+        # NUEVOS COMPONENTES v7.0
+        self.neural_engine = CicNeuralEngine()
+        self.feedback_collector = FeedbackCollector(db.session)
+        self.curiosity_engine = CuriosityEngine(db.session, self.web_search_engine)
+        self.working_memory = WorkingMemory(max_turns=7)
+        
+        # Contador de sesión
         self._auto_learned_session = 0
 
+        # Temas de aprendizaje (tu lista original)
         self.auto_learning_topics = [
             'física cuántica avances 2024', 'biología sintética descubrimientos',
             'neurociencia cognitiva', 'matemáticas teoría nuevas',
@@ -476,30 +483,553 @@ class CicIA:
             'robótica humanoides', 'transhumanismo mejoramiento',
         ]
 
+        # Estadísticas mejoradas
         with app.app_context():
             self.stats = {
                 'memories': Memory.query.count(),
                 'conversations': Conversation.query.count(),
                 'today_learned': self._get_today_count(),
-                'auto_learned_total': self._get_auto_learned_total()
+                'auto_learned_total': self._get_auto_learned_total(),
+                'feedback_received': FeedbackLog.query.count(),
+                'curiosity_gaps': CuriosityGap.query.filter_by(status='pending').count()
             }
 
-        threading.Thread(target=self._auto_learn_loop, daemon=True).start()
-        threading.Thread(target=self._auto_web_search_loop, daemon=True).start()
-        threading.Thread(target=self._continuous_learning_loop, daemon=True).start()
-        threading.Thread(target=self._process_manual_learning_queue, daemon=True).start()
+        # Iniciar todos los threads de background
+        self._start_background_threads()
 
         logger.info("=" * 70)
-        logger.info("🚀 CIC_IA EVOLUTIVA CON RED NEURONAL INICIADA v6.5.0")
+        logger.info("🚀 CIC_IA v7.0 - SISTEMA EVOLUTIVO CON AUTO-APRENDIZAJE")
         logger.info(f"📚 Memorias: {self.stats['memories']}")
         logger.info(f"💬 Conversaciones: {self.stats['conversations']}")
         logger.info(f"📈 Aprendidos hoy: {self.stats['today_learned']}")
         logger.info(f"🤖 Auto-aprendidos total: {self.stats['auto_learned_total']}")
+        logger.info(f"📊 Feedback recibido: {self.stats['feedback_received']}")
+        logger.info(f"🔍 Curiosidad gaps: {self.stats['curiosity_gaps']}")
         logger.info("🌐 Búsqueda web: ACTIVADA")
-        logger.info("🧠 Red Neuronal: " + ("ACTIVADA" if self.neural_net.is_trained else "EN ESPERA DE ENTRENAMIENTO"))
-        logger.info("🧠 Auto-aprendizaje: ACTIVADO (cada 2 horas, primer ciclo en 5 min)")
-        logger.info(f"🎯 Temas de aprendizaje: {len(self.auto_learning_topics)} categorías")
+        logger.info("🧠 Red Neuronal: " + ("ACTIVADA" if self.neural_engine.is_trained else "EN ESPERA"))
+        logger.info("🧠 Auto-aprendizaje: ACTIVADO (cada 2 horas)")
+        logger.info("🌙 Reentrenamiento: 3:00 AM diario")
+        logger.info(f"🎯 Temas disponibles: {len(self.auto_learning_topics)} categorías")
         logger.info("=" * 70)
+
+    # ========== MÉTODOS DE INICIALIZACIÓN ==========
+
+    def _start_background_threads(self):
+        """Inicia todos los threads de background"""
+        threads = [
+            (self._continuous_learning_loop, "Auto-aprendizaje (2h)"),
+            (self._nightly_training_loop, "Reentrenamiento nocturno"),
+            (self._curiosity_loop, "Investigación curiosidad"),
+            (self._feedback_analysis_loop, "Análisis de feedback"),
+            (self._auto_web_search_loop, "Mantenimiento web cache"),
+            (self._process_manual_learning_queue, "Cola aprendizaje manual"),
+        ]
+        
+        for target, name in threads:
+            t = threading.Thread(target=target, daemon=True)
+            t.name = name
+            t.start()
+            logger.info(f"✅ Thread iniciado: {name}")
+
+    # ========== LOOPS DE BACKGROUND ==========
+
+    def _continuous_learning_loop(self):
+        """Loop principal de auto-aprendizaje cada 2 horas"""
+        time.sleep(300)  # Esperar 5 minutos al inicio
+        
+        while self.learning_active:
+            try:
+                self._perform_auto_learning()
+            except Exception as e:
+                logger.error(f"❌ Error en auto-aprendizaje: {e}")
+            
+            logger.info("⏰ Auto-aprendizaje: esperando 2 horas...")
+            time.sleep(7200)
+
+    def _nightly_training_loop(self):
+        """Reentrena la red neuronal a las 3:00 AM"""
+        while self.learning_active:
+            now = datetime.now()
+            
+            # Esperar hasta las 3:00 AM
+            if now.hour == 3 and now.minute < 5:
+                try:
+                    self._perform_nightly_training()
+                except Exception as e:
+                    logger.error(f"❌ Error reentrenamiento: {e}")
+                
+                time.sleep(3600)  # Esperar 1 hora para no repetir
+            else:
+                time.sleep(300)  # Revisar cada 5 minutos
+
+    def _curiosity_loop(self):
+        """Investiga gaps de curiosidad cada 30 minutos"""
+        time.sleep(600)  # Esperar 10 minutos al inicio
+        
+        while self.learning_active:
+            try:
+                with app.app_context():
+                    gaps = CuriosityGap.query.filter_by(status='pending').all()
+                    
+                    for gap in gaps:
+                        if gap.mention_count >= 2:
+                            result = self.curiosity_engine._investigate_concept(gap)
+                            logger.info(f"🔍 Curiosidad: {result}")
+                            time.sleep(60)  # Pausa entre investigaciones
+                            
+            except Exception as e:
+                logger.error(f"❌ Error en curiosidad: {e}")
+            
+            time.sleep(1800)
+
+    def _feedback_analysis_loop(self):
+        """Analiza feedback implícito cada 15 minutos"""
+        time.sleep(900)  # Esperar 15 minutos al inicio
+        
+        while self.learning_active:
+            try:
+                with app.app_context():
+                    # Obtener conversaciones recientes sin feedback
+                    recent_convs = Conversation.query.filter(
+                        Conversation.timestamp > datetime.utcnow() - timedelta(minutes=20)
+                    ).order_by(Conversation.timestamp.desc()).limit(10).all()
+                    
+                    for i in range(len(recent_convs) - 1):
+                        current = recent_convs[i]
+                        previous = recent_convs[i + 1]
+                        
+                        # Verificar si ya tiene feedback
+                        existing = FeedbackLog.query.filter_by(
+                            conversation_id=previous.id
+                        ).first()
+                        
+                        if not existing:
+                            self.feedback_collector.collect_implicit_feedback(
+                                conversation_id=previous.id,
+                                user_message=current.user_message,
+                                bot_message=previous.bot_response,
+                                response_time=0.0
+                            )
+                            
+            except Exception as e:
+                logger.error(f"❌ Error análisis feedback: {e}")
+            
+            time.sleep(900)
+
+    def _auto_web_search_loop(self):
+        """Limpia caché de búsqueda cada hora"""
+        while self.learning_active:
+            try:
+                with app.app_context():
+                    expired = WebSearchCache.query.filter(
+                        WebSearchCache.expires_at < datetime.utcnow()
+                    ).all()
+                    
+                    for cache in expired:
+                        db.session.delete(cache)
+                    
+                    if expired:
+                        db.session.commit()
+                        logger.info(f"🧹 Caché limpiado: {len(expired)} entradas")
+                        
+            except Exception as e:
+                logger.error(f"❌ Error limpieza caché: {e}")
+            
+            time.sleep(3600)
+
+    def _process_manual_learning_queue(self):
+        """Procesa cola de aprendizaje manual cada 5 minutos"""
+        time.sleep(300)
+        
+        while self.learning_active:
+            try:
+                with app.app_context():
+                    pending = ManualLearningQueue.query.filter_by(
+                        status='pending'
+                    ).order_by(ManualLearningQueue.priority.desc()).limit(5).all()
+                    
+                    for item in pending:
+                        try:
+                            item.status = 'processing'
+                            db.session.commit()
+                            
+                            # Verificar duplicado
+                            exists = Memory.query.filter(
+                                Memory.content.ilike(f'%{item.content[:100]}%')
+                            ).first()
+                            
+                            if exists:
+                                item.status = 'completed'
+                                item.processed_at = datetime.utcnow()
+                                db.session.commit()
+                                continue
+                            
+                            # Crear memoria
+                            memory = Memory(
+                                content=f"{item.content}\n\nFuente: {item.source_url or 'Manual'}",
+                                source='manual_learning',
+                                topic=item.topic,
+                                relevance_score=0.9 if item.priority >= 2 else 0.8,
+                                confidence_score=0.8
+                            )
+                            db.session.add(memory)
+                            
+                            # Registrar evolución
+                            evolution = KnowledgeEvolution(
+                                topic=item.topic,
+                                action='manual_learned',
+                                new_content=item.content[:200],
+                                source='manual_learning',
+                                triggered_by='manual'
+                            )
+                            db.session.add(evolution)
+                            
+                            item.status = 'completed'
+                            item.processed_at = datetime.utcnow()
+                            db.session.commit()
+                            
+                            logger.info(f"✅ Manual procesado: {item.topic}")
+                            
+                        except Exception as e:
+                            item.status = 'failed'
+                            db.session.commit()
+                            logger.error(f"❌ Error procesando manual: {e}")
+                            
+            except Exception as e:
+                logger.error(f"❌ Error cola manual: {e}")
+            
+            time.sleep(300)
+
+    # ========== MÉTODOS DE APRENDIZAJE ==========
+
+    def _perform_auto_learning(self, custom_topic=None):
+        """Realiza una sesión de auto-aprendizaje"""
+        with app.app_context():
+            topic = custom_topic or self.current_learning_topic or random.choice(self.auto_learning_topics)
+            self.current_learning_topic = None
+            
+            logger.info(f"🤖 Auto-aprendizaje: investigando '{topic}'")
+            
+            results = self.web_search_engine.search_duckduckgo(topic, max_results=3)
+            
+            if not results:
+                logger.warning(f"⚠️ Sin resultados para '{topic}'")
+                return False
+            
+            learned_count = 0
+            
+            for result in results:
+                try:
+                    # Verificar duplicado por contenido
+                    preview = result['snippet'][:50] if result['snippet'] else ''
+                    exists = Memory.query.filter(
+                        Memory.content.ilike(f'%{preview}%')
+                    ).first()
+                    
+                    if exists:
+                        logger.info(f"⏭️ Ya conocido: {result['title'][:50]}...")
+                        continue
+                    
+                    # Verificar duplicado por URL
+                    url_exists = Memory.query.filter(
+                        Memory.content.contains(result['url'])
+                    ).first()
+                    
+                    if url_exists:
+                        logger.info(f"⏭️ URL conocida: {result['url'][:50]}...")
+                        continue
+                    
+                    # Crear memoria
+                    memory = Memory(
+                        content=f"{result['title']}\n\n{result['snippet']}\n\nFuente: {result['url']}",
+                        source='auto_learning',
+                        topic=topic,
+                        relevance_score=0.6,
+                        confidence_score=0.5,
+                        usage_context=[{'learned_at': datetime.utcnow().isoformat(), 'source': 'auto'}]
+                    )
+                    db.session.add(memory)
+                    
+                    # Registrar evolución
+                    evolution = KnowledgeEvolution(
+                        topic=topic,
+                        action='learned',
+                        new_content=result['snippet'][:200] if result['snippet'] else '',
+                        source='auto_learning',
+                        triggered_by='auto'
+                    )
+                    db.session.add(evolution)
+                    
+                    learned_count += 1
+                    self._auto_learned_session += 1
+                    
+                    logger.info(f"✅ Aprendido: {result['title'][:60]}...")
+                    
+                except Exception as e:
+                    logger.error(f"❌ Error procesando resultado: {e}")
+                    continue
+            
+            if learned_count > 0:
+                db.session.commit()
+                
+                # Actualizar log diario
+                today = date.today()
+                log = LearningLog.query.filter_by(date=today).first()
+                if not log:
+                    log = LearningLog(date=today)
+                    db.session.add(log)
+                
+                log.auto_learned += learned_count
+                log.web_searches += len(results)
+                db.session.commit()
+                
+                logger.info(f"🎉 Sesión completada: {learned_count} nuevos conocimientos")
+                return True
+            else:
+                logger.info("📝 Sin novedades en esta ronda")
+                return False
+
+    def _perform_nightly_training(self):
+        """Reentrena la red neuronal con feedback acumulado"""
+        logger.info("🌙 Iniciando reentrenamiento nocturno...")
+        
+        with app.app_context():
+            # Obtener feedback para entrenamiento
+            feedback_data = self.feedback_collector.get_feedback_for_training(
+                min_samples=5,
+                unused_only=True
+            )
+            
+            if len(feedback_data) < 5:
+                logger.info(f"ℹ️ Insuficiente feedback ({len(feedback_data)}), se necesitan 5")
+                return
+            
+            logger.info(f"🧠 Reentrenando con {len(feedback_data)} muestras de feedback...")
+            
+            # Reentrenar
+            result = self.neural_engine.retrain_with_feedback(feedback_data)
+            
+            if result['success']:
+                # Marcar feedback como usado
+                feedback_ids = [f['feedback_id'] for f in feedback_data]
+                self.feedback_collector.mark_as_used_for_training(feedback_ids)
+                
+                # Registrar batch
+                batch = TrainingBatch(
+                    samples_used=len(feedback_data),
+                    accuracy_after=result['metrics'].get('train_accuracy'),
+                    loss=result['metrics'].get('loss'),
+                    status='completed',
+                    completed_at=datetime.utcnow()
+                )
+                db.session.add(batch)
+                db.session.commit()
+                
+                logger.info(f"✅ Reentrenamiento completado:")
+                logger.info(f"   - Accuracy: {result['metrics']['train_accuracy']:.3f}")
+                logger.info(f"   - Pérdida: {result['metrics']['loss']:.4f}")
+                logger.info(f"   - Iteraciones: {result['metrics']['iterations']}")
+                logger.info(f"   - Versión: {result['version']}")
+            else:
+                logger.warning(f"❌ Reentrenamiento fallido: {result.get('error')}")
+
+    # ========== PROCESAMIENTO DE CHAT MEJORADO ==========
+
+    def process_chat(self, user_input, mode='balanced', attachment_info=None):
+        """Procesa mensaje del usuario con sistema evolutivo completo"""
+        input_lower = user_input.lower().strip()
+        
+        # 1. Verificar fecha/hora
+        if self._is_date_time_question(input_lower):
+            response = self._get_dynamic_date_response(input_lower)
+            return self._save_conversation(user_input, response, 'system_time', 
+                                         attachment_info=attachment_info)
+        
+        # 2. Predecir intención con red neuronal
+        intent_info = self.neural_engine.predict_intent(user_input)
+        logger.info(f"🧠 Intención: {intent_info['intent']} (conf: {intent_info['confidence']:.2f})")
+        
+        # 3. Procesar curiosidad (detectar conceptos desconocidos)
+        curiosity_actions = self.curiosity_engine.process_conversation(
+            user_message=user_input,
+            bot_response=""  # Se actualizará después
+        )
+        if curiosity_actions:
+            logger.info(f"🔍 Curiosidad: {len(curiosity_actions)} acciones")
+        
+        # 4. Actualizar memoria de trabajo
+        context = self.working_memory.add_turn(
+            user_message=user_input,
+            bot_response="",  # Temporal
+            intent=intent_info['intent'],
+            entities=self._extract_entities(user_input)
+        )
+        
+        # 5. Verificar si necesita aclaración
+        needs_clarification, clarification_msg = self.working_memory.should_ask_clarification()
+        if needs_clarification:
+            response = clarification_msg
+            return self._save_conversation(user_input, response, 'clarification', 
+                                         attachment_info=attachment_info,
+                                         intent=intent_info['intent'], 
+                                         context=context,
+                                         confidence=intent_info['confidence'])
+        
+        # 6. Buscar mejor tema y generar respuesta
+        best_topic = self._find_best_topic(input_lower)
+        
+        with app.app_context():
+            # Buscar memorias relevantes
+            memories = Memory.query.all()
+            relevant_memories = self._find_relevant_memories(user_input, memories, intent_info)
+            
+            # Generar respuesta
+            response, sources = self._generate_response(
+                user_input=user_input,
+                best_topic=best_topic,
+                relevant_memories=relevant_memories,
+                intent_info=intent_info,
+                mode=mode
+            )
+            
+            # Actualizar memoria de trabajo con respuesta real
+            if self.working_memory.turns:
+                self.working_memory.turns[-1].bot_response = response
+            
+            # Guardar y retornar
+            return self._save_conversation(
+                user_input=user_input,
+                response=response,
+                source=sources[0] if sources else 'learning',
+                attachment_info=attachment_info,
+                intent=intent_info['intent'],
+                context=context,
+                memories_count=len(relevant_memories),
+                sources_used=sources,
+                confidence=intent_info['confidence']
+            )
+
+    def _generate_response(self, user_input, best_topic, relevant_memories, intent_info, mode):
+        """Genera respuesta basada en fuentes disponibles"""
+        sources = []
+        response = ""
+        
+        # Prioridad 1: Knowledge base
+        if best_topic and best_topic != 'default':
+            respuestas = KNOWLEDGE_BASE[best_topic]['respuestas']
+            response = random.choice(respuestas)
+            sources.append('knowledge_base')
+        
+        # Prioridad 2: Memorias relevantes de la base de datos
+        elif relevant_memories:
+            mem = relevant_memories[0]
+            response = f"Basándome en mi conocimiento: {mem.content[:300]}"
+            sources.append(f"memory_{mem.source}")
+            
+            # Incrementar contador de acceso
+            mem.access_count += 1
+            db.session.commit()
+        
+        # Prioridad 3: Búsqueda web en tiempo real
+        else:
+            tema = user_input[:40] if len(user_input) > 5 else "este tema"
+            web_results = self._search_and_learn(user_input)
+            
+            if web_results:
+                response = f"He investigado sobre '{tema}':\n\n{web_results['summary']}"
+                sources.append('web_search')
+            else:
+                respuestas_default = KNOWLEDGE_BASE['default']['respuestas']
+                response = random.choice(respuestas_default).format(tema=tema)
+                sources.append('learning')
+        
+        # Ajustar según modo
+        if mode == 'fast':
+            response = response.split('.')[0] + '.' if '.' in response else response[:100]
+        elif mode == 'complete':
+            response += "\n\n¿Te gustaría que profundice en este tema?"
+        
+        return response, sources
+
+    def _find_relevant_memories(self, query, memories, intent_info):
+        """Encuentra memorias relevantes usando red neuronal o fallback"""
+        if self.neural_engine.is_trained and intent_info['confidence'] > 0.5:
+            relevant = []
+            for mem in memories:
+                relevance = self.neural_engine.predict_relevance(query, mem.content)
+                if relevance > 0.5:
+                    relevant.append((mem, relevance))
+                    mem.access_count += 1
+            
+            relevant.sort(key=lambda x: x[1], reverse=True)
+            db.session.commit()
+            return [mem for mem, _ in relevant[:5]]
+        else:
+            # Fallback: búsqueda por palabras clave
+            return self._keyword_memory_search(query, memories)
+
+    def _keyword_memory_search(self, query, memories):
+        """Búsqueda por palabras clave cuando la red neuronal no está disponible"""
+        query_words = set(query.lower().split())
+        relevant = []
+        
+        for mem in memories:
+            mem_words = set(mem.content.lower().split())
+            overlap = len(query_words & mem_words)
+            
+            if overlap >= 2:
+                relevant.append(mem)
+                mem.access_count += 1
+        
+        db.session.commit()
+        return relevant
+
+    def _save_conversation(self, user_input, response, source, attachment_info=None,
+                          intent=None, context=None, memories_count=0, sources_used=None,
+                          confidence=None):
+        """Guarda conversación con todos los metadatos"""
+        with app.app_context():
+            conv = Conversation(
+                user_message=user_input,
+                bot_response=response,
+                has_attachment=attachment_info is not None,
+                attachment_path=attachment_info.get('path') if attachment_info else None,
+                sources_used=sources_used or [source],
+                intent_detected=intent,
+                confidence=confidence,
+                context_snapshot=context
+            )
+            db.session.add(conv)
+            db.session.flush()  # Para obtener ID
+            
+            # Guardar snapshot de memoria de trabajo
+            if context:
+                self.working_memory.save_snapshot(db.session, conv.id)
+            
+            # Actualizar log diario
+            today = date.today()
+            log = LearningLog.query.filter_by(date=today).first()
+            if not log:
+                log = LearningLog(date=today)
+                db.session.add(log)
+            log.count += 1
+            db.session.commit()
+            
+            total_mem = Memory.query.count()
+        
+        return {
+            'response': response,
+            'model_used': 'cic_ia_v7_neural',
+            'sources_used': sources_used or [source],
+            'memories_found': memories_count,
+            'total_memories': total_mem,
+            'has_attachment': attachment_info is not None,
+            'intent_detected': intent,
+            'confidence': confidence,
+            'context_topic': context.get('current_topic') if context else None
+        }
+
+    # ========== MÉTODOS AUXILIARES ==========
 
     def _get_today_count(self):
         today = date.today()
@@ -512,7 +1042,7 @@ class CicIA:
 
     def set_custom_topic(self, topic):
         self.current_learning_topic = topic
-        logger.info(f"📌 Tema personalizado establecido: '{topic}'")
+        logger.info(f"📌 Tema personalizado: '{topic}'")
         return True
 
     def clear_custom_topic(self):
@@ -520,6 +1050,132 @@ class CicIA:
         logger.info("📌 Tema personalizado limpiado")
         return True
 
+    def _find_best_topic(self, text):
+        best_score = 0
+        best_topic = 'default'
+        
+        for topic, data in KNOWLEDGE_BASE.items():
+            if topic == 'default':
+                continue
+            score = sum(3 for kw in data['keywords'] if kw in text)
+            if score > best_score:
+                best_score = score
+                best_topic = topic
+        
+        return best_topic if best_score >= 2 else None
+
+    def _extract_entities(self, text):
+        entities = re.findall(r'\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\b', text)
+        quoted = re.findall(r'"([^"]+)"', text)
+        return list(set(entities + quoted))
+
+    def _is_date_time_question(self, text):
+        keywords = ['qué día', 'qué hora', 'fecha', 'hora actual', 'hoy es', 'dia es', 'día es']
+        return any(kw in text for kw in keywords)
+
+    def _get_dynamic_date_response(self, text):
+        now = datetime.now()
+        dias = ['lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo']
+        meses = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
+                'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
+        
+        fecha = f"📅 Hoy es {dias[now.weekday()]}, {now.day} de {meses[now.month-1]} de {now.year}"
+        hora = f"🕐 Son las {now.strftime('%H:%M:%S')}"
+        
+        return f"{fecha}\n{hora}"
+
+    def _search_and_learn(self, query):
+        """Busca en web y aprende"""
+        try:
+            with app.app_context():
+                # Verificar caché
+                cached = WebSearchCache.query.filter_by(query=query).first()
+                if cached and cached.expires_at > datetime.utcnow():
+                    cached.usage_count += 1
+                    db.session.commit()
+                    return cached.results
+                
+                results = self.web_search_engine.search_duckduckgo(query, max_results=3)
+                
+                if not results:
+                    return None
+                
+                summary = ""
+                for i, result in enumerate(results, 1):
+                    summary += f"{i}. **{result['title']}**\n"
+                    summary += f"   {result['snippet']}\n\n"
+                    
+                    # Guardar en memoria
+                    memory = Memory(
+                        content=result['snippet'],
+                        source='web_search',
+                        topic=query,
+                        relevance_score=0.7,
+                        confidence_score=0.6
+                    )
+                    db.session.add(memory)
+                
+                # Guardar en caché
+                cache_entry = WebSearchCache(
+                    query=query,
+                    results={'summary': summary},
+                    expires_at=datetime.utcnow() + timedelta(hours=24)
+                )
+                db.session.add(cache_entry)
+                db.session.commit()
+                
+                return {'summary': summary}
+                
+        except Exception as e:
+            logger.error(f"❌ Error búsqueda web: {e}")
+            return None
+
+    # ========== MÉTODOS PÚBLICOS PARA API ==========
+
+    def add_manual_learning(self, content, topic=None, source_url=None, priority=1):
+        try:
+            with app.app_context():
+                queue_item = ManualLearningQueue(
+                    content=content,
+                    topic=topic or 'manual_learning',
+                    source_url=source_url,
+                    priority=priority,
+                    status='pending'
+                )
+                db.session.add(queue_item)
+                db.session.commit()
+                
+                return {'success': True, 'id': queue_item.id}
+        except Exception as e:
+            return {'success': False, 'error': str(e)}
+
+    def get_learning_stats(self):
+        """Estadísticas completas del sistema"""
+        with app.app_context():
+            return {
+                'total_memories': Memory.query.count(),
+                'by_source': {
+                    'auto_learning': Memory.query.filter_by(source='auto_learning').count(),
+                    'web_search': Memory.query.filter_by(source='web_search').count(),
+                    'curiosity': Memory.query.filter_by(source='curiosity').count(),
+                    'manual_learning': Memory.query.filter_by(source='manual_learning').count(),
+                },
+                'feedback': {
+                    'total': FeedbackLog.query.count(),
+                    'implicit': FeedbackLog.query.filter_by(feedback_type='implicit').count(),
+                    'explicit': FeedbackLog.query.filter_by(feedback_type='explicit').count(),
+                },
+                'curiosity': {
+                    'pending': CuriosityGap.query.filter_by(status='pending').count(),
+                    'learned': CuriosityGap.query.filter_by(status='learned').count(),
+                },
+                'neural_network': self.neural_engine.get_stats(),
+                'working_memory': {
+                    'current_topic': self.working_memory.current_topic,
+                    'session_turns': self.working_memory.total_turns,
+                },
+                'version': '7.0'
+            }
     # ------------------------------------------------------------------ #
     #  AUTO-APRENDIZAJE                                                    #
     # ------------------------------------------------------------------ #
