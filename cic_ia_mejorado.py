@@ -1,6 +1,6 @@
 """
 Cic_IA - Asistente Inteligente EVOLUTIVO con RED NEURONAL
-Versión 6.4.4 - CORREGIDA Y FUNCIONAL
+Versión 6.5.0 - CORREGIDA: chat responses, auto-learning counter, keyword matching
 """
 
 from flask import Flask
@@ -121,41 +121,91 @@ class ManualLearningQueue(db.Model):
 with app.app_context():
     db.create_all()
 
-# ========== KNOWLEDGE BASE (DEFINIDO ANTES DE USARSE) ==========
+# ========== KNOWLEDGE BASE ==========
+# CORREGIDO: Keywords son palabras/frases individuales para mejor matching
 
 KNOWLEDGE_BASE = {
     'ia': {
         'respuestas': [
-            "La Inteligencia Artificial (IA) es la simulación de procesos de inteligencia humana por sistemas informáticos.",
-            "IA permite a las máquinas aprender, razonar y resolver problemas de manera autónoma."
+            "La Inteligencia Artificial (IA) es la simulación de procesos de inteligencia humana por sistemas informáticos. Incluye aprendizaje automático, razonamiento y resolución de problemas.",
+            "La IA permite a las máquinas aprender, razonar y resolver problemas de manera autónoma. Ramas principales: Machine Learning, Deep Learning, NLP y Visión por Computadora."
         ],
-        'keywords': ['inteligencia artificial', 'ia', 'ai', 'machine learning', 'deep learning']
+        'keywords': ['inteligencia artificial', 'machine learning', 'deep learning', 'neural network', 'red neuronal', 'algoritmo ia', 'aprendizaje automatico', 'aprendizaje automático']
     },
     'python': {
         'respuestas': [
-            "Python es el lenguaje líder en IA por su sintaxis clara y bibliotecas como TensorFlow y PyTorch.",
-            "Python fue creado por Guido van Rossum y es ideal para prototipado rápido."
+            "Python es el lenguaje líder en IA por su sintaxis clara y bibliotecas como TensorFlow, PyTorch y scikit-learn.",
+            "Python fue creado por Guido van Rossum. Es ideal para prototipado rápido, ciencia de datos y desarrollo web con Flask/Django."
         ],
-        'keywords': ['python', 'programación', 'código', 'desarrollo']
+        'keywords': ['python', 'programacion', 'programación', 'codigo', 'código', 'desarrollo', 'flask', 'django']
     },
     'hola': {
         'respuestas': [
             "¡Hola! Soy Cic_IA, tu asistente inteligente con red neuronal integrada. ¿En qué puedo ayudarte hoy?",
-            "¡Bienvenido! Estoy lista para aprender y asistirte con mi red neuronal."
+            "¡Bienvenido! Estoy lista para aprender y asistirte. ¿Qué deseas saber?"
         ],
-        'keywords': ['hola', 'buenas', 'hey', 'saludos']
+        'keywords': ['hola', 'buenas', 'hey ', 'saludos', 'buenos dias', 'buenos días', 'buenas tardes', 'buenas noches', 'hi ']
     },
     'cic_ia': {
         'respuestas': [
-            "Soy Cic_IA, una inteligencia artificial evolutiva con red neuronal integrada para mejorar mis respuestas.",
-            "Cic_IA aprende automáticamente cada 2 horas y usa una red neuronal para entender mejor tus preguntas."
+            "Soy Cic_IA, una inteligencia artificial evolutiva creada por Carlos. Tengo red neuronal integrada y aprendo automáticamente cada 2 horas.",
+            "Cic_IA es un asistente IA evolutivo que aprende de internet, memoriza conversaciones y mejora sus respuestas continuamente."
         ],
-        'keywords': ['quién eres', 'qué eres', 'cic_ia', 'tu nombre', 'presentación']
+        'keywords': ['quien eres', 'quién eres', 'que eres', 'qué eres', 'cic_ia', 'tu nombre', 'presentacion', 'como te llamas', 'cómo te llamas']
+    },
+    'clima': {
+        'respuestas': [
+            "El clima es el conjunto de condiciones atmosféricas que caracterizan una región durante un período prolongado. Incluye temperatura, humedad, precipitaciones, viento y presión atmosférica.",
+            "El clima se diferencia del tiempo meteorológico: el tiempo describe lo que ocurre hoy, mientras que el clima es el patrón promedio a largo plazo de una región."
+        ],
+        'keywords': ['clima', 'tiempo', 'meteorologia', 'meteorología', 'temperatura', 'lluvia', 'sol', 'nube', 'viento', 'atmosfera', 'atmosférica', 'calor', 'frio', 'frío']
+    },
+    'matematicas': {
+        'respuestas': [
+            "Las matemáticas son la ciencia del número, la cantidad, el espacio y el cambio. Son la base de la ciencia y la ingeniería.",
+            "Las matemáticas incluyen álgebra, geometría, cálculo, estadística, probabilidad y muchas otras ramas del conocimiento."
+        ],
+        'keywords': ['matematicas', 'matemáticas', 'matematica', 'algebra', 'calculo', 'geometria', 'numero', 'suma', 'resta', 'multiplicacion', 'division', 'ecuacion']
+    },
+    'historia': {
+        'respuestas': [
+            "La historia es el estudio del pasado humano, sus civilizaciones, culturas y eventos que han moldeado el mundo actual.",
+            "La historia nos permite comprender el presente y aprender de los errores y logros del pasado de la humanidad."
+        ],
+        'keywords': ['historia', 'pasado', 'civilizacion', 'civilización', 'antiguo', 'guerra', 'revolucion', 'cultura', 'siglo', 'historico', 'histórico']
+    },
+    'ciencia': {
+        'respuestas': [
+            "La ciencia es el conjunto de conocimientos obtenidos mediante la observación y el razonamiento sistemático. Incluye física, química, biología, astronomía y más.",
+            "La ciencia utiliza el método científico para generar hipótesis, experimentos y teorías que explican el universo."
+        ],
+        'keywords': ['ciencia', 'fisica', 'física', 'quimica', 'química', 'biologia', 'biología', 'cientifico', 'científico', 'experimento', 'laboratorio', 'teoria', 'teoría']
+    },
+    'salud': {
+        'respuestas': [
+            "La salud es un estado de completo bienestar físico, mental y social, no solamente la ausencia de enfermedad.",
+            "Mantener una buena salud requiere alimentación balanceada, ejercicio regular, sueño adecuado y manejo del estrés."
+        ],
+        'keywords': ['salud', 'medicina', 'enfermedad', 'doctor', 'medico', 'médico', 'hospital', 'sintoma', 'síntoma', 'cuerpo', 'bienestar', 'cura', 'tratamiento']
+    },
+    'tecnologia': {
+        'respuestas': [
+            "La tecnología es el conjunto de conocimientos técnicos que permiten diseñar y crear soluciones para satisfacer necesidades humanas.",
+            "La tecnología avanza exponencialmente, transformando comunicaciones, transporte, medicina y prácticamente todos los aspectos de la vida moderna."
+        ],
+        'keywords': ['tecnologia', 'tecnología', 'internet', 'computadora', 'ordenador', 'software', 'hardware', 'app', 'digital', 'robot', 'celular', 'smartphone', 'red', 'web']
+    },
+    'geografia': {
+        'respuestas': [
+            "La geografía estudia la superficie terrestre, sus paisajes, regiones, países, océanos y la relación entre el ser humano y el medio natural.",
+            "La geografía se divide en física (relieve, clima, hidrografía) y humana (población, ciudades, economía)."
+        ],
+        'keywords': ['geografia', 'geografía', 'pais', 'país', 'continente', 'oceano', 'océano', 'capital', 'ciudad', 'rio', 'río', 'montaña', 'mapa', 'region', 'región']
     },
     'default': {
         'respuestas': [
-            "Interesante tema sobre '{tema}'. Voy a investigar en internet para darte la mejor respuesta.",
-            "Estoy aprendiendo sobre '{tema}'. Déjame buscar información actualizada para ti."
+            "Interesante pregunta sobre '{tema}'. Déjame buscar información actualizada en internet para darte la mejor respuesta.",
+            "Voy a investigar sobre '{tema}' para darte información precisa y actualizada."
         ],
         'keywords': []
     }
@@ -174,10 +224,10 @@ class CicNeuralNetwork:
         self.model_path = 'models/cic_neural_model.pkl'
         self._ensure_model_dir()
         self._load_or_create_models()
-    
+
     def _ensure_model_dir(self):
         os.makedirs('models', exist_ok=True)
-    
+
     def _load_or_create_models(self):
         try:
             if os.path.exists(self.model_path):
@@ -193,12 +243,12 @@ class CicNeuralNetwork:
         except Exception as e:
             logger.error(f"Error cargando modelos: {e}")
             self._create_new_models()
-    
+
     def _create_new_models(self):
         try:
             from sklearn.neural_network import MLPClassifier
             from sklearn.feature_extraction.text import TfidfVectorizer
-            
+
             self.model_intent = MLPClassifier(
                 hidden_layer_sizes=(128, 64, 32),
                 activation='relu',
@@ -208,7 +258,6 @@ class CicNeuralNetwork:
                 early_stopping=True,
                 validation_fraction=0.1
             )
-            
             self.model_relevance = MLPClassifier(
                 hidden_layer_sizes=(64, 32),
                 activation='tanh',
@@ -216,19 +265,16 @@ class CicNeuralNetwork:
                 max_iter=300,
                 random_state=42
             )
-            
             self.vectorizer = TfidfVectorizer(max_features=5000, stop_words='english')
             self.is_trained = False
             logger.info("🧠 Nueva red neuronal creada")
-            
         except ImportError:
             logger.warning("scikit-learn no disponible, red neuronal desactivada")
             self.model_intent = None
-    
+
     def train(self, texts, labels):
         if self.model_intent is None:
             return False
-        
         try:
             X = self.vectorizer.fit_transform(texts)
             self.model_intent.fit(X, labels)
@@ -241,11 +287,10 @@ class CicNeuralNetwork:
         except Exception as e:
             logger.error(f"Error entrenando red neuronal: {e}")
             return False
-    
+
     def predict_intent(self, text):
         if not self.is_trained or self.model_intent is None:
             return {'intent': 'unknown', 'confidence': 0.0}
-        
         try:
             X = self.vectorizer.transform([text])
             prediction = self.model_intent.predict(X)[0]
@@ -254,20 +299,18 @@ class CicNeuralNetwork:
         except Exception as e:
             logger.error(f"Error en predicción: {e}")
             return {'intent': 'unknown', 'confidence': 0.0}
-    
+
     def predict_relevance(self, query, memory_content):
         if not self.is_trained or self.model_relevance is None:
             return 0.5
-        
         try:
             combined = f"{query} {memory_content}"
             X = self.vectorizer.transform([combined])
             relevance = self.model_relevance.predict_proba(X)[0][1]
             return float(relevance)
         except Exception as e:
-            logger.error(f"Error prediciendo relevancia: {e}")
             return 0.5
-    
+
     def _save_models(self):
         try:
             with open(self.model_path, 'wb') as f:
@@ -280,7 +323,7 @@ class CicNeuralNetwork:
             logger.info("💾 Modelos guardados")
         except Exception as e:
             logger.error(f"Error guardando modelos: {e}")
-    
+
     def get_stats(self):
         return {
             'is_trained': self.is_trained,
@@ -297,10 +340,10 @@ neural_net = CicNeuralNetwork()
 class DevAuthService:
     def __init__(self):
         self.active_sessions = {}
-    
+
     def verify_credentials(self, username, password):
         return username == DEV_USERNAME and password == DEV_PASSWORD
-    
+
     def generate_token(self, username):
         import secrets
         token = secrets.token_urlsafe(32)
@@ -311,19 +354,17 @@ class DevAuthService:
             'last_used': datetime.utcnow()
         }
         return token
-    
+
     def verify_token(self, token):
         if not token or token not in self.active_sessions:
             return False
-        
         session = self.active_sessions[token]
         if datetime.utcnow() > session['expires_at']:
             del self.active_sessions[token]
             return False
-        
         session['last_used'] = datetime.utcnow()
         return True
-    
+
     def revoke_token(self, token):
         if token in self.active_sessions:
             del self.active_sessions[token]
@@ -353,7 +394,6 @@ class WebSearchEngine:
                 results = []
                 ddgs = DDGS()
                 search_results = ddgs.text(query, max_results=max_results)
-                
                 for result in search_results:
                     results.append({
                         'title': result.get('title', ''),
@@ -361,29 +401,23 @@ class WebSearchEngine:
                         'snippet': result.get('body', ''),
                         'source': 'duckduckgo'
                     })
-                
                 logger.info(f"🔍 Búsqueda exitosa: '{query}' - {len(results)} resultados")
                 return results
-                
             except ImportError as ie:
                 logger.warning(f"duckduckgo-search no instalada: {ie}")
                 return WebSearchEngine._search_fallback(query, max_results)
-                
         except Exception as e:
             logger.error(f"❌ Error en búsqueda DuckDuckGo: {e}")
             return []
-    
+
     @staticmethod
     def _search_fallback(query, max_results=5):
         try:
             url = f"https://html.duckduckgo.com/?q={urllib.parse.quote(query)}"
-            headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-            }
+            headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
             response = requests.get(url, headers=headers, timeout=10)
             soup = BeautifulSoup(response.content, 'html.parser')
             results = []
-            
             for result in soup.find_all('div', class_='result')[:max_results]:
                 try:
                     title_elem = result.find('a', class_='result__a')
@@ -397,9 +431,7 @@ class WebSearchEngine:
                         })
                 except:
                     continue
-            
             return results
-            
         except Exception as e:
             logger.error(f"❌ Error en fallback: {e}")
             return []
@@ -412,7 +444,9 @@ class CicIA:
         self.web_search_engine = WebSearchEngine()
         self.current_learning_topic = None
         self.neural_net = neural_net
-        
+        # Contador en memoria para reflejar auto-aprendizaje de sesión actual
+        self._auto_learned_session = 0
+
         self.auto_learning_topics = [
             'física cuántica avances 2024', 'biología sintética descubrimientos',
             'neurociencia cognitiva', 'matemáticas teoría nuevas',
@@ -440,7 +474,7 @@ class CicIA:
             'espacio colonización', 'metaverso evolución',
             'robótica humanoides', 'transhumanismo mejoramiento',
         ]
-        
+
         with app.app_context():
             self.stats = {
                 'memories': Memory.query.count(),
@@ -448,58 +482,70 @@ class CicIA:
                 'today_learned': self._get_today_count(),
                 'auto_learned_total': self._get_auto_learned_total()
             }
-        
+
         threading.Thread(target=self._auto_learn_loop, daemon=True).start()
         threading.Thread(target=self._auto_web_search_loop, daemon=True).start()
         threading.Thread(target=self._continuous_learning_loop, daemon=True).start()
         threading.Thread(target=self._process_manual_learning_queue, daemon=True).start()
-        
+
         logger.info("=" * 70)
-        logger.info("🚀 CIC_IA EVOLUTIVA CON RED NEURONAL INICIADA")
+        logger.info("🚀 CIC_IA EVOLUTIVA CON RED NEURONAL INICIADA v6.5.0")
         logger.info(f"📚 Memorias: {self.stats['memories']}")
         logger.info(f"💬 Conversaciones: {self.stats['conversations']}")
         logger.info(f"📈 Aprendidos hoy: {self.stats['today_learned']}")
         logger.info(f"🤖 Auto-aprendidos total: {self.stats['auto_learned_total']}")
         logger.info("🌐 Búsqueda web: ACTIVADA")
-        logger.info("🧠 Red Neuronal: " + ("ACTIVADA" if self.neural_net.is_trained else "EN ESPERA"))
-        logger.info("🧠 Auto-aprendizaje: ACTIVADO (cada 2 horas)")
+        logger.info("🧠 Red Neuronal: " + ("ACTIVADA" if self.neural_net.is_trained else "EN ESPERA DE ENTRENAMIENTO"))
+        logger.info("🧠 Auto-aprendizaje: ACTIVADO (cada 2 horas, primer ciclo en 5 min)")
         logger.info(f"🎯 Temas de aprendizaje: {len(self.auto_learning_topics)} categorías")
         logger.info("=" * 70)
-    
+
     def _get_today_count(self):
         today = date.today()
         log = LearningLog.query.filter_by(date=today).first()
         return log.count if log else 0
-    
+
     def _get_auto_learned_total(self):
         total = db.session.query(db.func.sum(LearningLog.auto_learned)).scalar()
         return int(total) if total else 0
-    
+
     def set_custom_topic(self, topic):
         self.current_learning_topic = topic
         logger.info(f"📌 Tema personalizado establecido: '{topic}'")
         return True
-    
+
     def clear_custom_topic(self):
         self.current_learning_topic = None
         logger.info("📌 Tema personalizado limpiado")
         return True
-    
+
+    # ------------------------------------------------------------------ #
+    #  AUTO-APRENDIZAJE                                                    #
+    # ------------------------------------------------------------------ #
+
     def _continuous_learning_loop(self):
+        """Primer ciclo a los 5 min, luego cada 2 horas."""
         logger.info("🧠 Iniciando loop de auto-aprendizaje evolutivo...")
-        time.sleep(300)
-        
+        time.sleep(300)  # espera inicial 5 minutos
         while self.learning_active:
             try:
-                self._perform_auto_learning()
+                count = self._perform_auto_learning()
+                if count:
+                    self._auto_learned_session += count
+                    logger.info(f"🤖 Auto-aprendidos acumulados en sesión: {self._auto_learned_session}")
             except Exception as e:
                 logger.error(f"❌ Error en auto-aprendizaje: {e}")
-            
             logger.info("⏰ Auto-aprendizaje: esperando 2 horas...")
             time.sleep(7200)
-    
+
     def _perform_auto_learning(self, custom_topic=None):
+        """
+        Ejecuta UN ciclo de aprendizaje.
+        Retorna el número de elementos nuevos aprendidos (int).
+        """
+        learned_count = 0
         with app.app_context():
+            # Elegir tema
             if custom_topic:
                 topic = custom_topic
             elif self.current_learning_topic:
@@ -507,79 +553,83 @@ class CicIA:
                 self.current_learning_topic = None
             else:
                 topic = random.choice(self.auto_learning_topics)
-            
+
             logger.info(f"🤖 Auto-aprendizaje: investigando '{topic}'")
-            
+
             results = self.web_search_engine.search_duckduckgo(topic, max_results=3)
-            
+
             if not results:
-                logger.warning(f"⚠️ No se encontraron resultados para '{topic}'")
-                return False
-            
-            learned_count = 0
-            
+                logger.warning(f"⚠️ Sin resultados web para '{topic}'")
+                return 0
+
             for result in results:
                 try:
-                    content_preview = result['snippet'][:100] if result['snippet'] else ''
-                    exists = Memory.query.filter(
+                    snippet = result.get('snippet', '')
+                    if not snippet:
+                        continue
+
+                    content_preview = snippet[:100]
+
+                    # Evitar duplicados por contenido
+                    exists_content = Memory.query.filter(
                         Memory.content.ilike(f'%{content_preview}%')
                     ).first()
-                    
-                    if exists:
-                        logger.info(f"⏭️ Ya conocido: {result['title'][:50]}...")
+                    if exists_content:
+                        logger.info(f"⏭️ Ya conocido (contenido): {result['title'][:50]}")
                         continue
-                    
-                    url_exists = Memory.query.filter(
-                        Memory.content.contains(result['url'])
-                    ).first()
-                    
-                    if url_exists:
-                        logger.info(f"⏭️ URL conocida: {result['url'][:50]}...")
-                        continue
-                    
+
+                    # Evitar duplicados por URL
+                    url = result.get('url', '')
+                    if url:
+                        exists_url = Memory.query.filter(
+                            Memory.content.contains(url)
+                        ).first()
+                        if exists_url:
+                            logger.info(f"⏭️ Ya conocido (URL): {url[:50]}")
+                            continue
+
                     memory = Memory(
-                        content=f"{result['title']}\n\n{result['snippet']}\n\nFuente: {result['url']}",
+                        content=f"{result['title']}\n\n{snippet}\n\nFuente: {url}",
                         source='auto_learning',
                         topic=topic,
                         relevance_score=0.6,
                         access_count=0
                     )
                     db.session.add(memory)
-                    learned_count += 1
-                    
+
                     evolution = KnowledgeEvolution(
                         topic=topic,
                         action='learned',
-                        new_content=result['snippet'][:200] if result['snippet'] else '',
+                        new_content=snippet[:200],
                         source='auto_learning'
                     )
                     db.session.add(evolution)
-                    
-                    logger.info(f"✅ Aprendido: {result['title'][:60]}...")
-                    
+                    learned_count += 1
+                    logger.info(f"✅ Aprendido: {result['title'][:60]}")
+
                 except Exception as e:
                     logger.error(f"❌ Error procesando resultado: {e}")
                     continue
-            
+
             if learned_count > 0:
                 db.session.commit()
-                
+
+                # Actualizar log de hoy
                 today = date.today()
                 log = LearningLog.query.filter_by(date=today).first()
                 if not log:
                     log = LearningLog(date=today, count=0, web_searches=0, auto_learned=0)
                     db.session.add(log)
-                
                 log.auto_learned += learned_count
                 log.web_searches += len(results)
                 db.session.commit()
-                
-                logger.info(f"🎉 Sesión completada: {learned_count} nuevos conocimientos")
-                return True
+
+                logger.info(f"🎉 Ciclo completado: {learned_count} nuevos conocimientos sobre '{topic}'")
             else:
-                logger.info("📝 Sin novedades en esta ronda")
-                return False
-    
+                logger.info(f"📝 Sin novedades para '{topic}'")
+
+        return learned_count
+
     def add_manual_learning(self, content, topic=None, source_url=None, priority=1):
         try:
             with app.app_context():
@@ -592,13 +642,12 @@ class CicIA:
                 )
                 db.session.add(queue_item)
                 db.session.commit()
-                
-                logger.info(f"📥 Agregado a cola manual: '{topic or 'Sin tema'}' (prioridad {priority})")
+                logger.info(f"📥 Cola manual: '{topic or 'Sin tema'}' (prioridad {priority})")
                 return {'success': True, 'id': queue_item.id}
         except Exception as e:
             logger.error(f"❌ Error agregando aprendizaje manual: {e}")
             return {'success': False, 'error': str(e)}
-    
+
     def _process_manual_learning_queue(self):
         while self.learning_active:
             try:
@@ -606,23 +655,23 @@ class CicIA:
                     pending = ManualLearningQueue.query.filter_by(status='pending')\
                         .order_by(ManualLearningQueue.priority.desc())\
                         .limit(5).all()
-                    
+
                     for item in pending:
                         try:
                             item.status = 'processing'
                             db.session.commit()
-                            
+
                             exists = Memory.query.filter(
                                 Memory.content.ilike(f'%{item.content[:100]}%')
                             ).first()
-                            
+
                             if exists:
                                 item.status = 'completed'
                                 item.processed_at = datetime.utcnow()
                                 db.session.commit()
-                                logger.info(f"⏭️ Contenido manual ya existente: {item.topic}")
+                                logger.info(f"⏭️ Manual ya existente: {item.topic}")
                                 continue
-                            
+
                             memory = Memory(
                                 content=f"{item.content}\n\nFuente: {item.source_url or 'Aprendizaje manual'}",
                                 source='manual_learning',
@@ -631,7 +680,7 @@ class CicIA:
                                 access_count=0
                             )
                             db.session.add(memory)
-                            
+
                             evolution = KnowledgeEvolution(
                                 topic=item.topic,
                                 action='manual_learned',
@@ -639,24 +688,23 @@ class CicIA:
                                 source='manual_learning'
                             )
                             db.session.add(evolution)
-                            
+
                             item.status = 'completed'
                             item.processed_at = datetime.utcnow()
                             db.session.commit()
-                            
-                            logger.info(f"✅ Aprendizaje manual procesado: {item.topic}")
-                            
+                            logger.info(f"✅ Manual procesado: {item.topic}")
+
                         except Exception as e:
                             item.status = 'failed'
                             db.session.commit()
                             logger.error(f"❌ Error procesando item manual: {e}")
-                
+
             except Exception as e:
                 logger.error(f"❌ Error en cola manual: {e}")
-            
             time.sleep(300)
-    
+
     def _auto_web_search_loop(self):
+        """Limpia cache de búsqueda expirado cada hora."""
         while self.learning_active:
             try:
                 with app.app_context():
@@ -664,16 +712,17 @@ class CicIA:
                         WebSearchCache.expires_at < datetime.utcnow()
                     )
                     expired = db.session.execute(stmt).scalars().all()
-                    for cache_entry in expired:
-                        db.session.delete(cache_entry)
+                    for entry in expired:
+                        db.session.delete(entry)
                     db.session.commit()
-                    if len(expired) > 0:
+                    if expired:
                         logger.info(f"🧹 Cache limpiado: {len(expired)} entradas")
             except Exception as e:
                 logger.error(f"❌ Error limpiando cache: {e}")
             time.sleep(3600)
-    
+
     def _auto_learn_loop(self):
+        """Refresca relevance_score de memorias cada hora."""
         while self.learning_active:
             try:
                 with app.app_context():
@@ -684,73 +733,90 @@ class CicIA:
             except Exception as e:
                 logger.error(f"❌ Error en auto-learn: {e}")
             time.sleep(3600)
-    
-    # ✅ CORREGIDO: Función renombrada de chat() a process_chat()
-    def process_chat(self, user_input, mode='balanced', attachment_info=None):
-        """Procesa el mensaje del usuario y genera una respuesta."""
-        input_lower = user_input.lower().strip()
-        
-        # Verificar si es pregunta de fecha/hora
-        if self._is_date_time_question(input_lower):
-            response = self._get_dynamic_date_response(input_lower)
-            return self._save_conversation(user_input, response, 'system_time', 
-                                         attachment_info=attachment_info)
-        
-        # Predecir intención con red neuronal
-        intent_info = self.neural_net.predict_intent(user_input)
-        logger.info(f"🧠 Intención detectada: {intent_info}")
-        
-        # Buscar mejor tema en knowledge base
-        best_topic = self._find_best_topic(input_lower)
-        
-        with app.app_context():
-            # Buscar memorias relevantes
-            memories = Memory.query.all()
-            
-            if self.neural_net.is_trained:
-                relevant_memories = self._find_relevant_memories_neural(user_input, memories)
-            else:
-                relevant_memories = self._find_relevant_memories(input_lower, memories)
-            
-            sources_used = []
-            response = ""
-            
-            # Generar respuesta basada en knowledge base
-            if best_topic and best_topic != 'default':
-                respuestas = KNOWLEDGE_BASE[best_topic]['respuestas']
-                response = random.choice(respuestas)
-                sources_used.append('knowledge_base')
-            # Usar memorias relevantes si existen
-            elif relevant_memories:
-                mem = relevant_memories[0]
-                response = f"Basándome en mi conocimiento: {mem.content[:300]}"
-                sources_used.append(f"memory_{mem.source}")
-            # Buscar en web si no hay información local
-            else:
-                tema = user_input[:40] if len(user_input) > 5 else "este tema"
-                web_results = self._search_and_learn(user_input)
-                
-                if web_results:
-                    response = f"He investigado en internet sobre '{tema}':\n\n"
-                    response += web_results['summary']
-                    sources_used.append('web_search')
-                else:
-                    respuestas_default = KNOWLEDGE_BASE['default']['respuestas']
-                    response = random.choice(respuestas_default).format(tema=tema)
-                    sources_used.append('learning')
-            
-            # Ajustar respuesta según modo
-            if mode == 'fast':
-                response = response.split('.')[0] + '.' if '.' in response else response[:100]
-            elif mode == 'complete':
-                response += "\n\n¿Te gustaría que profundice en este tema?"
-            
-            return self._save_conversation(user_input, response, sources_used[0] if sources_used else 'learning',
-                                         attachment_info=attachment_info,
-                                         memories_count=len(relevant_memories),
-                                         sources_used=sources_used,
-                                         intent=intent_info.get('intent', 'unknown'))
-    
+
+    # ------------------------------------------------------------------ #
+    #  LÓGICA DE CHAT - CORREGIDA                                          #
+    # ------------------------------------------------------------------ #
+
+    def _find_best_topic(self, text):
+        """
+        CORREGIDO: Busca el mejor tema en KNOWLEDGE_BASE usando texto normalizado.
+        El score cuenta cuántas keywords del tema aparecen en el texto.
+        Retorna la clave del tema o None.
+        """
+        # Normalizar: eliminar acentos no críticos, lowercase, agregar espacios en extremos
+        text_lower = f" {text.lower()} "
+
+        best_score = 0
+        best_topic = None
+
+        for topic_key, data in KNOWLEDGE_BASE.items():
+            if topic_key == 'default':
+                continue
+            score = 0
+            for kw in data['keywords']:
+                # Buscar keyword (con espacios para evitar falsas coincidencias parciales)
+                kw_padded = f" {kw.lower()} "
+                if kw_padded in text_lower or kw.lower() in text_lower:
+                    # Frases largas valen más
+                    score += max(1, len(kw.split()))
+            if score > best_score:
+                best_score = score
+                best_topic = topic_key
+
+        logger.info(f"🔎 KB match: topic='{best_topic}' score={best_score}")
+        # Umbral: al menos 1 coincidencia
+        return best_topic if best_score >= 1 else None
+
+    def _find_relevant_memories(self, text, memories):
+        """
+        CORREGIDO: Filtra stop-words y requiere ≥2 palabras significativas en común.
+        Solo retorna memorias cuyo topic también coincide con la consulta.
+        """
+        STOP_WORDS = {
+            'el', 'la', 'los', 'las', 'un', 'una', 'unos', 'unas', 'de', 'del',
+            'en', 'es', 'que', 'y', 'a', 'se', 'no', 'con', 'por', 'para', 'su',
+            'al', 'lo', 'le', 'me', 'mi', 'yo', 'tu', 'te', 'si', 'ya', 'como',
+            'mas', 'más', 'pero', 'o', 'he', 'ha', 'hay', 'muy', 'bien', 'sobre',
+            'cuando', 'tan', 'sin', 'ni', 'esto', 'ese', 'eso', 'esta', 'este',
+            'ser', 'fue', 'era', 'son', 'sus', 'que', 'cual', 'quien', 'donde'
+        }
+
+        query_words = set(
+            w for w in text.lower().split()
+            if w not in STOP_WORDS and len(w) > 2
+        )
+
+        if not query_words:
+            return []
+
+        scored = []
+        for mem in memories:
+            mem_words = set(
+                w for w in mem.content.lower().split()
+                if w not in STOP_WORDS and len(w) > 2
+            )
+            common = query_words & mem_words
+            if len(common) >= 2:
+                # Verificar que el topic de la memoria también sea relevante
+                topic_words = set(
+                    w for w in (mem.topic or '').lower().split()
+                    if w not in STOP_WORDS and len(w) > 2
+                )
+                topic_match = len(topic_words & query_words) >= 1 if topic_words else True
+                if topic_match:
+                    scored.append((mem, len(common)))
+                    mem.access_count += 1
+
+        scored.sort(key=lambda x: x[1], reverse=True)
+        if scored:
+            try:
+                db.session.commit()
+            except Exception:
+                pass
+
+        return [mem for mem, _ in scored[:5]]
+
     def _find_relevant_memories_neural(self, query, memories):
         relevant = []
         for mem in memories:
@@ -758,29 +824,120 @@ class CicIA:
             if relevance > 0.6:
                 relevant.append((mem, relevance))
                 mem.access_count += 1
-        
         relevant.sort(key=lambda x: x[1], reverse=True)
-        db.session.commit()
-        
+        if relevant:
+            try:
+                db.session.commit()
+            except Exception:
+                pass
         return [mem for mem, _ in relevant[:5]]
-    
+
+    def process_chat(self, user_input, mode='balanced', attachment_info=None):
+        """
+        Procesa el mensaje del usuario y genera una respuesta.
+        Orden de prioridad:
+          1. Fecha/hora del sistema
+          2. Knowledge Base (respuesta directa)
+          3. Memorias relevantes (solo si el topic coincide)
+          4. Búsqueda web en tiempo real
+          5. Respuesta por defecto
+        """
+        input_lower = user_input.lower().strip()
+
+        # --- 1. Fecha/hora ---
+        if self._is_date_time_question(input_lower):
+            response = self._get_dynamic_date_response(input_lower)
+            return self._save_conversation(
+                user_input, response, 'system_time',
+                attachment_info=attachment_info
+            )
+
+        # --- 2. Intención neural (informativo, no bloquea el flujo) ---
+        intent_info = self.neural_net.predict_intent(user_input)
+        logger.info(f"🧠 Intención: {intent_info}")
+
+        # --- 3. Knowledge Base ---
+        best_topic = self._find_best_topic(input_lower)
+
+        with app.app_context():
+            sources_used = []
+            response = ""
+            memories_count = 0
+
+            if best_topic:
+                respuestas = KNOWLEDGE_BASE[best_topic]['respuestas']
+                response = random.choice(respuestas)
+                sources_used.append('knowledge_base')
+                logger.info(f"✅ Respuesta KB → '{best_topic}'")
+
+            else:
+                # --- 4. Memorias relevantes ---
+                all_memories = Memory.query.all()
+
+                if self.neural_net.is_trained:
+                    relevant = self._find_relevant_memories_neural(user_input, all_memories)
+                else:
+                    relevant = self._find_relevant_memories(input_lower, all_memories)
+
+                memories_count = len(relevant)
+
+                if relevant:
+                    mem = relevant[0]
+                    response = f"Basándome en mi conocimiento aprendido:\n\n{mem.content[:400]}"
+                    sources_used.append(f"memory_{mem.source}")
+                    logger.info(f"✅ Respuesta memoria → topic='{mem.topic}'")
+
+                else:
+                    # --- 5. Búsqueda web ---
+                    tema = user_input[:60] if len(user_input) > 5 else "este tema"
+                    logger.info(f"🌐 Sin respuesta local, buscando en web: '{tema}'")
+                    web_results = self._search_and_learn(user_input)
+
+                    if web_results and web_results.get('summary'):
+                        response = f"He investigado en internet sobre '{tema}':\n\n"
+                        response += web_results['summary']
+                        sources_used.append('web_search')
+                        logger.info("✅ Respuesta web search")
+                    else:
+                        # --- 6. Fallback ---
+                        tema_corto = user_input[:40]
+                        respuestas_default = KNOWLEDGE_BASE['default']['respuestas']
+                        response = random.choice(respuestas_default).format(tema=tema_corto)
+                        sources_used.append('learning')
+                        logger.info("⚠️ Respuesta por defecto (sin resultados web)")
+
+            # Ajuste según modo
+            if mode == 'fast':
+                response = (response.split('.')[0] + '.') if '.' in response else response[:150]
+            elif mode == 'complete':
+                response += "\n\n¿Te gustaría que profundice más en este tema?"
+
+            return self._save_conversation(
+                user_input, response,
+                sources_used[0] if sources_used else 'learning',
+                attachment_info=attachment_info,
+                memories_count=memories_count,
+                sources_used=sources_used,
+                intent=intent_info.get('intent', 'unknown')
+            )
+
     def _search_and_learn(self, query):
         try:
             with app.app_context():
                 cached = WebSearchCache.query.filter_by(query=query).first()
                 if cached and cached.expires_at > datetime.utcnow():
                     return cached.results
-                
+
                 results = self.web_search_engine.search_duckduckgo(query, max_results=3)
-                
+
                 if not results:
                     return None
-                
+
                 summary = ""
                 for i, result in enumerate(results, 1):
                     summary += f"{i}. **{result['title']}**\n"
                     summary += f"   {result['snippet']}\n\n"
-                    
+
                     memory = Memory(
                         content=result['snippet'],
                         source='web_search',
@@ -788,7 +945,7 @@ class CicIA:
                         relevance_score=0.7
                     )
                     db.session.add(memory)
-                
+
                 cache_entry = WebSearchCache(
                     query=query,
                     results={'summary': summary},
@@ -796,37 +953,15 @@ class CicIA:
                 )
                 db.session.add(cache_entry)
                 db.session.commit()
-                
+
                 return {'summary': summary}
         except Exception as e:
             logger.error(f"❌ Error en búsqueda web: {e}")
             return None
-    
-    def _find_best_topic(self, text):
-        best_score = 0
-        best_topic = 'default'
-        for topic, data in KNOWLEDGE_BASE.items():
-            if topic == 'default':
-                continue
-            score = sum(3 for kw in data['keywords'] if kw in text)
-            if score > best_score:
-                best_score = score
-                best_topic = topic
-        return best_topic if best_score >= 2 else None
-    
-    def _find_relevant_memories(self, text, memories):
-        relevant = []
-        text_words = set(text.split())
-        for mem in memories:
-            mem_words = set(mem.content.lower().split())
-            if len(text_words & mem_words) >= 2:
-                relevant.append(mem)
-                mem.access_count += 1
-        db.session.commit()
-        return relevant
-    
-    def _save_conversation(self, user_msg, bot_resp, source, 
-                          attachment_info=None, memories_count=0, sources_used=None, intent='unknown'):
+
+    def _save_conversation(self, user_msg, bot_resp, source,
+                           attachment_info=None, memories_count=0,
+                           sources_used=None, intent='unknown'):
         with app.app_context():
             conv = Conversation(
                 user_message=user_msg,
@@ -836,7 +971,7 @@ class CicIA:
                 sources_used=sources_used or [source]
             )
             db.session.add(conv)
-            
+
             today = date.today()
             log = LearningLog.query.filter_by(date=today).first()
             if not log:
@@ -844,35 +979,35 @@ class CicIA:
                 db.session.add(log)
             else:
                 log.count += 1
-            
+
             db.session.commit()
             total_mem = Memory.query.count()
-        
+
         return {
             'response': bot_resp,
-            'model_used': 'cic_ia_neural',
+            'model_used': 'cic_ia_neural_v6.5',
             'sources_used': sources_used or [source],
             'memories_found': memories_count,
             'total_memories': total_mem,
             'has_attachment': attachment_info is not None,
             'intent_detected': intent
         }
-    
+
     def _is_date_time_question(self, text):
-        keywords = ['qué día', 'qué hora', 'fecha', 'hora actual', 'hoy es', 'dia es', 'día es']
+        keywords = ['qué día', 'qué hora', 'fecha actual', 'hora actual', 'hoy es',
+                    'que dia', 'que hora', 'qué fecha', 'que fecha', 'dia de hoy',
+                    'día de hoy', 'fecha de hoy']
         return any(kw in text for kw in keywords)
-    
+
     def _get_dynamic_date_response(self, text):
         now = datetime.now()
         dias = ['lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo']
         meses = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
-                'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
-        
+                 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
         fecha = f"📅 Hoy es {dias[now.weekday()]}, {now.day} de {meses[now.month-1]} de {now.year}"
         hora = f"🕐 Son las {now.strftime('%H:%M:%S')}"
-        
         return f"{fecha}\n{hora}"
-    
+
     def get_learning_stats(self):
         with app.app_context():
             total_memories = Memory.query.count()
@@ -881,28 +1016,32 @@ class CicIA:
                 'web_search': Memory.query.filter_by(source='web_search').count(),
                 'user_taught': Memory.query.filter_by(source='user_taught').count(),
                 'manual_learning': Memory.query.filter_by(source='manual_learning').count(),
-                'knowledge_base': Memory.query.filter(Memory.source.notin_(['auto_learning', 'web_search', 'user_taught', 'manual_learning'])).count()
+                'knowledge_base': Memory.query.filter(
+                    Memory.source.notin_(['auto_learning', 'web_search', 'user_taught', 'manual_learning'])
+                ).count()
             }
-            
+
             week_ago = date.today() - timedelta(days=7)
             recent_logs = LearningLog.query.filter(LearningLog.date >= week_ago).all()
-            
             weekly_stats = {
                 'conversations': sum(log.count for log in recent_logs),
                 'web_searches': sum(log.web_searches for log in recent_logs),
                 'auto_learned': sum(log.auto_learned for log in recent_logs)
             }
-            
+
             topic_counts = {}
             for mem in Memory.query.filter(Memory.source == 'auto_learning').all():
-                topic = mem.topic or 'unknown'
-                topic_counts[topic] = topic_counts.get(topic, 0) + 1
-            
+                t = mem.topic or 'unknown'
+                topic_counts[t] = topic_counts.get(t, 0) + 1
             top_topics = sorted(topic_counts.items(), key=lambda x: x[1], reverse=True)[:5]
-            
+
             manual_pending = ManualLearningQueue.query.filter_by(status='pending').count()
             manual_completed = ManualLearningQueue.query.filter_by(status='completed').count()
-            
+
+            # Total auto-aprendidos: DB + sesión actual
+            auto_learned_db = db.session.query(db.func.sum(LearningLog.auto_learned)).scalar() or 0
+            auto_learned_total = int(auto_learned_db) + self._auto_learned_session
+
             return {
                 'total_memories': total_memories,
                 'by_source': by_source,
@@ -917,7 +1056,8 @@ class CicIA:
                 'manual_learning_queue': {
                     'pending': manual_pending,
                     'completed': manual_completed
-                }
+                },
+                'auto_learned_total': auto_learned_total
             }
 
 # Instancia global
@@ -938,11 +1078,11 @@ def health_check():
     return jsonify({
         'status': 'healthy',
         'timestamp': datetime.utcnow().isoformat(),
-        'version': '4.0_neural_fixed',
-        'features': ['chat', 'web_search', 'auto_learning', 'memory', 'evolution', '50_topics', 'neural_network', 'manual_learning']
+        'version': '6.5.0_fixed',
+        'features': ['chat', 'web_search', 'auto_learning', 'memory',
+                     'evolution', '50_topics', 'neural_network', 'manual_learning']
     })
 
-# ✅ CORREGIDO: Endpoint renombrado a api_chat para evitar conflicto
 @app.route('/api/chat', methods=['POST'])
 def api_chat():
     """Endpoint principal de chat"""
@@ -950,17 +1090,16 @@ def api_chat():
         data = request.json
         message = data.get('message', '').strip()
         mode = data.get('mode', 'balanced')
-        
+
         if not message:
             return jsonify({'error': 'Mensaje vacío'}), 400
-        
-        # ✅ CORREGIDO: Llamar a process_chat en lugar de chat
+
         result = cic_ia.process_chat(message, mode=mode)
         return jsonify(result)
     except Exception as e:
-        logger.error(f"❌ Error en endpoint /api/chat: {e}")
+        logger.error(f"❌ Error en /api/chat: {e}")
         return jsonify({
-            'error': str(e), 
+            'error': str(e),
             'response': 'Lo siento, ocurrió un error procesando tu mensaje. Por favor intenta de nuevo.'
         }), 500
 
@@ -970,9 +1109,9 @@ def web_search():
         query = request.json.get('query', '').strip()
         if not query:
             return jsonify({'error': 'Query vacío'}), 400
-        
+
         results = cic_ia.web_search_engine.search_duckduckgo(query, max_results=5)
-        
+
         with app.app_context():
             for result in results:
                 memory = Memory(
@@ -983,13 +1122,8 @@ def web_search():
                 )
                 db.session.add(memory)
             db.session.commit()
-        
-        return jsonify({
-            'query': query,
-            'results': results,
-            'count': len(results),
-            'source': 'duckduckgo'
-        })
+
+        return jsonify({'query': query, 'results': results, 'count': len(results), 'source': 'duckduckgo'})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -1000,9 +1134,9 @@ def status():
             today = date.today()
             log = LearningLog.query.filter_by(date=today).first()
             stats = cic_ia.get_learning_stats()
-            
+
             return jsonify({
-                'stage': 'v4.0_neural_fixed',
+                'stage': 'v6.5.0_fixed',
                 'total_memories': stats['total_memories'],
                 'total_conversations': Conversation.query.count(),
                 'today_learned': log.count if log else 0,
@@ -1012,9 +1146,11 @@ def status():
                 'auto_learning_active': True,
                 'learning_frequency': 'cada 2 horas',
                 'total_topics': len(cic_ia.auto_learning_topics),
+                'auto_learned_total': stats.get('auto_learned_total', 0),
                 'learning_stats': stats,
                 'neural_network': stats.get('neural_network', {}),
-                'features': ['chat', 'web_search', 'auto_learning', 'memory', 'evolution', '50_topics', 'attachments', 'neural_network', 'manual_learning']
+                'features': ['chat', 'web_search', 'auto_learning', 'memory',
+                             'evolution', '50_topics', 'attachments', 'neural_network', 'manual_learning']
             })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -1025,29 +1161,21 @@ def learn():
         data = request.json
         query = data.get('query', '')
         source = data.get('source', 'wikipedia')
-        
+
         with app.app_context():
+            results = []
             if source == 'web':
                 results = cic_ia.web_search_engine.search_duckduckgo(query, max_results=3)
                 for result in results:
-                    memory = Memory(
-                        content=result['snippet'],
-                        source='web_search',
-                        topic=query,
-                        relevance_score=0.8
-                    )
+                    memory = Memory(content=result['snippet'], source='web_search',
+                                    topic=query, relevance_score=0.8)
                     db.session.add(memory)
             else:
-                memory = Memory(
-                    content=f"Información sobre {query}",
-                    source='wikipedia',
-                    topic=query,
-                    relevance_score=0.7
-                )
+                memory = Memory(content=f"Información sobre {query}", source='wikipedia',
+                                topic=query, relevance_score=0.7)
                 db.session.add(memory)
-            
+
             db.session.commit()
-            
             return jsonify({
                 'message': f'✅ He aprendido sobre {query} desde {source}',
                 'memories_added': len(results) if source == 'web' else 1
@@ -1062,16 +1190,15 @@ def teach():
         text = data.get('text', '').strip()
         topic = data.get('topic', '').strip()
         source = data.get('source', 'user_taught')
-        
+
         token = request.headers.get('X-Dev-Token')
         is_dev = dev_auth.verify_token(token) if token else False
-        
+
         if not text:
             return jsonify({'error': 'Texto vacío'}), 400
-        
         if not topic:
             topic = text[:50]
-        
+
         with app.app_context():
             memory = Memory(
                 content=text,
@@ -1081,25 +1208,21 @@ def teach():
                 access_count=0
             )
             db.session.add(memory)
-            
+
             if is_dev:
                 evolution = KnowledgeEvolution(
-                    topic=topic,
-                    action='manual_teach',
-                    new_content=text[:200],
-                    source='developer'
+                    topic=topic, action='manual_teach',
+                    new_content=text[:200], source='developer'
                 )
                 db.session.add(evolution)
-            
+
             db.session.commit()
-            
             return jsonify({
                 'message': 'He aprendido lo que me enseñaste',
                 'memory_id': memory.id,
                 'topic': topic,
                 'is_dev_mode': is_dev
             })
-            
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
@@ -1110,11 +1233,8 @@ def memories():
         with app.app_context():
             mems = Memory.query.order_by(Memory.created_at.desc()).limit(10).all()
             return jsonify([{
-                'id': m.id,
-                'topic': m.topic,
-                'source': m.source,
-                'content': m.content[:100],
-                'relevance': m.relevance_score
+                'id': m.id, 'topic': m.topic, 'source': m.source,
+                'content': m.content[:100], 'relevance': m.relevance_score
             } for m in mems])
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -1125,9 +1245,7 @@ def history():
         with app.app_context():
             convs = Conversation.query.order_by(Conversation.timestamp.desc()).limit(5).all()
             return jsonify([{
-                'user': c.user_message,
-                'bot': c.bot_response,
-                'sources': c.sources_used
+                'user': c.user_message, 'bot': c.bot_response, 'sources': c.sources_used
             } for c in convs])
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -1148,20 +1266,10 @@ def dev_login():
         data = request.json
         username = data.get('username', '').strip()
         password = data.get('password', '').strip()
-        
         if dev_auth.verify_credentials(username, password):
             token = dev_auth.generate_token(username)
-            return jsonify({
-                'success': True,
-                'token': token,
-                'username': username,
-                'expires_in': '24h'
-            })
-        else:
-            return jsonify({
-                'success': False,
-                'error': 'Credenciales inválidas'
-            }), 401
+            return jsonify({'success': True, 'token': token, 'username': username, 'expires_in': '24h'})
+        return jsonify({'success': False, 'error': 'Credenciales inválidas'}), 401
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -1189,55 +1297,36 @@ def dev_verify():
 def dev_manual_learning():
     try:
         data = request.get_json()
-        
         if not data:
-            return jsonify({
-                'success': False,
-                'error': 'No se recibieron datos'
-            }), 400
-        
+            return jsonify({'success': False, 'error': 'No se recibieron datos'}), 400
+
         content = (data.get('content') or '').strip()
         topic = (data.get('topic') or '').strip()
         source_url = (data.get('source_url') or '').strip() or None
         priority = data.get('priority', 1)
-        
+
         if not content:
-            return jsonify({
-                'success': False,
-                'error': 'Debes proporcionar contenido para aprender'
-            }), 400
-        
+            return jsonify({'success': False, 'error': 'Debes proporcionar contenido para aprender'}), 400
         if not topic:
             topic = content[:50] + '...' if len(content) > 50 else content
-        
+
         try:
             priority = int(priority)
             if priority not in [1, 2, 3]:
                 priority = 1
         except (ValueError, TypeError):
             priority = 1
-        
-        result = cic_ia.add_manual_learning(
-            content=content,
-            topic=topic,
-            source_url=source_url,
-            priority=priority
-        )
-        
+
+        result = cic_ia.add_manual_learning(content=content, topic=topic,
+                                             source_url=source_url, priority=priority)
         if result['success']:
             return jsonify({
                 'success': True,
                 'message': f'📥 Contenido agregado a la cola (ID: {result["id"]})',
-                'topic': topic,
-                'priority': priority,
+                'topic': topic, 'priority': priority,
                 'note': 'Se procesará en los próximos 5 minutos'
             })
-        else:
-            return jsonify({
-                'success': False,
-                'error': result.get('error', 'Error desconocido')
-            }), 500
-            
+        return jsonify({'success': False, 'error': result.get('error', 'Error desconocido')}), 500
     except Exception as e:
         logger.error(f"Error en manual learning: {e}")
         return jsonify({'error': str(e)}), 500
@@ -1251,23 +1340,17 @@ def dev_manual_learning_queue():
             processing = ManualLearningQueue.query.filter_by(status='processing').count()
             completed = ManualLearningQueue.query.filter_by(status='completed').count()
             failed = ManualLearningQueue.query.filter_by(status='failed').count()
-            
             recent = ManualLearningQueue.query.order_by(
-                ManualLearningQueue.created_at.desc()
-            ).limit(10).all()
-            
+                ManualLearningQueue.created_at.desc()).limit(10).all()
+
             return jsonify({
                 'queue_stats': {
-                    'pending': pending,
-                    'processing': processing,
-                    'completed': completed,
-                    'failed': failed,
+                    'pending': pending, 'processing': processing,
+                    'completed': completed, 'failed': failed,
                     'total': pending + processing + completed + failed
                 },
                 'recent_items': [{
-                    'id': item.id,
-                    'topic': item.topic,
-                    'status': item.status,
+                    'id': item.id, 'topic': item.topic, 'status': item.status,
                     'priority': item.priority,
                     'created_at': item.created_at.isoformat(),
                     'processed_at': item.processed_at.isoformat() if item.processed_at else None
@@ -1282,31 +1365,29 @@ def dev_train_neural_network():
     try:
         with app.app_context():
             conversations = Conversation.query.order_by(
-                Conversation.timestamp.desc()
-            ).limit(100).all()
-            
+                Conversation.timestamp.desc()).limit(100).all()
+
             if len(conversations) < 10:
                 return jsonify({
                     'success': False,
                     'error': 'Se necesitan al menos 10 conversaciones para entrenar',
                     'current': len(conversations)
                 }), 400
-            
+
             texts = [conv.user_message for conv in conversations]
             labels = []
             for text in texts:
-                text_lower = text.lower()
-                if any(kw in text_lower for kw in ['hola', 'buenas', 'saludos']):
+                tl = text.lower()
+                if any(kw in tl for kw in ['hola', 'buenas', 'saludos']):
                     labels.append('greeting')
-                elif any(kw in text_lower for kw in ['qué', 'cómo', 'cuándo', 'dónde']):
+                elif any(kw in tl for kw in ['qué', 'cómo', 'cuándo', 'dónde', 'que', 'como', 'cuando']):
                     labels.append('question')
-                elif any(kw in text_lower for kw in ['gracias', 'ok', 'bien']):
+                elif any(kw in tl for kw in ['gracias', 'ok', 'bien', 'perfecto']):
                     labels.append('acknowledgment')
                 else:
                     labels.append('statement')
-            
+
             success = neural_net.train(texts, labels)
-            
             if success:
                 return jsonify({
                     'success': True,
@@ -1315,12 +1396,7 @@ def dev_train_neural_network():
                     'labels': list(set(labels)),
                     'stats': neural_net.get_stats()
                 })
-            else:
-                return jsonify({
-                    'success': False,
-                    'error': 'Error durante el entrenamiento'
-                }), 500
-                
+            return jsonify({'success': False, 'error': 'Error durante el entrenamiento'}), 500
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -1335,15 +1411,9 @@ def dev_set_learning_topic():
     try:
         data = request.json
         topic = (data.get('topic') or '').strip()
-        
         if not topic:
-            return jsonify({
-                'success': False,
-                'error': 'Debes proporcionar un tema'
-            }), 400
-        
+            return jsonify({'success': False, 'error': 'Debes proporcionar un tema'}), 400
         cic_ia.set_custom_topic(topic)
-        
         return jsonify({
             'success': True,
             'message': f'📌 Tema establecido: "{topic}"',
@@ -1358,10 +1428,7 @@ def dev_set_learning_topic():
 def dev_clear_learning_topic():
     try:
         cic_ia.clear_custom_topic()
-        return jsonify({
-            'success': True,
-            'message': 'Tema personalizado eliminado'
-        })
+        return jsonify({'success': True, 'message': 'Tema personalizado eliminado'})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -1371,20 +1438,22 @@ def evolution_learn_now():
     try:
         data = request.get_json() or {}
         topic = (data.get('topic') or '').strip() or None
-        
+
         if topic:
             cic_ia.set_custom_topic(topic)
-        
-        threading.Thread(
-            target=cic_ia._perform_auto_learning,
-            args=(topic,),
-            daemon=True
-        ).start()
-        
+
+        def _learn_and_count(t):
+            count = cic_ia._perform_auto_learning(t)
+            if count:
+                cic_ia._auto_learned_session += count
+                logger.info(f"🤖 Forzado: +{count} aprendidos, sesión total={cic_ia._auto_learned_session}")
+
+        threading.Thread(target=_learn_and_count, args=(topic,), daemon=True).start()
+
         message_text = '🤖 Auto-aprendizaje iniciado manualmente'
         if topic:
             message_text += f' sobre "{topic}"'
-        
+
         return jsonify({
             'success': True,
             'message': message_text,
@@ -1405,18 +1474,13 @@ def dev_memories_all():
     try:
         page = request.args.get('page', 1, type=int)
         per_page = request.args.get('per_page', 50, type=int)
-        
-        pagination = Memory.query.order_by(
-            Memory.created_at.desc()
-        ).paginate(page=page, per_page=per_page, error_out=False)
-        
+        pagination = Memory.query.order_by(Memory.created_at.desc())\
+            .paginate(page=page, per_page=per_page, error_out=False)
+
         return jsonify({
             'memories': [{
-                'id': m.id,
-                'topic': m.topic,
-                'content': m.content,
-                'source': m.source,
-                'relevance': m.relevance_score,
+                'id': m.id, 'topic': m.topic, 'content': m.content,
+                'source': m.source, 'relevance': m.relevance_score,
                 'access_count': m.access_count,
                 'created_at': m.created_at.isoformat()
             } for m in pagination.items],
@@ -1445,7 +1509,6 @@ def dev_stats_detailed():
     try:
         today = date.today()
         week_ago = today - timedelta(days=7)
-        
         stats = {
             'general': {
                 'total_memories': Memory.query.count(),
@@ -1462,19 +1525,15 @@ def dev_stats_detailed():
             },
             'today': {
                 'conversations': db.session.query(db.func.sum(LearningLog.count)).filter(
-                    LearningLog.date == today
-                ).scalar() or 0,
+                    LearningLog.date == today).scalar() or 0,
                 'auto_learned': db.session.query(db.func.sum(LearningLog.auto_learned)).filter(
-                    LearningLog.date == today
-                ).scalar() or 0
+                    LearningLog.date == today).scalar() or 0
             },
             'this_week': {
                 'conversations': db.session.query(db.func.sum(LearningLog.count)).filter(
-                    LearningLog.date >= week_ago
-                ).scalar() or 0,
+                    LearningLog.date >= week_ago).scalar() or 0,
                 'web_searches': db.session.query(db.func.sum(LearningLog.web_searches)).filter(
-                    LearningLog.date >= week_ago
-                ).scalar() or 0
+                    LearningLog.date >= week_ago).scalar() or 0
             },
             'learning': {
                 'frequency': 'cada 2 horas',
@@ -1488,7 +1547,6 @@ def dev_stats_detailed():
                 'completed': ManualLearningQueue.query.filter_by(status='completed').count()
             }
         }
-        
         return jsonify(stats)
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -1503,14 +1561,13 @@ def dev_clear_db():
                 'error': 'Confirmación requerida',
                 'message': 'Agrega header X-Confirm-Delete: DESTRUIR_TODO'
             }), 400
-        
+
         counts = {
             'memories': Memory.query.count(),
             'conversations': Conversation.query.count(),
             'logs': LearningLog.query.count(),
             'manual_queue': ManualLearningQueue.query.count()
         }
-        
         Memory.query.delete()
         Conversation.query.delete()
         LearningLog.query.delete()
@@ -1518,14 +1575,9 @@ def dev_clear_db():
         KnowledgeEvolution.query.delete()
         DeveloperSession.query.delete()
         ManualLearningQueue.query.delete()
-        
         db.session.commit()
-        
-        return jsonify({
-            'success': True,
-            'message': 'Base de datos completamente eliminada',
-            'deleted': counts
-        })
+
+        return jsonify({'success': True, 'message': 'Base de datos completamente eliminada', 'deleted': counts})
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
@@ -1534,20 +1586,14 @@ def dev_clear_db():
 @dev_required
 def dev_sessions():
     try:
-        sessions = []
-        for token, session in dev_auth.active_sessions.items():
-            sessions.append({
-                'username': session['username'],
-                'created_at': session['created_at'].isoformat(),
-                'expires_at': session['expires_at'].isoformat(),
-                'last_used': session['last_used'].isoformat(),
-                'token_preview': token[:8] + '...'
-            })
-        
-        return jsonify({
-            'active_sessions': len(sessions),
-            'sessions': sessions
-        })
+        sessions = [{
+            'username': s['username'],
+            'created_at': s['created_at'].isoformat(),
+            'expires_at': s['expires_at'].isoformat(),
+            'last_used': s['last_used'].isoformat(),
+            'token_preview': t[:8] + '...'
+        } for t, s in dev_auth.active_sessions.items()]
+        return jsonify({'active_sessions': len(sessions), 'sessions': sessions})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
