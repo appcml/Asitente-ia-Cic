@@ -3,1620 +3,374 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cic_IA - Asistente Inteligente</title>
+    <title>Cic_IA - Dashboard de Aprendizaje</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
+            background: #f0f2f5; 
+            padding: 20px;
+            line-height: 1.6;
         }
-
-        :root {
-            --primary: #4ecca3;
-            --danger: #e94560;
-            --dark: #0f0f1e;
-            --sidebar: #1a1a2e;
-            --card: #16213e;
-            --border: #2d2d44;
-            --warning: #f39c12;
+        h1 { color: #1a1a2e; margin-bottom: 20px; }
+        h2 { color: #16213e; margin: 20px 0 10px; font-size: 1.2em; }
+        
+        .grid { 
+            display: grid; 
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); 
+            gap: 20px; 
+            max-width: 1400px;
+            margin: 0 auto;
         }
-
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: var(--dark);
-            color: #fff;
-            height: 100vh;
-            overflow: hidden;
+        
+        .card { 
+            background: white; 
+            border-radius: 12px; 
+            padding: 20px; 
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
         }
-
-        .container {
-            display: flex;
-            height: 100vh;
+        
+        .stat-number { 
+            font-size: 2em; 
+            font-weight: bold; 
+            color: #0f3460; 
         }
-
-        /* SIDEBAR */
-        .sidebar {
-            width: 260px;
-            background: var(--sidebar);
-            display: flex;
-            flex-direction: column;
-            padding: 15px;
-            border-right: 1px solid var(--border);
+        
+        .stat-label { color: #666; font-size: 0.9em; }
+        
+        .memory-item { 
+            border-left: 4px solid; 
+            padding: 12px 15px; 
+            margin: 10px 0; 
+            background: #f8f9fa;
+            border-radius: 0 8px 8px 0;
         }
-
-        .new-chat-btn {
-            background: var(--primary);
-            color: var(--sidebar);
-            border: none;
-            padding: 12px;
-            border-radius: 8px;
-            font-size: 14px;
-            font-weight: bold;
-            cursor: pointer;
-            margin-bottom: 15px;
-            transition: all 0.3s;
-        }
-
-        .new-chat-btn:hover {
-            opacity: 0.9;
-            transform: translateY(-1px);
-        }
-
-        /* HERRAMIENTAS COMPACTAS - ARRIBA */
-        .tools-section {
-            margin-bottom: 15px;
-        }
-
-        .section-title {
-            color: var(--primary);
-            font-size: 10px;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            margin-bottom: 10px;
-            opacity: 0.8;
-        }
-
-        .tool-item {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            padding: 10px;
-            margin-bottom: 6px;
-            background: var(--card);
-            border-radius: 6px;
-            cursor: pointer;
-            transition: all 0.2s;
-            font-size: 12px;
-        }
-
-        .tool-item:hover {
-            background: #0f3460;
-            transform: translateX(3px);
-        }
-
-        .tool-icon {
-            font-size: 18px;
-        }
-
-        .tool-info {
-            flex: 1;
-        }
-
-        .tool-name {
-            font-weight: 600;
-            font-size: 12px;
-        }
-
-        .tool-desc {
-            font-size: 10px;
-            color: #888;
-        }
-
-        /* HISTORIAL - ABAJO */
-        .history-section {
-            flex: 1;
-            overflow-y: auto;
-            margin-bottom: 10px;
-        }
-
-        .history-item {
-            padding: 10px;
-            margin-bottom: 5px;
-            background: var(--card);
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 11px;
-            transition: all 0.2s;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .history-item:hover {
-            background: #0f3460;
-        }
-
-        .history-text {
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            color: #ccc;
-        }
-
-        /* BOTÓN MODO DEV / INDICADOR */
-        .dev-login-btn {
-            margin-top: auto;
-            padding: 10px;
-            background: transparent;
-            border: 1px dashed var(--danger);
-            color: var(--danger);
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 11px;
-            transition: all 0.3s;
-        }
-
-        .dev-login-btn:hover {
-            background: var(--danger);
-            color: white;
-        }
-
-        .dev-indicator {
-            display: none;
-            margin-top: auto;
-            padding: 12px;
-            background: var(--danger);
-            color: white;
-            border-radius: 6px;
-            font-size: 11px;
-            text-align: center;
-        }
-
-        .dev-indicator.active {
+        
+        .memory-item.auto_learning { border-color: #2196F3; }
+        .memory-item.curiosity { border-color: #FF9800; }
+        .memory-item.web_search { border-color: #4CAF50; }
+        .memory-item.manual_learning { border-color: #9C27B0; }
+        
+        .timestamp { 
+            color: #888; 
+            font-size: 0.85em; 
             display: block;
+            margin-bottom: 5px;
         }
-
-        .dev-indicator button {
+        
+        .topic { 
+            font-weight: 600; 
+            color: #1a1a2e;
+            margin-bottom: 5px;
+        }
+        
+        .source-badge { 
+            display: inline-block; 
+            padding: 2px 10px; 
+            border-radius: 12px; 
+            font-size: 0.75em; 
+            text-transform: uppercase;
+            font-weight: 500;
+        }
+        
+        .source-badge.auto_learning { background: #E3F2FD; color: #1976D2; }
+        .source-badge.curiosity { background: #FFF3E0; color: #F57C00; }
+        .source-badge.web_search { background: #E8F5E9; color: #388E3C; }
+        .source-badge.manual_learning { background: #F3E5F5; color: #7B1FA2; }
+        
+        .preview { 
+            color: #555; 
+            font-size: 0.95em;
             margin-top: 8px;
-            padding: 6px 10px;
-            background: white;
-            color: var(--danger);
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 10px;
-            width: 100%;
-        }
-
-        /* MAIN CONTENT */
-        .main-content {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            background: var(--dark);
-            position: relative;
-        }
-
-        .header {
-            padding: 15px 20px;
-            border-bottom: 1px solid var(--border);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .logo {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .logo-icon {
-            font-size: 24px;
-        }
-
-        .logo-text {
-            font-size: 18px;
-            font-weight: 700;
-        }
-
-        .logo-text span {
-            color: var(--primary);
-        }
-
-        .mode-selector {
-            display: flex;
-            gap: 5px;
-            background: var(--sidebar);
-            padding: 4px;
-            border-radius: 6px;
-        }
-
-        .mode-btn {
-            padding: 6px 12px;
-            border: none;
-            background: transparent;
-            color: #888;
-            cursor: pointer;
-            border-radius: 4px;
-            font-size: 12px;
-            transition: all 0.3s;
-        }
-
-        .mode-btn.active {
-            background: var(--primary);
-            color: var(--sidebar);
-            font-weight: 600;
-        }
-
-        /* CHAT AREA */
-        .chat-area {
-            flex: 1;
-            overflow-y: auto;
-            padding: 20px;
-            scroll-behavior: smooth;
-        }
-
-        .welcome {
-            text-align: center;
-            padding: 40px 20px;
-        }
-
-        .welcome h1 {
-            font-size: 32px;
-            margin-bottom: 10px;
-            color: var(--primary);
-        }
-
-        .welcome p {
-            color: #888;
-            font-size: 14px;
-            max-width: 400px;
-            margin: 0 auto 30px;
-        }
-
-        .features-grid {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 15px;
-            max-width: 700px;
-            margin: 0 auto;
-        }
-
-        .feature-card {
-            background: var(--sidebar);
-            border-radius: 10px;
-            padding: 20px;
-            text-align: center;
-            border: 1px solid var(--border);
-            transition: all 0.3s;
-        }
-
-        .feature-card:hover {
-            border-color: var(--primary);
-        }
-
-        .feature-icon {
-            font-size: 28px;
-            margin-bottom: 10px;
-        }
-
-        .feature-title {
-            font-size: 12px;
-            font-weight: 600;
-            color: var(--primary);
-            margin-bottom: 4px;
-        }
-
-        .feature-desc {
-            font-size: 10px;
-            color: #888;
-        }
-
-        /* MENSAJES */
-        .messages {
-            max-width: 700px;
-            margin: 0 auto;
-            display: flex;
-            flex-direction: column;
-            gap: 15px;
-        }
-
-        .message {
-            display: flex;
-            gap: 10px;
-            max-width: 80%;
-        }
-
-        .message.user {
-            align-self: flex-end;
-            flex-direction: row-reverse;
-        }
-
-        .message-avatar {
-            width: 32px;
-            height: 32px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 14px;
-            flex-shrink: 0;
-        }
-
-        .message.user .message-avatar {
-            background: var(--primary);
-        }
-
-        .message.bot .message-avatar {
-            background: var(--danger);
-        }
-
-        .message-content {
-            background: var(--sidebar);
-            padding: 12px 16px;
-            border-radius: 12px;
             line-height: 1.5;
-            font-size: 14px;
         }
-
-        .message.user .message-content {
+        
+        .error { 
+            background: #ffebee; 
+            color: #c62828; 
+            padding: 15px; 
+            border-radius: 8px;
+            margin: 10px 0;
+        }
+        
+        .loading { 
+            text-align: center; 
+            color: #666; 
+            padding: 40px;
+        }
+        
+        .refresh-btn {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
             background: #0f3460;
-        }
-
-        .message-meta {
-            font-size: 10px;
-            color: #666;
-            margin-top: 5px;
-        }
-
-        /* INPUT */
-        .input-area {
-            padding: 15px 20px;
-            border-top: 1px solid var(--border);
-        }
-
-        .input-container {
-            max-width: 700px;
-            margin: 0 auto;
-            position: relative;
-        }
-
-        .chat-input {
-            width: 100%;
-            padding: 14px 50px 14px 16px;
-            border-radius: 10px;
-            border: 1px solid var(--border);
-            background: var(--sidebar);
-            color: #fff;
-            font-size: 14px;
-            outline: none;
-        }
-
-        .chat-input:focus {
-            border-color: var(--primary);
-        }
-
-        .send-btn {
-            position: absolute;
-            right: 6px;
-            top: 50%;
-            transform: translateY(-50%);
-            width: 36px;
-            height: 36px;
-            border-radius: 8px;
-            border: none;
-            background: var(--primary);
-            color: var(--sidebar);
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        /* TYPING */
-        .typing {
-            display: flex;
-            gap: 4px;
-            padding: 4px 0;
-        }
-
-        .typing span {
-            width: 8px;
-            height: 8px;
-            background: var(--primary);
-            border-radius: 50%;
-            animation: typing 1s infinite;
-        }
-
-        .typing span:nth-child(2) { animation-delay: 0.2s; }
-        .typing span:nth-child(3) { animation-delay: 0.4s; }
-
-        @keyframes typing {
-            0%, 100% { opacity: 0.3; }
-            50% { opacity: 1; }
-        }
-
-        /* PANEL DESARROLLADOR */
-        .dev-panel {
-            position: fixed;
-            right: -400px;
-            top: 0;
-            width: 380px;
-            height: 100vh;
-            background: var(--sidebar);
-            border-left: 1px solid var(--border);
-            z-index: 1000;
-            display: flex;
-            flex-direction: column;
-            transition: right 0.3s;
-        }
-
-        .dev-panel.open {
-            right: 0;
-        }
-
-        .dev-header {
-            padding: 20px;
-            border-bottom: 1px solid var(--border);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            background: var(--danger);
-        }
-
-        .dev-header h2 {
-            font-size: 16px;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .close-dev {
-            background: none;
-            border: none;
             color: white;
-            font-size: 20px;
-            cursor: pointer;
-        }
-
-        .dev-content {
-            flex: 1;
-            overflow-y: auto;
-            padding: 15px;
-        }
-
-        .dev-section {
-            margin-bottom: 20px;
-            padding: 15px;
-            background: var(--card);
-            border-radius: 8px;
-        }
-
-        .dev-section h3 {
-            color: var(--primary);
-            margin-bottom: 12px;
-            font-size: 13px;
-            display: flex;
-            align-items: center;
-            gap: 6px;
-        }
-
-        .dev-input, .dev-textarea, .dev-select {
-            width: 100%;
-            padding: 10px;
-            border-radius: 6px;
-            border: 1px solid var(--border);
-            background: var(--dark);
-            color: #fff;
-            font-family: inherit;
-            font-size: 13px;
-            margin-bottom: 8px;
-        }
-
-        .dev-textarea {
-            height: 100px;
-            resize: vertical;
-        }
-
-        .dev-select {
-            cursor: pointer;
-        }
-
-        .dev-btn {
-            width: 100%;
-            padding: 10px;
             border: none;
-            border-radius: 6px;
-            font-size: 12px;
-            font-weight: 600;
+            padding: 15px 25px;
+            border-radius: 50px;
             cursor: pointer;
-            transition: all 0.3s;
-            margin-bottom: 8px;
+            font-size: 1em;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
         }
-
-        .dev-btn.primary {
-            background: var(--primary);
-            color: var(--sidebar);
-        }
-
-        .dev-btn.warning {
-            background: var(--warning);
-            color: var(--dark);
-        }
-
-        .dev-btn.danger {
-            background: var(--danger);
-            color: white;
-        }
-
-        .dev-btn.secondary {
-            background: var(--border);
-            color: white;
-        }
-
-        .dev-btn:hover {
-            opacity: 0.9;
-            transform: translateY(-1px);
-        }
-
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 8px;
-            margin-bottom: 10px;
-        }
-
-        .stat-box {
-            background: var(--dark);
-            padding: 12px;
-            border-radius: 6px;
-            text-align: center;
-        }
-
-        .stat-number {
-            font-size: 24px;
-            font-weight: 700;
-            color: var(--primary);
-        }
-
-        .stat-label {
-            font-size: 10px;
-            color: #888;
-            margin-top: 3px;
-        }
-
-        .memories-list {
-            max-height: 200px;
-            overflow-y: auto;
-            background: var(--dark);
-            border-radius: 6px;
-            padding: 8px;
-            margin-bottom: 10px;
-        }
-
-        .memory-item {
-            padding: 10px;
-            margin-bottom: 6px;
-            background: var(--card);
-            border-radius: 6px;
-            font-size: 11px;
-        }
-
-        .memory-item strong {
-            color: var(--primary);
-            display: block;
-            margin-bottom: 4px;
-            font-size: 12px;
-        }
-
-        .memory-item p {
-            color: #ccc;
-            line-height: 1.4;
-            margin-bottom: 4px;
-        }
-
-        .memory-item small {
-            color: #666;
-        }
-
-        /* MODAL LOGIN */
-        .modal-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0,0,0,0.9);
-            display: none;
-            justify-content: center;
-            align-items: center;
-            z-index: 2000;
-        }
-
-        .modal-overlay.show {
-            display: flex;
-        }
-
-        .modal-box {
-            background: var(--sidebar);
-            padding: 30px;
-            border-radius: 12px;
-            width: 320px;
-            border: 1px solid var(--border);
-        }
-
-        .modal-box h3 {
-            color: var(--danger);
-            margin-bottom: 5px;
-            font-size: 18px;
-        }
-
-        .modal-box p {
-            color: #888;
-            font-size: 12px;
-            margin-bottom: 20px;
-        }
-
-        .form-group {
-            margin-bottom: 15px;
-        }
-
-        .form-group label {
-            display: block;
-            font-size: 11px;
-            color: #888;
-            margin-bottom: 5px;
-            text-transform: uppercase;
-        }
-
-        .form-group input, .form-group textarea, .form-group select {
-            width: 100%;
-            padding: 12px;
-            border-radius: 6px;
-            border: 1px solid var(--border);
-            background: var(--dark);
-            color: #fff;
-            font-size: 14px;
-        }
-
-        .form-group textarea {
-            min-height: 100px;
-            resize: vertical;
-        }
-
-        .modal-buttons {
+        
+        .refresh-btn:hover { background: #1a1a2e; }
+        
+        .tabs {
             display: flex;
             gap: 10px;
-            margin-top: 20px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
         }
-
-        .modal-btn {
-            flex: 1;
-            padding: 12px;
+        
+        .tab {
+            padding: 8px 16px;
+            border-radius: 20px;
             border: none;
-            border-radius: 6px;
+            background: #e0e0e0;
             cursor: pointer;
-            font-size: 12px;
-            font-weight: 600;
+            font-size: 0.9em;
         }
-
-        .modal-btn.primary {
-            background: var(--primary);
-            color: var(--sidebar);
+        
+        .tab.active { background: #0f3460; color: white; }
+        
+        .hidden { display: none; }
+        
+        .search-box {
+            width: 100%;
+            padding: 12px 15px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            font-size: 1em;
         }
-
-        .modal-btn.secondary {
-            background: var(--card);
+        
+        .empty-state {
+            text-align: center;
+            padding: 40px;
             color: #888;
-        }
-
-        .modal-btn.warning {
-            background: var(--warning);
-            color: var(--dark);
-        }
-
-        .error-msg {
-            color: var(--danger);
-            font-size: 12px;
-            margin-top: 10px;
-            display: none;
-        }
-
-        .error-msg.show {
-            display: block;
-        }
-
-        .success-msg {
-            color: var(--primary);
-            font-size: 12px;
-            margin-top: 10px;
-            display: none;
-        }
-
-        .success-msg.show {
-            display: block;
-        }
-
-        .hidden {
-            display: none !important;
-        }
-
-        ::-webkit-scrollbar {
-            width: 6px;
-        }
-
-        ::-webkit-scrollbar-track {
-            background: var(--dark);
-        }
-
-        ::-webkit-scrollbar-thumb {
-            background: var(--border);
-            border-radius: 3px;
-        }
-
-        ::-webkit-scrollbar-thumb:hover {
-            background: var(--primary);
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <!-- SIDEBAR -->
-        <aside class="sidebar" id="sidebar">
-            <button class="new-chat-btn" onclick="newChat()">+ Nuevo chat</button>
-            
-            <!-- HERRAMIENTAS -->
-            <div class="tools-section">
-                <div class="section-title">Herramientas</div>
-                
-                <div class="tool-item" onclick="useTool('web')">
-                    <span class="tool-icon">🌐</span>
-                    <div class="tool-info">
-                        <div class="tool-name">Búsqueda Web</div>
-                        <div class="tool-desc">Investiga en internet</div>
-                    </div>
-                </div>
-                
-                <div class="tool-item" onclick="useTool('docs')">
-                    <span class="tool-icon">📎</span>
-                    <div class="tool-info">
-                        <div class="tool-name">Documentos</div>
-                        <div class="tool-desc">PDFs, imágenes, Word</div>
-                    </div>
-                </div>
-                
-                <div class="tool-item" onclick="useTool('semantic')">
-                    <span class="tool-icon">🧠</span>
-                    <div class="tool-info">
-                        <div class="tool-name">Análisis</div>
-                        <div class="tool-desc">Comprensión profunda</div>
-                    </div>
-                </div>
-                
-                <div class="tool-item" onclick="useTool('learning')">
-                    <span class="tool-icon">📈</span>
-                    <div class="tool-info">
-                        <div class="tool-name">Aprendizaje</div>
-                        <div class="tool-desc">Mejora continua</div>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- HISTORIAL -->
-            <div class="history-section" id="history-list">
-                <div class="section-title">Historial</div>
-            </div>
-            
-            <!-- BOTÓN DEV / INDICADOR -->
-            <button class="dev-login-btn" id="dev-login-btn" onclick="openDevLogin()">
-                🔒 Acceso Desarrollador
-            </button>
-            
-            <div class="dev-indicator" id="dev-indicator">
-                <div>🔴 MODO DESARROLLADOR</div>
-                <small>Usuario: <span id="dev-username">-</span></small>
-                <button onclick="switchToUserMode()">Cambiar a Modo Usuario</button>
-            </div>
-        </aside>
-
-        <!-- MAIN -->
-        <main class="main-content" id="main-content">
-            <header class="header">
-                <div class="logo">
-                    <span class="logo-icon">🤖</span>
-                    <div class="logo-text">Cic_IA <span id="mode-label">Chat</span></div>
-                </div>
-                
-                <div class="mode-selector">
-                    <button class="mode-btn" onclick="setMode('fast')">Rápido</button>
-                    <button class="mode-btn active" onclick="setMode('balanced')">Balanceado</button>
-                    <button class="mode-btn" onclick="setMode('complete')">Completo</button>
-                </div>
-            </header>
-            
-            <div class="chat-area" id="chat-area">
-                <div class="welcome" id="welcome-screen">
-                    <h1>Cic_IA Mejorado</h1>
-                    <p>Asistente inteligente con búsqueda web y aprendizaje continuo</p>
-                    
-                    <div class="features-grid">
-                        <div class="feature-card">
-                            <div class="feature-icon">🌐</div>
-                            <div class="feature-title">Búsqueda Web</div>
-                            <div class="feature-desc">Investiga automáticamente</div>
-                        </div>
-                        <div class="feature-card">
-                            <div class="feature-icon">📎</div>
-                            <div class="feature-title">Documentos</div>
-                            <div class="feature-desc">Procesa archivos</div>
-                        </div>
-                        <div class="feature-card">
-                            <div class="feature-icon">🧠</div>
-                            <div class="feature-title">Análisis</div>
-                            <div class="feature-desc">Comprensión profunda</div>
-                        </div>
-                        <div class="feature-card">
-                            <div class="feature-icon">📈</div>
-                            <div class="feature-title">Aprendizaje</div>
-                            <div class="feature-desc">Mejora continua</div>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="messages hidden" id="messages-container"></div>
-            </div>
-            
-            <div class="input-area">
-                <div class="input-container">
-                    <input type="text" class="chat-input" id="chat-input" 
-                           placeholder="Escribe tu mensaje..." 
-                           onkeypress="handleKeyPress(event)">
-                    <button class="send-btn" onclick="sendMessage()">➤</button>
-                </div>
-            </div>
-        </main>
+    <h1>🧠 Dashboard de Aprendizaje - Cic_IA v7.1</h1>
+    
+    <div class="tabs">
+        <button class="tab active" onclick="showTab('resumen')">📊 Resumen</button>
+        <button class="tab" onclick="showTab('auto')">🤖 Auto-Aprendizaje</button>
+        <button class="tab" onclick="showTab('curiosidad')">🔍 Curiosidad</button>
+        <button class="tab" onclick="showTab('memorias')">📚 Memorias</button>
+        <button class="tab" onclick="showTab('perfil')">👤 Perfil Usuario</button>
     </div>
-
-    <!-- PANEL DESARROLLADOR -->
-    <div class="dev-panel" id="dev-panel">
-        <div class="dev-header">
-            <h2>🔧 Modo Desarrollador</h2>
-            <button class="close-dev" onclick="closeDevPanel()">✕</button>
+    
+    <div class="grid">
+        <!-- RESUMEN -->
+        <div id="tab-resumen" class="card">
+            <h2>Estadísticas Generales</h2>
+            <div id="summary-stats" class="loading">Cargando...</div>
         </div>
         
-        <div class="dev-content">
-            <!-- 📝 ENSEÑAR A LA IA (Guardar en Memoria) -->
-            <div class="dev-section">
-                <h3>📝 Enseñar a la IA</h3>
-                <textarea class="dev-textarea" id="teach-text" 
-                          placeholder="Contenido a aprender..."></textarea>
-                <input type="text" class="dev-input" id="teach-topic" 
-                       placeholder="Tema (opcional)">
-                <button class="dev-btn primary" onclick="teachAI()">
-                    💾 Guardar en Memoria
-                </button>
-                <div class="error-msg" id="teach-result"></div>
-            </div>
-            
-            <!-- 📊 ESTADÍSTICAS -->
-            <div class="dev-section">
-                <h3>📊 Estadísticas</h3>
-                <div class="stats-grid">
-                    <div class="stat-box">
-                        <div class="stat-number" id="stat-total">0</div>
-                        <div class="stat-label">Memorias</div>
-                    </div>
-                    <div class="stat-box">
-                        <div class="stat-number" id="stat-auto">0</div>
-                        <div class="stat-label">Auto</div>
-                    </div>
-                    <div class="stat-box">
-                        <div class="stat-number" id="stat-user">0</div>
-                        <div class="stat-label">Usuario</div>
-                    </div>
-                    <div class="stat-box">
-                        <div class="stat-number" id="stat-web">0</div>
-                        <div class="stat-label">Web</div>
-                    </div>
-                </div>
-                <button class="dev-btn secondary" onclick="refreshStats()">
-                    🔄 Actualizar
-                </button>
-            </div>
-            
-            <!-- 🔍 MEMORIAS RECIENTES -->
-            <div class="dev-section">
-                <h3>🔍 Memorias Recientes</h3>
-                <div class="memories-list" id="memories-list">
-                    <p style="color: #666; text-align: center; font-size: 11px;">
-                        Presiona cargar...
-                    </p>
-                </div>
-                <button class="dev-btn secondary" onclick="loadMemories()">
-                    📋 Cargar
-                </button>
-            </div>
-            
-            <!-- ⚡ ACCIONES -->
-            <div class="dev-section">
-                <h3>⚡ Acciones</h3>
-                
-                <!-- 🚀 BOTÓN 1: Forzar Aprendizaje Automático (Web) -->
-                <button class="dev-btn primary" onclick="forceAutoLearning()" 
-                        style="margin-bottom: 8px;">
-                    🚀 Forzar Aprendizaje (Web)
-                </button>
-                <small style="color: #888; display: block; margin-bottom: 12px; font-size: 10px;">
-                    Busca y aprende automáticamente de internet
-                </small>
-                
-                <!-- 🎯 BOTÓN 2: Forzar Aprendizaje Manual (NUEVO) -->
-                <button class="dev-btn warning" onclick="openManualLearningModal()" 
-                        style="margin-bottom: 8px;">
-                    ✍️ Forzar Aprendizaje Manual
-                </button>
-                <small style="color: #888; display: block; margin-bottom: 12px; font-size: 10px;">
-                    Tú proporcionas el contenido a aprender
-                </small>
-                
-                <!-- 🗑️ BOTÓN 3: Limpiar Todo -->
-                <button class="dev-btn danger" onclick="clearDatabase()">
-                    🗑️ Limpiar Todo
-                </button>
-            </div>
+        <!-- AUTO-APRENDIZAJE -->
+        <div id="tab-auto" class="card hidden">
+            <h2>🤖 Aprendizaje Automático</h2>
+            <div id="auto-learning">Cargando...</div>
+        </div>
+        
+        <!-- CURIOSIDAD -->
+        <div id="tab-curiosidad" class="card hidden">
+            <h2>🔍 Curiosidades Satisfechas</h2>
+            <div id="curiosity">Cargando...</div>
+        </div>
+        
+        <!-- MEMORIAS -->
+        <div id="tab-memorias" class="card hidden" style="grid-column: 1 / -1;">
+            <h2>📚 Búsqueda en Memorias</h2>
+            <input type="text" class="search-box" id="search-input" 
+                   placeholder="Buscar en memorias..." onkeyup="searchMemories(this.value)">
+            <div id="memories-list">Cargando últimas...</div>
+        </div>
+        
+        <!-- PERFIL -->
+        <div id="tab-perfil" class="card hidden">
+            <h2>👤 Perfil de Usuario Actual</h2>
+            <div id="user-profile">Cargando...</div>
         </div>
     </div>
-
-    <!-- MODAL LOGIN -->
-    <div class="modal-overlay" id="dev-login-modal">
-        <div class="modal-box">
-            <h3>🔒 Acceso Desarrollador</h3>
-            <p>Ingresa tus credenciales</p>
-            
-            <div class="form-group">
-                <label>Usuario</label>
-                <input type="text" id="login-username" placeholder="admin">
-            </div>
-            
-            <div class="form-group">
-                <label>Contraseña</label>
-                <input type="password" id="login-password" placeholder="••••••••">
-            </div>
-            
-            <div class="error-msg" id="login-error">Credenciales incorrectas</div>
-            
-            <div class="modal-buttons">
-                <button class="modal-btn primary" onclick="devLogin()">Ingresar</button>
-                <button class="modal-btn secondary" onclick="closeDevLogin()">Cancelar</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- 🎯 NUEVO MODAL: Forzar Aprendizaje Manual -->
-    <div class="modal-overlay" id="manual-learning-modal">
-        <div class="modal-box" style="width: 450px; max-height: 80vh; overflow-y: auto;">
-            <h3>✍️ Forzar Aprendizaje Manual</h3>
-            <p>Ingresa el contenido que quieres que la IA aprenda</p>
-            
-            <div class="form-group">
-                <label>Contenido *</label>
-                <textarea id="manual-content" placeholder="Escribe aquí el contenido completo que quieres que la IA aprenda...
-                
-Ejemplo: El cambio climático es el fenómeno de aumento de la temperatura global causado principalmente por la acumulación de gases de efecto invernadero en la atmósfera..."></textarea>
-            </div>
-            
-            <div class="form-group">
-                <label>Tema *</label>
-                <input type="text" id="manual-topic" placeholder="Ej: Cambio climático, Inteligencia Artificial, etc.">
-            </div>
-            
-            <div class="form-group">
-                <label>URL Fuente (opcional)</label>
-                <input type="text" id="manual-url" placeholder="https://ejemplo.com/articulo">
-            </div>
-            
-            <div class="form-group">
-                <label>Prioridad</label>
-                <select id="manual-priority" style="width: 100%; padding: 12px; border-radius: 6px; border: 1px solid var(--border); background: var(--dark); color: #fff;">
-                    <option value="1">🟢 Normal - Procesar cuando sea posible</option>
-                    <option value="2">🟡 Alta - Procesar pronto</option>
-                    <option value="3">🔴 Urgente - Procesar inmediatamente</option>
-                </select>
-            </div>
-            
-            <div class="error-msg" id="manual-error"></div>
-            <div class="success-msg" id="manual-success"></div>
-            
-            <div class="modal-buttons">
-                <button class="modal-btn warning" onclick="submitManualLearning()">📥 Agregar a Cola</button>
-                <button class="modal-btn secondary" onclick="closeManualLearningModal()">Cancelar</button>
-            </div>
-        </div>
-    </div>
+    
+    <button class="refresh-btn" onclick="loadAll()">🔄 Actualizar</button>
 
     <script>
-        // ==========================================
-        // VARIABLES GLOBALES
-        // ==========================================
-        let currentMode = 'balanced';
-        let isDevMode = false;
-        let devToken = localStorage.getItem('cic_ia_dev_token') || null;
-        let devUsername = localStorage.getItem('cic_ia_dev_username') || null;
-
-        // ==========================================
-        // INICIALIZACIÓN
-        // ==========================================
-        document.addEventListener('DOMContentLoaded', function() {
-            // Si hay token guardado, verificar que siga válido
-            if (devToken) {
-                verifyDevToken();
-            }
-        });
-
-        // ==========================================
-        // FUNCIONES DE CHAT
-        // ==========================================
-        function setMode(mode) {
-            currentMode = mode;
-            document.querySelectorAll('.mode-btn').forEach(btn => {
-                btn.classList.remove('active');
-                if (btn.textContent.toLowerCase().includes(mode)) {
-                    btn.classList.add('active');
-                }
-            });
+        const API_BASE = '/api/dev';
+        let TOKEN = localStorage.getItem('cic_token') || '';
+        
+        if (!TOKEN) {
+            TOKEN = prompt('Token de desarrollador (X-Dev-Token):');
+            if (TOKEN) localStorage.setItem('cic_token', TOKEN);
         }
-
-        function newChat() {
-            document.getElementById('welcome-screen').classList.remove('hidden');
-            document.getElementById('messages-container').classList.add('hidden');
-            document.getElementById('messages-container').innerHTML = '';
-            document.getElementById('chat-input').value = '';
+        
+        function showTab(tabName) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            event.target.classList.add('active');
+            
+            document.querySelectorAll('[id^="tab-"]').forEach(el => el.classList.add('hidden'));
+            document.getElementById('tab-' + tabName).classList.remove('hidden');
+            
+            // Cargar datos específicos
+            if (tabName === 'perfil') loadProfile();
+            if (tabName === 'memorias') loadRecentMemories();
         }
-
-        function handleKeyPress(event) {
-            if (event.key === 'Enter') sendMessage();
-        }
-
-        function useTool(tool) {
-            const msgs = {
-                'web': '🔍 Búsqueda Web activada. Pregunta sobre cualquier tema actual.',
-                'docs': '📎 Puedes subir PDFs, imágenes o Word para analizar.',
-                'semantic': '🧠 Análisis profundo activado.',
-                'learning': '📈 Aprendizaje continuo activo (cada 2 horas).'
-            };
-            addMessage('bot', msgs[tool]);
-            showChat();
-        }
-
-        function showChat() {
-            document.getElementById('welcome-screen').classList.add('hidden');
-            document.getElementById('messages-container').classList.remove('hidden');
-        }
-
-        async function sendMessage() {
-            const input = document.getElementById('chat-input');
-            const msg = input.value.trim();
-            if (!msg) return;
-
-            showChat();
-            addMessage('user', msg);
-            input.value = '';
-
-            const loadingId = addLoading();
-
+        
+        async function apiCall(endpoint) {
             try {
-                const res = await fetch('/api/chat', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({message: msg, mode: currentMode})
+                const res = await fetch(`${API_BASE}${endpoint}`, {
+                    headers: {'X-Dev-Token': TOKEN}
                 });
-                
-                const data = await res.json();
-                document.getElementById(loadingId).remove();
-                
-                let text = data.response;
-                if (data.sources_used?.includes('web_search')) {
-                    text += '\n\n🌐 *Información de búsqueda web*';
+                if (res.status === 401) {
+                    alert('Token inválido');
+                    localStorage.removeItem('cic_token');
+                    location.reload();
+                    return null;
                 }
-                
-                addMessage('bot', text);
-                updateHistory(msg);
-                scrollToBottom();
-                
+                return await res.json();
             } catch (e) {
-                document.getElementById(loadingId).remove();
-                addMessage('bot', '❌ Error. Intenta de nuevo.');
-                scrollToBottom();
+                return {error: e.message};
             }
         }
-
-        function addMessage(sender, text) {
-            const container = document.getElementById('messages-container');
-            const div = document.createElement('div');
-            div.className = `message ${sender}`;
+        
+        async function loadAll() {
+            // Resumen
+            const history = await apiCall('/learning/history');
+            if (history.error) {
+                document.getElementById('summary-stats').innerHTML = `<div class="error">${history.error}</div>`;
+                return;
+            }
             
-            const avatar = sender === 'user' ? '👤' : '🤖';
-            const bg = sender === 'user' ? 'var(--primary)' : 'var(--danger)';
-            
-            div.innerHTML = `
-                <div class="message-avatar" style="background: ${bg}">${avatar}</div>
-                <div class="message-content">
-                    ${text.replace(/\n/g, '<br>')}
-                    <div class="message-meta">${new Date().toLocaleTimeString()}</div>
+            // Stats cards
+            const stats = history.resumen;
+            document.getElementById('summary-stats').innerHTML = `
+                <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px;">
+                    <div>
+                        <div class="stat-number">${stats.total_aprendido_auto}</div>
+                        <div class="stat-label">Aprendizajes automáticos</div>
+                    </div>
+                    <div>
+                        <div class="stat-number">${stats.curiosidades_satisfechas}</div>
+                        <div class="stat-label">Curiosidades resueltas</div>
+                    </div>
+                    <div>
+                        <div class="stat-number">${history.estado_memoria.total_memorias}</div>
+                        <div class="stat-label">Memorias totales</div>
+                    </div>
+                    <div>
+                        <div class="stat-number">${stats.dias_con_datos}</div>
+                        <div class="stat-label">Días con actividad</div>
+                    </div>
+                </div>
+                <div style="margin-top: 20px;">
+                    <h3 style="font-size: 1em; margin-bottom: 10px;">Temas más frecuentes:</h3>
+                    ${history.estado_memoria.temas_top.map(t => 
+                        `<span class="source-badge" style="margin: 3px;">${t.tema} (${t.cantidad})</span>`
+                    ).join('')}
                 </div>
             `;
-            container.appendChild(div);
-            scrollToBottom();
+            
+            // Auto learning
+            document.getElementById('auto-learning').innerHTML = 
+                history.aprendizaje_automatico.slice(0, 10).map(item => `
+                    <div class="memory-item ${item.fuente}">
+                        <span class="timestamp">${new Date(item.fecha).toLocaleString()}</span>
+                        <span class="source-badge ${item.fuente}">${item.fuente}</span>
+                        <div class="topic">${item.tema}</div>
+                        <div class="preview">${item.contenido_preview}...</div>
+                    </div>
+                `).join('') || '<div class="empty-state">Sin aprendizaje automático aún</div>';
+            
+            // Curiosidad
+            document.getElementById('curiosity').innerHTML = 
+                history.curiosidades.slice(0, 10).map(item => `
+                    <div class="memory-item curiosity">
+                        <span class="timestamp">${new Date(item.aprendido_el).toLocaleString()}</span>
+                        <span class="source-badge curiosity">curiosity</span>
+                        <div class="topic">${item.concepto}</div>
+                        <div>Mencionado ${item.menciones} veces por el usuario</div>
+                        <div style="margin-top: 8px; font-style: italic; color: #666;">
+                            "${item.contexto_ejemplo}..."
+                        </div>
+                    </div>
+                `).join('') || '<div class="empty-state">Sin curiosidades satisfechas aún</div>';
         }
-
-        function addLoading() {
-            const container = document.getElementById('messages-container');
-            const id = 'load-' + Date.now();
-            const div = document.createElement('div');
-            div.id = id;
-            div.className = 'message bot';
-            div.innerHTML = `
-                <div class="message-avatar" style="background: var(--danger)">🤖</div>
-                <div class="message-content">
-                    <div class="typing"><span></span><span></span><span></span></div>
-                </div>
-            `;
-            container.appendChild(div);
-            scrollToBottom();
-            return id;
-        }
-
-        function scrollToBottom() {
-            document.getElementById('chat-area').scrollTop = document.getElementById('chat-area').scrollHeight;
-        }
-
-        function updateHistory(msg) {
-            const list = document.getElementById('history-list');
-            const item = document.createElement('div');
-            item.className = 'history-item';
-            item.innerHTML = `<span>💬</span><span class="history-text">${msg.substring(0, 25)}...</span>`;
-            item.onclick = () => loadConv(msg);
-            list.insertBefore(item, list.children[1]);
-        }
-
-        function loadConv(msg) {
-            showChat();
-            document.getElementById('messages-container').innerHTML = '';
-            addMessage('user', msg);
-            addMessage('bot', 'Conversación cargada del historial.');
-        }
-
-        // ==========================================
-        // MODO DESARROLLADOR - MEJORADO
-        // ==========================================
-        async function verifyDevToken() {
-            try {
-                const res = await fetch('/api/dev/verify', {
-                    headers: {'X-Dev-Token': devToken}
-                });
-                
-                if (res.ok) {
-                    const data = await res.json();
-                    if (data.valid) {
-                        isDevMode = true;
-                        devUsername = data.username;
-                        activateDevMode();
-                        return;
-                    }
-                }
-                
-                // Token inválido, limpiar
-                clearDevSession();
-                
-            } catch (e) {
-                console.error('Error verificando token:', e);
-                clearDevSession();
-            }
-        }
-
-        function clearDevSession() {
-            devToken = null;
-            devUsername = null;
-            localStorage.removeItem('cic_ia_dev_token');
-            localStorage.removeItem('cic_ia_dev_username');
-            isDevMode = false;
-        }
-
-        function openDevLogin() {
-            if (isDevMode) {
-                openDevPanel();
+        
+        async function loadRecentMemories() {
+            const data = await apiCall('/learning/recent-memories?limit=20');
+            if (data.error) {
+                document.getElementById('memories-list').innerHTML = `<div class="error">${data.error}</div>`;
                 return;
             }
-            document.getElementById('dev-login-modal').classList.add('show');
-            document.getElementById('login-username').value = '';
-            document.getElementById('login-password').value = '';
-            document.getElementById('login-error').classList.remove('show');
-        }
-
-        function closeDevLogin() {
-            document.getElementById('dev-login-modal').classList.remove('show');
-        }
-
-        async function devLogin() {
-            const user = document.getElementById('login-username').value;
-            const pass = document.getElementById('login-password').value;
-
-            try {
-                const res = await fetch('/api/dev/login', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({username: user, password: pass})
-                });
-                
-                const data = await res.json();
-                
-                if (data.success) {
-                    // ✅ GUARDAR EN LOCALSTORAGE
-                    devToken = data.token;
-                    devUsername = data.username;
-                    localStorage.setItem('cic_ia_dev_token', devToken);
-                    localStorage.setItem('cic_ia_dev_username', devUsername);
-                    
-                    isDevMode = true;
-                    closeDevLogin();
-                    activateDevMode();
-                    openDevPanel();
-                } else {
-                    document.getElementById('login-error').classList.add('show');
-                }
-            } catch (e) {
-                document.getElementById('login-error').textContent = 'Error de conexión';
-                document.getElementById('login-error').classList.add('show');
-            }
-        }
-
-        function activateDevMode() {
-            document.getElementById('dev-login-btn').classList.add('hidden');
-            document.getElementById('dev-indicator').classList.add('active');
-            document.getElementById('dev-username').textContent = devUsername || 'Admin';
-            document.getElementById('mode-label').textContent = 'DEV';
-            document.getElementById('mode-label').style.color = 'var(--danger)';
-        }
-
-        async function switchToUserMode() {
-            if (devToken) {
-                try {
-                    await fetch('/api/dev/logout', {
-                        method: 'POST',
-                        headers: {'X-Dev-Token': devToken}
-                    });
-                } catch (e) {
-                    console.error('Error en logout:', e);
-                }
-            }
             
-            clearDevSession();
-            closeDevPanel();
-            document.getElementById('dev-login-btn').classList.remove('hidden');
-            document.getElementById('dev-indicator').classList.remove('active');
-            document.getElementById('mode-label').textContent = 'Chat';
-            document.getElementById('mode-label').style.color = 'var(--primary)';
-        }
-
-        function openDevPanel() {
-            if (!isDevMode || !devToken) {
-                openDevLogin();
-                return;
-            }
-            document.getElementById('dev-panel').classList.add('open');
-            refreshStats();
-        }
-
-        function closeDevPanel() {
-            document.getElementById('dev-panel').classList.remove('open');
-        }
-
-        // ==========================================
-        // FUNCIONES DEV - CON VERIFICACIÓN DE TOKEN
-        // ==========================================
-        async function teachAI() {
-            if (!checkDevAuth()) return;
-            
-            const text = document.getElementById('teach-text').value.trim();
-            const topic = document.getElementById('teach-topic').value.trim() || 'manual';
-            const result = document.getElementById('teach-result');
-
-            if (!text) {
-                result.className = 'error-msg show';
-                result.textContent = '❌ Escribe contenido';
-                return;
-            }
-
-            result.className = '';
-            result.style.color = '#888';
-            result.textContent = '⏳ Guardando...';
-
-            try {
-                const res = await fetch('/api/teach', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-Dev-Token': devToken
-                    },
-                    body: JSON.stringify({text, topic, source: 'developer'})
-                });
-                
-                // ✅ MANEJAR ERROR 401
-                if (res.status === 401) {
-                    handleAuthError();
-                    return;
-                }
-                
-                const data = await res.json();
-                
-                if (data.error) throw new Error(data.error);
-                
-                result.style.color = 'var(--primary)';
-                result.textContent = '✅ Guardado';
-                document.getElementById('teach-text').value = '';
-                document.getElementById('teach-topic').value = '';
-                refreshStats();
-                
-            } catch (e) {
-                result.className = 'error-msg show';
-                result.textContent = '❌ Error: ' + e.message;
-            }
-        }
-
-        async function refreshStats() {
-            if (!checkDevAuth()) return;
-            
-            try {
-                const res = await fetch('/api/dev/stats/detailed', {
-                    headers: {'X-Dev-Token': devToken}
-                });
-                
-                if (res.status === 401) {
-                    handleAuthError();
-                    return;
-                }
-                
-                const data = await res.json();
-                
-                document.getElementById('stat-total').textContent = data.general?.total_memories || 0;
-                document.getElementById('stat-auto').textContent = data.by_source?.auto_learning || 0;
-                document.getElementById('stat-user').textContent = data.by_source?.user_taught || 0;
-                document.getElementById('stat-web').textContent = data.by_source?.web_search || 0;
-            } catch (e) {
-                console.error('Error stats:', e);
-            }
-        }
-
-        async function loadMemories() {
-            if (!checkDevAuth()) return;
-            
-            const list = document.getElementById('memories-list');
-            list.innerHTML = '<p style="color: #666; text-align: center;">⏳...</p>';
-
-            try {
-                const res = await fetch('/api/dev/memories/all?per_page=10', {
-                    headers: {'X-Dev-Token': devToken}
-                });
-                
-                if (res.status === 401) {
-                    handleAuthError();
-                    return;
-                }
-                
-                const data = await res.json();
-                
-                if (!data.memories?.length) {
-                    list.innerHTML = '<p style="color: #666; text-align: center;">Sin memorias</p>';
-                    return;
-                }
-                
-                list.innerHTML = data.memories.map(m => `
-                    <div class="memory-item">
-                        <strong>${m.topic || 'Sin título'}</strong>
-                        <p>${m.content?.substring(0, 80) || '...'}...</p>
-                        <small>${m.source} | ${m.relevance || 0.5}</small>
+            document.getElementById('memories-list').innerHTML = 
+                data.memories.map(m => `
+                    <div class="memory-item ${m.fuente}">
+                        <span class="timestamp">${new Date(m.fecha_creacion).toLocaleString()}</span>
+                        <span class="source-badge ${m.fuente}">${m.fuente}</span>
+                        <div class="topic">${m.tema}</div>
+                        <div class="preview">${m.contenido_completo.substring(0, 300)}...</div>
+                        <div style="margin-top: 8px; font-size: 0.85em; color: #888;">
+                            Relevancia: ${m.relevancia.toFixed(2)} | Usada: ${m.usada_veces} veces
+                        </div>
                     </div>
                 `).join('');
-            } catch (e) {
-                list.innerHTML = '<p style="color: var(--danger); text-align: center;">Error</p>';
-            }
         }
-
-        // 🚀 BOTÓN 1: Forzar Aprendizaje Automático (Web)
-        async function forceAutoLearning() {
-            if (!checkDevAuth()) return;
-            
-            if (!confirm('¿Forzar aprendizaje automático ahora?\n\nLa IA buscará información en internet sobre un tema aleatorio.')) return;
-            
-            try {
-                const res = await fetch('/api/dev/system/force-learning', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-Dev-Token': devToken
-                    },
-                    body: JSON.stringify({})
-                });
-                
-                if (res.status === 401) {
-                    handleAuthError();
-                    return;
-                }
-                
-                const data = await res.json();
-                alert(data.success ? '✅ ' + data.message : '❌ Error: ' + (data.error || 'Desconocido'));
-                refreshStats();
-            } catch (e) {
-                alert('❌ Error de conexión: ' + e.message);
-            }
-        }
-
-        // 🎯 BOTÓN 2: Forzar Aprendizaje Manual - Abrir Modal
-        function openManualLearningModal() {
-            if (!checkDevAuth()) {
-                openDevLogin();
-                return;
-            }
-            
-            document.getElementById('manual-learning-modal').classList.add('show');
-            document.getElementById('manual-content').value = '';
-            document.getElementById('manual-topic').value = '';
-            document.getElementById('manual-url').value = '';
-            document.getElementById('manual-priority').value = '1';
-            document.getElementById('manual-error').classList.remove('show');
-            document.getElementById('manual-success').classList.remove('show');
-        }
-
-        function closeManualLearningModal() {
-            document.getElementById('manual-learning-modal').classList.remove('show');
-        }
-
-        // 🎯 Enviar Aprendizaje Manual - CORREGIDO
-        async function submitManualLearning() {
-            if (!checkDevAuth()) return;
-            
-            const content = document.getElementById('manual-content').value.trim();
-            const topic = document.getElementById('manual-topic').value.trim();
-            const url = document.getElementById('manual-url').value.trim();
-            const priority = document.getElementById('manual-priority').value;
-            const errorDiv = document.getElementById('manual-error');
-            const successDiv = document.getElementById('manual-success');
-
-            // Validaciones
-            if (!content) {
-                errorDiv.textContent = '❌ Debes ingresar el contenido a aprender';
-                errorDiv.classList.add('show');
-                successDiv.classList.remove('show');
-                return;
-            }
-
-            if (!topic) {
-                errorDiv.textContent = '❌ Debes especificar un tema';
-                errorDiv.classList.add('show');
-                successDiv.classList.remove('show');
-                return;
-            }
-
-            errorDiv.classList.remove('show');
-            successDiv.textContent = '⏳ Enviando...';
-            successDiv.classList.add('show');
-
-            try {
-                const res = await fetch('/api/dev/learning/manual', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-Dev-Token': devToken
-                    },
-                    body: JSON.stringify({
-                        content: content,
-                        topic: topic,
-                        source_url: url || null,
-                        priority: parseInt(priority)
-                    })
-                });
-
-                // ✅ MANEJAR ERROR 401
-                if (res.status === 401) {
-                    handleAuthError();
-                    return;
-                }
-
-                const data = await res.json();
-
-                if (data.success) {
-                    successDiv.textContent = '✅ ' + data.message;
-                    successDiv.classList.add('show');
-                    errorDiv.classList.remove('show');
-                    
-                    // Limpiar formulario después de 2 segundos
-                    setTimeout(() => {
-                        document.getElementById('manual-content').value = '';
-                        document.getElementById('manual-topic').value = '';
-                        document.getElementById('manual-url').value = '';
-                        closeManualLearningModal();
-                    }, 2000);
-                    
-                    refreshStats();
-                } else {
-                    errorDiv.textContent = '❌ Error: ' + (data.error || 'Desconocido');
-                    errorDiv.classList.add('show');
-                    successDiv.classList.remove('show');
-                }
-            } catch (e) {
-                errorDiv.textContent = '❌ Error de conexión: ' + e.message;
-                errorDiv.classList.add('show');
-                successDiv.classList.remove('show');
-            }
-        }
-
-        async function clearDatabase() {
-            if (!checkDevAuth()) return;
-            
-            if (!confirm('⚠️ ¿BORRAR TODA LA BASE DE DATOS?')) return;
-            if (!confirm('🔴 ¿CONFIRMAS? Esta acción NO se puede deshacer.')) return;
-            
-            try {
-                const res = await fetch('/api/dev/system/clear-db', {
-                    method: 'POST',
-                    headers: {
-                        'X-Dev-Token': devToken,
-                        'X-Confirm-Delete': 'DESTRUIR_TODO'
-                    }
-                });
-                
-                if (res.status === 401) {
-                    handleAuthError();
-                    return;
-                }
-                
-                const data = await res.json();
-                alert(data.success ? '🗑️ ' + data.message : '❌ ' + data.error);
-                refreshStats();
-            } catch (e) {
-                alert('❌ Error');
-            }
-        }
-
-        // ==========================================
-        // FUNCIONES AUXILIARES
-        // ==========================================
         
-        // ✅ VERIFICAR AUTENTICACIÓN
-        function checkDevAuth() {
-            if (!isDevMode || !devToken) {
-                alert('⚠️ Sesión expirada. Por favor inicia sesión nuevamente.');
-                openDevLogin();
-                return false;
+        async function searchMemories(query) {
+            if (!query || query.length < 3) {
+                loadRecentMemories();
+                return;
             }
-            return true;
-        }
-
-        // ✅ MANEJAR ERROR DE AUTENTICACIÓN
-        function handleAuthError() {
-            clearDevSession();
-            document.getElementById('dev-panel').classList.remove('open');
-            document.getElementById('dev-login-btn').classList.remove('hidden');
-            document.getElementById('dev-indicator').classList.remove('active');
-            document.getElementById('mode-label').textContent = 'Chat';
-            document.getElementById('mode-label').style.color = 'var(--primary)';
             
-            alert('⚠️ Tu sesión ha expirado. Por favor inicia sesión nuevamente.');
-            openDevLogin();
+            const data = await apiCall(`/learning/search?q=${encodeURIComponent(query)}`);
+            if (data.error) return;
+            
+            document.getElementById('memories-list').innerHTML = 
+                data.memories.map(m => `
+                    <div class="memory-item ${m.fuente}">
+                        <span class="timestamp">${new Date(m.fecha).toLocaleString()}</span>
+                        <span class="source-badge ${m.fuente}">${m.fuente}</span>
+                        <div class="topic">${m.tema}</div>
+                        <div class="preview">${m.contenido_preview}...</div>
+                    </div>
+                `).join('') || '<div class="empty-state">Sin resultados</div>';
         }
-
-        // Cerrar modales al hacer clic fuera
-        window.onclick = function(event) {
-            const loginModal = document.getElementById('dev-login-modal');
-            const manualModal = document.getElementById('manual-learning-modal');
-            if (event.target === loginModal) {
-                closeDevLogin();
+        
+        async function loadProfile() {
+            const data = await apiCall('/working-memory/status');
+            if (data.error) {
+                document.getElementById('user-profile').innerHTML = `<div class="error">${data.error}</div>`;
+                return;
             }
-            if (event.target === manualModal) {
-                closeManualLearningModal();
-            }
+            
+            const p = data.perfil_usuario;
+            document.getElementById('user-profile').innerHTML = `
+                <div style="margin-bottom: 20px;">
+                    <strong>Nombre:</strong> ${p.nombre || 'No conocido aún'}<br>
+                    <strong>Estilo de conversación:</strong> ${p.estilo_conversacion}<br>
+                    <strong>Intereses:</strong> ${p.intereses.join(', ') || 'Ninguno registrado'}
+                </div>
+                <div>
+                    <strong>Hechos conocidos:</strong>
+                    <pre style="background: #f5f5f5; padding: 10px; border-radius: 8px; margin-top: 10px;">${
+                        JSON.stringify(p.hechos_conocidos, null, 2)
+                    }</pre>
+                </div>
+                <div style="margin-top: 20px;">
+                    <strong>Turnos en esta sesión:</strong> ${data.stats.session_turns}<br>
+                    <strong>Tema actual:</strong> ${data.contexto_actual.current_topic || 'Ninguno'}<br>
+                    <strong>Continuidad temática:</strong> ${(data.contexto_actual.topic_continuity * 100).toFixed(0)}%
+                </div>
+            `;
         }
+        
+        // Carga inicial
+        loadAll();
+        setInterval(loadAll, 30000); // Auto-refresh cada 30s
     </script>
 </body>
 </html>
