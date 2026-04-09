@@ -1146,6 +1146,271 @@ def dev_sessions():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+# ========== NUEVOS ENDPOINTS: HISTORIAL DE APRENDIZAJE ==========
+
+@app.route('/api/dev/learning/history', methods=['GET'])
+@dev_required
+def dev_learning_history():
+    """
+    Dashboard visual de todo el aprendizaje de la IA
+    """
+    try:
+        if not V7_MODULES_AVAILABLE:
+            return jsonify({'error': 'Módulos no disponibles'}), 500
+        
+        # 1. Aprendizaje automático (de KnowledgeEvolution)
+        auto_learning = KnowledgeEvolution.query.filter(
+            KnowledgeEvolution.triggered_by.in_(['auto', 'curiosity', 'web_search'])
+        ).order_by(KnowledgeEvolution.date.desc()).limit(50).all()
+        
+        auto_learning_data = [{
+            'fecha': ev.date.isoformat(),
+            'tema': ev.topic,
+            'accion': ev.action,
+            'contenido_preview': ev.new_content[:150] if ev.new_content else '',
+            'fuente': ev.source,
+            'disparado_por': ev.triggered_by
+        } for ev in auto_learning]
+        
+        # 2. Aprendizaje manual (cola procesada)
+        manual_learning = ManualLearningQueue.query.filter_by(
+            status='completed'
+        ).order_by(ManualLearningQueue.processed_at.desc()).limit(30).all()
+        
+        manual_data = [{
+            'fecha': item.processed_at.isoformat() if item.processed_at else None,
+            'tema': item.topic,
+            'contenido_preview': item.content[:150],
+            'prioridad': item.priority,
+            'fuente_url': item.source_url
+        } for item in manual_learning]
+        
+        # 3. Curiosidades satisfechas
+        curiosity_satisfied = CuriosityGap.query.filter_by(
+            status='learned'
+        ).order_by(CuriosityGap.last_mentioned.desc()).limit(20).all()
+        
+        curiosity_data = [{
+            'concepto': gap.concept,
+            'menciones': gap.mention_count,
+            'aprendido_el': gap.last_mentioned.isoformat(),
+            'contexto_ejemplo': (gap.context_examples[0]['text'] if gap.context_examples else '')[:100]
+        } for gap in curiosity_satisfied]
+        
+        # 4. Estadísticas por día
+        daily_stats = db.session.query(
+            LearningLog.date,
+            LearningLog.auto_learned,
+            LearningLog.web_searches,
+            LearningLog.count
+        ).order_by(LearningLog.date.desc()).limit(14).all()
+        
+        daily_data = [{
+            'fecha': str(day.date),
+            'auto_aprendidos': day.auto_learned,
+            'busquedas_web': day.web_searches,
+            'conversaciones': day.count
+        } for day in daily_stats]
+        
+        # 5. Resumen de memoria actual
+        memory_stats = {
+            'total_memorias': Memory.query.count(),
+            'por_fuente': {
+                'auto_learning': Memory.query.filter_by(source='auto_learning').count(),
+                'web_search': Memory.query.filter_by(source='web_search').count(),
+                'curiosity': Memory.query.filter_by(source='curiosity').count(),
+                'manual_learning': Memory.query.filter_by(source='manual_learning').count(),
+                'user_taught': Memory.query.filter_by(source='user_taught').count(),
+            },
+            'temas_top': []
+        }
+        
+        # Temas más frecuentes
+        temas_freq = db.session.query(
+            Memory.topic, db.func.count(Memory.id)
+        ).group_by(Memory.topic).order_by(db.func.count(Memory.id).desc()).limit(10).all()
+        
+        memory_stats['temas_top'] = [
+            {'tema': t[0], 'cantidad': t[1]} for t in temas_freq
+        ]
+        
+        return jsonify({
+            'resumen': {
+                'total_aprendido_auto': len(auto_learning_data),
+                'total_manual': len(manual_data),
+                'curiosidades_satisfechas': len(curiosity_data),
+                'dias_con_datos': len(daily_data)
+            },
+            'aprendizaje_automatico': auto_learning_data,
+            'aprendizaje_manual': manual_data,
+            'curiosidades': curiosity_data,
+            'estadisticas_diarias': daily_data,
+            'estado_memoria': memory_stats,
+            'ultima_actualizacion': datetime.utcnow().isoformat()
+        })
+        
+    except Exception as e:
+        logger.error(f"Error en learning history: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/dev/learning/recent-memories', methods=['GET'])
+@dev_required
+def dev_recent_memories():
+    """
+    Ver últimas memorias creadas con contenido completo
+    """
+    try:
+        if not V7_MODULES_AVAILABLE:
+            return jsonify({'error': 'Módulos no disponibles'}), 500
+        
+        limit = request.args.get('limit', 10, type=int)
+        
+        memories = Memory.query.order_by(
+            Memory.created_at.desc()
+        ).limit(limit).all()
+        
+        return jsonify({
+            'count': len(memories),
+            'memories': [{
+                'id': m.id,
+                'fecha_creacion': m.created_at.isoformat(),
+                'tema': m.topic,
+                'fuente': m.source,
+                'relevancia': m.relevance_score,
+                'confianza': m.confidence_score,
+                'contenido_completo': m.content,
+                'usada_veces': m.access_count
+            } for m in memories]
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/dev/learning/search', methods=['GET'])
+@dev_required
+def dev_search_memories():
+    """
+    Buscar en las memorias de la IA
+    """
+    try:
+        if not V7_MODULES_AVAILABLE:
+            return jsonify({'error': 'Módulos no disponibles'}), 500
+        
+        query = request.args.get('q', '').strip()
+        if not query:
+            return jsonify({'error': 'Parámetro q requerido'}), 400
+        
+        # Búsqueda simple en contenido y tema
+        memories = Memory.query.filter(
+            db.or_(
+                Memory.content.ilike(f'%{query}%'),
+                Memory.topic.ilike(f'%{query}%')
+            )
+        ).order_by(Memory.created_at.desc()).limit(20).all()
+        
+        return jsonify({
+            'query': query,
+            'resultados': len(memories),
+            'memories': [{
+                'id': m.id,
+                'fecha': m.created_at.isoformat(),
+                'tema': m.topic,
+                'fuente': m.source,
+                'contenido_preview': m.content[:200],
+                'relevancia': m.relevance_score
+            } for m in memories]
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/dev/working-memory/status', methods=['GET'])
+@dev_required
+def dev_working_memory_status():
+    """
+    Ver estado actual de la memoria de trabajo (sesión actual)
+    """
+    try:
+        if not V7_MODULES_AVAILABLE or not cic_ia.working_memory:
+            return jsonify({'error': 'WorkingMemory no disponible'}), 500
+        
+        wm = cic_ia.working_memory
+        
+        return jsonify({
+            'stats': wm.get_stats(),
+            'contexto_actual': wm.get_context(),
+            'perfil_usuario': {
+                'nombre': wm.user_profile.name,
+                'hechos_conocidos': dict(wm.user_profile.facts),
+                'estilo_conversacion': wm.user_profile.conversation_style,
+                'intereses': list(wm.user_profile.interests)
+            },
+            'temas_historial': [
+                {'tema': t[0], 'cuando': t[1].isoformat()} 
+                for t in wm.topic_tracker.topic_history[-10:]
+            ],
+            'turnos_recientes': [
+                {
+                    'usuario': t.user_message[:80],
+                    'bot': t.bot_response[:80] if t.bot_response else '(sin respuesta)',
+                    'intencion': t.intent,
+                    'tema': t.topic,
+                    'hechos_extraidos': t.key_facts_extracted
+                }
+                for t in list(wm.turns)[-5:]
+            ]
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/personality/modes', methods=['GET'])
+def get_personality_modes():
+    """Obtiene modos de personalidad disponibles (público)"""
+    try:
+        if V7_MODULES_AVAILABLE and cic_ia.personality:
+            modes = PersonalityConfig.list_modes()
+            current = cic_ia.personality.mode
+        else:
+            modes = [{'key': 'kimi', 'name': 'Kimi', 'description': 'Por defecto'}]
+            current = 'kimi'
+        
+        return jsonify({
+            'available': modes,
+            'current': current
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/personality/set', methods=['POST'])
+def set_personality():
+    """Cambia el modo de personalidad (requiere auth simple)"""
+    try:
+        mode = request.json.get('mode', 'kimi')
+        
+        if V7_MODULES_AVAILABLE and cic_ia.personality:
+            result = cic_ia.set_personality_mode(mode)
+            if result['success']:
+                return jsonify({
+                    'success': True,
+                    'message': f'Personalidad cambiada a {mode}',
+                    'greeting': cic_ia.personality.get_greeting()
+                })
+            return jsonify(result), 400
+        
+        return jsonify({'success': False, 'error': 'Personalidad no disponible'}), 500
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+# ========== FIN NUEVOS ENDPOINTS ==========
+
 @app.route('/uploads/<path:filename>')
 def uploaded_file(filename):
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
