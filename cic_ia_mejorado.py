@@ -1,9 +1,8 @@
 """
 Cic_IA v7.2 - Asistente Inteligente EVOLUTIVO
-Modo Desarrollador + Modo Usuario - VERSIÓN FINAL
+Modo Desarrollador + Modo Usuario - VERSIÓN FINAL CORREGIDA CON BÚSQUEDA MEJORADA
 """
 
-# ========== IMPORTACIONES CORREGIDAS ==========
 from flask import Flask, render_template, render_template_string, request, jsonify, send_from_directory, session, redirect, url_for
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.utils import secure_filename
@@ -29,7 +28,6 @@ import secrets
 
 app = Flask(__name__, template_folder='templates')
 
-# Configuración crítica para sesiones
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'cic-ia-secret-2024-v7-desarrollo')
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=24)
 
@@ -336,16 +334,18 @@ class SimpleWorkingMemory:
             'current_topic': self.current_topic
         }
 
-# ========== SERVICIOS ==========
+# ========== SERVICIOS DE BÚSQUEDA WEB MEJORADOS ==========
 
 class WebSearchEngine:
     @staticmethod
     def search_duckduckgo(query, max_results=5):
+        logger.info(f"🔍 Buscando: '{query}'")
+        
+        # Intentar 1: Librería duckduckgo_search
         try:
-            try:
-                from duckduckgo_search import DDGS
-                results = []
-                ddgs = DDGS()
+            from duckduckgo_search import DDGS
+            results = []
+            with DDGS() as ddgs:
                 for result in ddgs.text(query, max_results=max_results):
                     results.append({
                         'title': result.get('title', ''),
@@ -353,37 +353,119 @@ class WebSearchEngine:
                         'snippet': result.get('body', ''),
                         'source': 'duckduckgo'
                     })
+            if results:
+                logger.info(f"✅ DuckDuckGo librería: {len(results)} resultados")
                 return results
-            except ImportError:
-                return WebSearchEngine._search_fallback(query, max_results)
         except Exception as e:
-            logger.error(f"Error búsqueda: {e}")
-            return []
+            logger.warning(f"⚠️ DuckDuckGo librería falló: {e}")
+        
+        # Intentar 2: Fallback HTML scraping
+        try:
+            results = WebSearchEngine._search_fallback(query, max_results)
+            if results:
+                logger.info(f"✅ DuckDuckGo fallback: {len(results)} resultados")
+                return results
+        except Exception as e:
+            logger.warning(f"⚠️ DuckDuckGo fallback falló: {e}")
+        
+        # Intentar 3: Wikipedia como último recurso
+        try:
+            results = WebSearchEngine._search_wikipedia(query, max_results)
+            if results:
+                logger.info(f"✅ Wikipedia: {len(results)} resultados")
+                return results
+        except Exception as e:
+            logger.warning(f"⚠️ Wikipedia falló: {e}")
+        
+        logger.error("❌ Todas las fuentes de búsqueda fallaron")
+        return []
 
     @staticmethod
     def _search_fallback(query, max_results=5):
+        url = f"https://html.duckduckgo.com/html/?q={urllib.parse.quote(query)}"
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept-Language': 'es-ES,es;q=0.9,en;q=0.8',
+            'Referer': 'https://duckduckgo.com/'
+        }
+        
+        response = requests.get(url, headers=headers, timeout=15)
+        soup = BeautifulSoup(response.content, 'html.parser')
+        results = []
+        
+        # Múltiples selectores por si cambia la estructura
+        selectors = [
+            ('div', 'result'),
+            ('div', 'web-result'),
+            ('article', 'result')
+        ]
+        
+        for tag, class_name in selectors:
+            elements = soup.find_all(tag, class_=class_name)[:max_results]
+            if elements:
+                for result in elements:
+                    try:
+                        title_elem = result.find(['a', 'h2', 'h3'], class_=re.compile('result|title|link'))
+                        if not title_elem:
+                            title_elem = result.find('a')
+                        
+                        snippet_elem = result.find(['a', 'div', 'span'], class_=re.compile('snippet|result__snippet|description'))
+                        if not snippet_elem:
+                            snippet_elem = result.find('div', class_=False)
+                        
+                        if title_elem:
+                            title = title_elem.get_text(strip=True)
+                            url_result = title_elem.get('href', '')
+                            
+                            # Limpiar URL de redirección de DuckDuckGo
+                            if url_result.startswith('/'):
+                                match = re.search(r'uddg=([^&]+)', url_result)
+                                if match:
+                                    url_result = urllib.parse.unquote(match.group(1))
+                            
+                            snippet = snippet_elem.get_text(strip=True) if snippet_elem else title
+                            
+                            if title and len(title) > 5:
+                                results.append({
+                                    'title': title,
+                                    'url': url_result if url_result.startswith('http') else f'https://duckduckgo.com{url_result}',
+                                    'snippet': snippet[:300],
+                                    'source': 'duckduckgo_fallback'
+                                })
+                    except Exception as e:
+                        continue
+                break  # Si encontramos con un selector, no seguimos
+        
+        return results
+
+    @staticmethod
+    def _search_wikipedia(query, max_results=3):
+        """Búsqueda en Wikipedia como fallback final"""
         try:
-            url = f"https://html.duckduckgo.com/?q={urllib.parse.quote(query)}"
-            headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+            # Buscar en Wikipedia en español
+            search_query = urllib.parse.quote(query)
+            url = f"https://es.wikipedia.org/w/api.php?action=query&list=search&srsearch={search_query}&format=json&srlimit={max_results}"
+            
+            headers = {'User-Agent': 'Cic_IA/1.0 (Educational Bot)'}
             response = requests.get(url, headers=headers, timeout=10)
-            soup = BeautifulSoup(response.content, 'html.parser')
+            data = response.json()
+            
             results = []
-            for result in soup.find_all('div', class_='result')[:max_results]:
-                try:
-                    title_elem = result.find('a', class_='result__a')
-                    snippet_elem = result.find('a', class_='result__snippet')
-                    if title_elem and snippet_elem:
-                        results.append({
-                            'title': title_elem.get_text(strip=True),
-                            'url': title_elem.get('href', ''),
-                            'snippet': snippet_elem.get_text(strip=True),
-                            'source': 'duckduckgo_fallback'
-                        })
-                except:
-                    continue
+            for item in data.get('query', {}).get('search', []):
+                title = item.get('title', '')
+                snippet = item.get('snippet', '').replace('<span class="searchmatch">', '').replace('</span>', '')
+                
+                results.append({
+                    'title': f"{title} - Wikipedia",
+                    'url': f"https://es.wikipedia.org/wiki/{urllib.parse.quote(title.replace(' ', '_'))}",
+                    'snippet': snippet[:300] if snippet else f"Artículo sobre {title} en Wikipedia",
+                    'source': 'wikipedia'
+                })
+            
             return results
         except Exception as e:
-            logger.error(f"Error fallback: {e}")
+            logger.error(f"Error Wikipedia: {e}")
             return []
 
 # ========== CLASE PRINCIPAL CIC_IA ==========
@@ -656,6 +738,7 @@ class CicIA:
         for mem in memories:
             mem_words = set(mem.content.lower().split())
             overlap = len(query_words & mem_words)
+            
             if overlap >= 2:
                 relevant.append(mem)
                 mem.access_count += 1
@@ -856,10 +939,8 @@ def login_page():
         if request.is_json:
             return jsonify({'success': False, 'error': error}), 401
         
-        # CORREGIDO: Usar render_template_string con comillas triples
         return render_template_string(LOGIN_TEMPLATE, error=error)
     
-    # GET
     return render_template_string(LOGIN_TEMPLATE, error=None)
 
 @app.route('/register', methods=['GET', 'POST'])
