@@ -20,7 +20,7 @@ import hashlib
 import requests
 from bs4 import BeautifulSoup
 import logging
-from sqlalchemy import select
+from sqlalchemy import select, func
 
 # Configuración de logging
 logging.basicConfig(level=logging.INFO)
@@ -50,7 +50,7 @@ app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
 
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-# Credenciales DESARROLLADOR - SOLO TÚ (desde variables de entorno o defaults para desarrollo)
+# Credenciales DESARROLLADOR
 DEV_USERNAME = os.environ.get('DEV_USERNAME', 'admin')
 DEV_PASSWORD = os.environ.get('DEV_PASSWORD', 'CicDev2024!')
 
@@ -117,17 +117,13 @@ with app.app_context():
 # ========== SERVICIO DE AUTENTICACIÓN ==========
 
 class DevAuthService:
-    """Servicio de autenticación para modo desarrollador"""
-    
     def __init__(self):
         self.active_sessions = {}
     
     def verify_credentials(self, username, password):
-        """Verificar credenciales del desarrollador"""
         return username == DEV_USERNAME and password == DEV_PASSWORD
     
     def generate_token(self, username):
-        """Generar token de sesión"""
         import secrets
         token = secrets.token_urlsafe(32)
         self.active_sessions[token] = {
@@ -139,7 +135,6 @@ class DevAuthService:
         return token
     
     def verify_token(self, token):
-        """Verificar si token es válido"""
         if not token or token not in self.active_sessions:
             return False
         
@@ -152,17 +147,14 @@ class DevAuthService:
         return True
     
     def revoke_token(self, token):
-        """Revocar token"""
         if token in self.active_sessions:
             del self.active_sessions[token]
             return True
         return False
 
-# Instancia global
 dev_auth = DevAuthService()
 
 def dev_required(f):
-    """Decorador para rutas de desarrollador"""
     from functools import wraps
     @wraps(f)
     def decorated_function(*args, **kwargs):
@@ -179,7 +171,8 @@ class WebSearchEngine:
     def search_duckduckgo(query, max_results=5):
         try:
             try:
-                from duckduckgo_search import DDGS
+                # ✅ ACTUALIZADO: Usar ddgs en lugar de duckduckgo_search
+                from ddgs import DDGS
                 results = []
                 with DDGS() as ddgs:
                     for result in ddgs.text(query, max_results=max_results):
@@ -191,7 +184,7 @@ class WebSearchEngine:
                         })
                 return results
             except ImportError:
-                logger.warning("duckduckgo-search no instalada, usando fallback")
+                logger.warning("ddgs no instalada, usando fallback")
                 return WebSearchEngine._search_fallback(query, max_results)
         except Exception as e:
             logger.error(f"Error en búsqueda DuckDuckGo: {e}")
@@ -230,9 +223,7 @@ class CicIA:
         self.learning_active = True
         self.web_search_engine = WebSearchEngine()
         
-        # 50 TEMAS PARA AUTO-APRENDIZAJE
         self.auto_learning_topics = [
-            # CIENCIA PROFUNDA (10)
             'física cuántica avances 2024',
             'biología sintética descubrimientos',
             'neurociencia cognitiva',
@@ -243,8 +234,6 @@ class CicIA:
             'genética edición CRISPR',
             'psicología conducta humana',
             'filosofía mente artificial',
-            
-            # TECNOLOGÍA (12)
             'inteligencia artificial noticias 2024',
             'machine learning avances',
             'desarrollo software arquitectura',
@@ -257,8 +246,6 @@ class CicIA:
             'ciberseguridad ética hacking',
             'computación cuántica progreso',
             'edge computing computación borde',
-            
-            # MUNDO Y SOCIEDAD (10)
             'economía global tendencias',
             'geopolítica análisis actual',
             'cambio climático soluciones',
@@ -269,8 +256,6 @@ class CicIA:
             'lingüística evolución idiomas',
             'derecho tecnología regulación',
             'sociología cambios sociales',
-            
-            # DESARROLLO PERSONAL (10)
             'productividad métodos eficaces',
             'aprendizaje acelerado técnicas',
             'creatividad innovación pensamiento',
@@ -281,8 +266,6 @@ class CicIA:
             'mindfulness atención plena',
             'inteligencia emocional',
             'emprendimiento startups casos éxito',
-            
-            # FUTURO (8)
             'biotecnología longevidad',
             'nanotecnología medicina',
             'energía fusión nuclear',
@@ -322,13 +305,12 @@ class CicIA:
         return log.count if log else 0
     
     def _get_auto_learned_total(self):
-        total = db.session.query(db.func.sum(LearningLog.auto_learned)).scalar()
+        total = db.session.query(func.sum(LearningLog.auto_learned)).scalar()
         return int(total) if total else 0
     
-    # ⬇️⬇️⬇️ CAMBIO 2: INTERVALO CORREGIDO A 15 MINUTOS ⬇️⬇️⬇️
     def _continuous_learning_loop(self):
         logger.info("🧠 Iniciando loop de auto-aprendizaje evolutivo...")
-        time.sleep(180)  # 3 minutos inicial
+        time.sleep(180)
         
         while self.learning_active:
             try:
@@ -336,9 +318,8 @@ class CicIA:
             except Exception as e:
                 logger.error(f"Error en auto-aprendizaje: {e}")
             
-            # CAMBIO: De 3 horas (10800) a 15 minutos (900) para Render gratuito
             logger.info("⏰ Auto-aprendizaje: esperando 15 minutos...")
-            time.sleep(900)  # 15 minutos
+            time.sleep(900)
     
     def _perform_auto_learning(self):
         with app.app_context():
@@ -487,10 +468,14 @@ class CicIA:
                                          memories_count=len(relevant_memories),
                                          sources_used=sources_used)
     
+    # ✅ CORREGIDO: SQLAlchemy 2.0 syntax
     def _search_and_learn(self, query):
         try:
             with app.app_context():
-                cached = WebSearchCache.query.filter_by(query=query).first()
+                # ✅ SQLAlchemy 2.0: Usar select() en lugar de query.filter_by()
+                stmt = select(WebSearchCache).where(WebSearchCache.query == query)
+                cached = db.session.execute(stmt).scalar_one_or_none()
+                
                 if cached and cached.expires_at > datetime.utcnow():
                     return cached.results
                 
@@ -678,7 +663,7 @@ KNOWLEDGE_BASE = {
 # Instancia global
 cic_ia = CicIA()
 
-# ========== RUTAS PÚBLICAS (USUARIOS) ==========
+# ========== RUTAS PÚBLICAS ==========
 
 @app.route('/')
 def index():
@@ -804,7 +789,6 @@ def learn():
 
 @app.route('/api/teach', methods=['POST'])
 def teach():
-    """Enseñar a la IA - Público pero con bonus si es dev"""
     try:
         data = request.json
         text = data.get('text', '').strip()
@@ -888,11 +872,10 @@ def evolution_stats():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-# ========== RUTAS DESARROLLADOR (PROTEGIDAS) ==========
+# ========== RUTAS DESARROLLADOR ==========
 
 @app.route('/api/dev/login', methods=['POST'])
 def dev_login():
-    """Login para modo desarrollador"""
     try:
         data = request.json
         username = data.get('username', '').strip()
@@ -916,7 +899,6 @@ def dev_login():
 
 @app.route('/api/dev/logout', methods=['POST'])
 def dev_logout():
-    """Logout desarrollador"""
     token = request.headers.get('X-Dev-Token')
     if token:
         dev_auth.revoke_token(token)
@@ -924,7 +906,6 @@ def dev_logout():
 
 @app.route('/api/dev/verify')
 def dev_verify():
-    """Verificar sesión activa"""
     token = request.headers.get('X-Dev-Token')
     if dev_auth.verify_token(token):
         session = dev_auth.active_sessions.get(token)
@@ -935,11 +916,9 @@ def dev_verify():
         })
     return jsonify({'valid': False}), 401
 
-# ⬇️⬇️⬇️ CAMBIO 1: AGREGAR RUTA /api/evolution/learn-now ⬇️⬇️⬇️
 @app.route('/api/evolution/learn-now', methods=['POST'])
 @dev_required
 def evolution_learn_now():
-    """Forzar aprendizaje - endpoint para el frontend"""
     try:
         threading.Thread(target=cic_ia._perform_auto_learning, daemon=True).start()
         return jsonify({
@@ -953,7 +932,6 @@ def evolution_learn_now():
 @app.route('/api/dev/system/force-learning', methods=['POST'])
 @dev_required
 def dev_force_learning():
-    """Forzar aprendizaje inmediato - endpoint alternativo"""
     try:
         threading.Thread(target=cic_ia._perform_auto_learning, daemon=True).start()
         return jsonify({
@@ -964,11 +942,9 @@ def dev_force_learning():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-# ✅ NUEVO ENDPOINT: Aprendizaje Manual (para el modal del frontend)
 @app.route('/api/dev/learning/manual', methods=['POST'])
 @dev_required
 def dev_manual_learning():
-    """Endpoint para aprendizaje manual desde el modal del desarrollador"""
     try:
         data = request.json
         content = data.get('content', '').strip()
@@ -976,7 +952,6 @@ def dev_manual_learning():
         source_url = data.get('source_url', '')
         priority = data.get('priority', 1)
         
-        # Validaciones
         if not content:
             return jsonify({
                 'success': False,
@@ -989,16 +964,12 @@ def dev_manual_learning():
                 'error': 'El tema es requerido'
             }), 400
         
-        # Construir el contenido completo
         full_content = content
         if source_url:
             full_content += f"\n\nFuente: {source_url}"
         
-        # Calcular relevancia basada en prioridad (1-3)
-        # Prioridad 1 = 0.9, 2 = 0.93, 3 = 0.96
         relevance = 0.9 + ((priority - 1) * 0.03)
         
-        # Guardar en memoria
         memory = Memory(
             content=full_content,
             source='developer',
@@ -1008,7 +979,6 @@ def dev_manual_learning():
         )
         db.session.add(memory)
         
-        # Registrar en evolución
         evolution = KnowledgeEvolution(
             topic=topic,
             action='manual_learning',
@@ -1041,7 +1011,6 @@ def dev_manual_learning():
 @app.route('/api/dev/memories/all')
 @dev_required
 def dev_memories_all():
-    """Todas las memorias (paginado)"""
     try:
         page = request.args.get('page', 1, type=int)
         per_page = request.args.get('per_page', 50, type=int)
@@ -1070,7 +1039,6 @@ def dev_memories_all():
 @app.route('/api/dev/memories/<int:id>', methods=['DELETE'])
 @dev_required
 def dev_delete_memory(id):
-    """Eliminar memoria específica"""
     try:
         memory = Memory.query.get_or_404(id)
         db.session.delete(memory)
@@ -1083,7 +1051,6 @@ def dev_delete_memory(id):
 @app.route('/api/dev/stats/detailed')
 @dev_required
 def dev_stats_detailed():
-    """Estadísticas detalladas del sistema"""
     try:
         today = date.today()
         week_ago = today - timedelta(days=7)
@@ -1102,18 +1069,18 @@ def dev_stats_detailed():
                 'developer': Memory.query.filter_by(source='developer').count()
             },
             'today': {
-                'conversations': db.session.query(db.func.sum(LearningLog.count)).filter(
+                'conversations': db.session.query(func.sum(LearningLog.count)).filter(
                     LearningLog.date == today
                 ).scalar() or 0,
-                'auto_learned': db.session.query(db.func.sum(LearningLog.auto_learned)).filter(
+                'auto_learned': db.session.query(func.sum(LearningLog.auto_learned)).filter(
                     LearningLog.date == today
                 ).scalar() or 0
             },
             'this_week': {
-                'conversations': db.session.query(db.func.sum(LearningLog.count)).filter(
+                'conversations': db.session.query(func.sum(LearningLog.count)).filter(
                     LearningLog.date >= week_ago
                 ).scalar() or 0,
-                'web_searches': db.session.query(db.func.sum(LearningLog.web_searches)).filter(
+                'web_searches': db.session.query(func.sum(LearningLog.web_searches)).filter(
                     LearningLog.date >= week_ago
                 ).scalar() or 0
             }
@@ -1126,9 +1093,7 @@ def dev_stats_detailed():
 @app.route('/api/dev/system/clear-db', methods=['POST'])
 @dev_required
 def dev_clear_db():
-    """⚠️ LIMPIAR TODA LA BASE DE DATOS"""
     try:
-        # Verificar confirmación
         confirm = request.headers.get('X-Confirm-Delete')
         if confirm != 'DESTRUIR_TODO':
             return jsonify({
@@ -1136,14 +1101,12 @@ def dev_clear_db():
                 'message': 'Agrega header X-Confirm-Delete: DESTRUIR_TODO'
             }), 400
         
-        # Contar antes de borrar
         counts = {
             'memories': Memory.query.count(),
             'conversations': Conversation.query.count(),
             'logs': LearningLog.query.count()
         }
         
-        # Eliminar todo
         Memory.query.delete()
         Conversation.query.delete()
         LearningLog.query.delete()
@@ -1165,7 +1128,6 @@ def dev_clear_db():
 @app.route('/api/dev/sessions')
 @dev_required
 def dev_sessions():
-    """Listar sesiones activas"""
     try:
         sessions = []
         for token, session in dev_auth.active_sessions.items():
