@@ -2,6 +2,18 @@
 Cic_IA v7.2 - Asistente Inteligente EVOLUTIVO
 Modo Desarrollador + Modo Usuario - VERSIÓN FINAL CORREGIDA CON BÚSQUEDA MEJORADA
 """
+# Forzar SQLite si no hay DATABASE_URL válido
+database_url = os.environ.get('DATABASE_URL')
+if database_url and database_url.startswith('postgres'):
+    # Usar PostgreSQL
+    if database_url.startswith('postgres://'):
+        database_url = database_url.replace('postgres://', 'postgresql://', 1)
+else:
+    # Forzar SQLite si no hay PostgreSQL configurado
+    database_url = 'sqlite:///cic_ia_v7.db'
+    logger.info("⚠️ Usando SQLite (no se encontró DATABASE_URL de PostgreSQL)")
+
+app.config['SQLALCHEMY_DATABASE_URI'] = database_url
 
 from flask import Flask, render_template, render_template_string, request, jsonify, send_from_directory, session, redirect, url_for
 from flask_sqlalchemy import SQLAlchemy
