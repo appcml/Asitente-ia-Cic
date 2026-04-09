@@ -1,7 +1,9 @@
 """
-Cic_IA v7.2 - Asistente Inteligente EVOLUTIVO
-Modo Desarrollador + Modo Usuario
-Auto-aprendizaje cada 1 hora
+Cic_IA v7.3 - Asistente Inteligente EVOLUTIVO
+- Modos: Básico, Rápido, Avanzado
+- Auto-aprendizaje web cada 1 hora
+- Aprendizaje manual forzado
+- Respuestas coherentes y contextuales
 """
 
 # ========== IMPORTS ==========
@@ -22,7 +24,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 import requests
 from bs4 import BeautifulSoup
 
-# ========== CONFIGURACIÓN INICIAL ==========
+# ========== CONFIGURACIÓN ==========
 app = Flask(__name__)
 
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'cic-ia-secret-2024-v7')
@@ -42,7 +44,7 @@ logger = logging.getLogger('cic_ia')
 
 db = SQLAlchemy(app)
 
-# ========== MODELOS DE BASE DE DATOS ==========
+# ========== MODELOS ==========
 
 class UserAccount(db.Model):
     __tablename__ = 'user_accounts'
@@ -53,6 +55,7 @@ class UserAccount(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     last_login = db.Column(db.DateTime)
     is_active = db.Column(db.Boolean, default=True)
+    preferred_mode = db.Column(db.String(20), default='balanced')  # basic, fast, advanced
     
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
@@ -65,6 +68,7 @@ class UserAccount(db.Model):
             'id': self.id,
             'username': self.username,
             'email': self.email,
+            'preferred_mode': self.preferred_mode,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'last_login': self.last_login.isoformat() if self.last_login else None
         }
@@ -73,7 +77,7 @@ class Memory(db.Model):
     __tablename__ = 'memories'
     id = db.Column(db.Integer, primary_key=True)
     content = db.Column(db.Text, nullable=False)
-    source = db.Column(db.String(50), default='unknown')
+    source = db.Column(db.String(50), default='unknown')  # auto_learning, web_search, manual, curiosity
     topic = db.Column(db.String(100))
     relevance_score = db.Column(db.Float, default=0.5)
     access_count = db.Column(db.Integer, default=0)
@@ -86,6 +90,7 @@ class Conversation(db.Model):
     bot_response = db.Column(db.Text, nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey('user_accounts.id'))
     intent_detected = db.Column(db.String(50))
+    mode_used = db.Column(db.String(20), default='balanced')
     timestamp = db.Column(db.DateTime, default=datetime.utcnow)
 
 class LearningLog(db.Model):
@@ -99,54 +104,73 @@ class LearningLog(db.Model):
 with app.app_context():
     db.create_all()
 
-# ========== KNOWLEDGE BASE ==========
+# ========== KNOWLEDGE BASE AMPLIADA ==========
 
 KNOWLEDGE_BASE = {
     'ia': {
-        'respuestas': [
-            "La Inteligencia Artificial (IA) es la simulación de procesos de inteligencia humana por sistemas informáticos.",
-            "La IA permite a las máquinas aprender, razonar y resolver problemas de manera autónoma."
-        ],
-        'keywords': ['inteligencia artificial', 'machine learning', 'deep learning', 'ia']
+        'basic': "La IA es la inteligencia artificial.",
+        'fast': "La IA permite a las máquinas aprender y razonar como humanos.",
+        'advanced': """La Inteligencia Artificial (IA) es la simulación de procesos de inteligencia humana por sistemas informáticos. 
+        
+Incluye:
+• Machine Learning: Aprendizaje automático a partir de datos
+• Deep Learning: Redes neuronales profundas
+• Procesamiento de lenguaje natural
+• Visión por computadora
+• Robótica inteligente
+
+Aplicaciones actuales: asistentes virtuales, diagnóstico médico, vehículos autónomos, traducción automática, generación de contenido."""
     },
     'python': {
-        'respuestas': [
-            "Python es el lenguaje líder en IA por su sintaxis clara y bibliotecas como TensorFlow, PyTorch y scikit-learn.",
-            "Python fue creado por Guido van Rossum y es ideal para prototipado rápido."
-        ],
-        'keywords': ['python', 'programacion', 'codigo', 'desarrollo']
+        'basic': "Python es un lenguaje de programación.",
+        'fast': "Python es el lenguaje líder en IA por su sintaxis simple y librerías como TensorFlow.",
+        'advanced': """Python es un lenguaje de programación de alto nivel, interpretado y de propósito general.
+
+Características:
+• Sintaxis clara y legible
+• Tipado dinámico
+• Gran ecosistema de librerías (NumPy, Pandas, TensorFlow, PyTorch)
+• Multiplataforma
+• Comunidad activa
+
+Uso en IA: prototipado rápido, análisis de datos, machine learning, deep learning, automatización."""
     },
     'hola': {
-        'respuestas': [
-            "¡Hola! Soy Cic_IA, tu asistente con auto-aprendizaje. ¿En qué puedo ayudarte?",
-            "¡Bienvenido! Estoy aprendiendo continuamente para servirte mejor."
-        ],
-        'keywords': ['hola', 'buenas', 'saludos', 'buenos dias', 'buenas tardes']
+        'basic': "¡Hola!",
+        'fast': "¡Hola! Soy Cic_IA, tu asistente inteligente. ¿En qué puedo ayudarte?",
+        'advanced': "¡Hola! Soy Cic_IA, tu asistente con auto-aprendizaje. Puedo responder en modo básico, rápido o avanzado. ¿Qué necesitas saber?"
     },
     'cic_ia': {
-        'respuestas': [
-            "Soy Cic_IA, una inteligencia artificial evolutiva que aprende automáticamente y mejora con cada conversación.",
-            "Cic_IA es un asistente IA con auto-aprendizaje, memoria de conversaciones y búsqueda web."
-        ],
-        'keywords': ['quien eres', 'que eres', 'cic_ia', 'tu nombre', 'cic-ia']
+        'basic': "Soy Cic_IA.",
+        'fast': "Soy Cic_IA, un asistente IA que aprende automáticamente cada hora.",
+        'advanced': """Soy Cic_IA v7.3, una inteligencia artificial evolutiva con las siguientes capacidades:
+
+• Auto-aprendizaje web cada 1 hora
+• Tres modos de respuesta: Básico, Rápido y Avanzado
+• Memoria persistente de conversaciones
+• Aprendizaje manual forzado (modo dev)
+• Búsqueda en tiempo real cuando no tengo información
+
+Modos disponibles:
+- BÁSICO: Respuestas simples y directas
+- RÁPIDO: Respuestas concisas pero informativas  
+- AVANZADO: Respuestas detalladas con contexto y ejemplos"""
     },
     'default': {
-        'respuestas': [
-            "Interesante pregunta sobre '{tema}'. Déjame buscar información actualizada.",
-            "Voy a investigar sobre '{tema}' para darte información precisa."
-        ],
-        'keywords': []
+        'basic': "No tengo información sobre {tema}.",
+        'fast': "Voy a buscar información sobre {tema} para ayudarte.",
+        'advanced': "No tengo información específica sobre '{tema}' en mi base de conocimiento. Permíteme buscar en fuentes externas para darte una respuesta completa y actualizada."
     }
 }
 
-# ========== BÚSQUEDA WEB ==========
+# ========== BÚSQUEDA WEB MEJORADA ==========
 
 class WebSearchEngine:
     @staticmethod
-    def search(query, max_results=3):
+    def search(query, max_results=5):
         logger.info(f"🔍 Buscando: '{query}'")
         
-        # Intentar 1: DuckDuckGo HTML
+        # Intentar DuckDuckGo primero
         try:
             results = WebSearchEngine._search_duckduckgo(query, max_results)
             if results:
@@ -155,7 +179,7 @@ class WebSearchEngine:
         except Exception as e:
             logger.warning(f"⚠️ DuckDuckGo falló: {e}")
         
-        # Intentar 2: Wikipedia
+        # Fallback a Wikipedia
         try:
             results = WebSearchEngine._search_wikipedia(query, max_results)
             if results:
@@ -187,7 +211,6 @@ class WebSearchEngine:
                     url_result = title_elem.get('href', '')
                     snippet = snippet_elem.get_text(strip=True) if snippet_elem else title
                     
-                    # Limpiar URL
                     if url_result.startswith('/'):
                         match = re.search(r'uddg=([^&]+)', url_result)
                         if match:
@@ -196,7 +219,7 @@ class WebSearchEngine:
                     results.append({
                         'title': title,
                         'url': url_result if url_result.startswith('http') else f'https://duckduckgo.com{url_result}',
-                        'snippet': snippet[:300]
+                        'snippet': snippet
                     })
             except:
                 continue
@@ -220,7 +243,7 @@ class WebSearchEngine:
             results.append({
                 'title': f"{title} - Wikipedia",
                 'url': f"https://es.wikipedia.org/wiki/{urllib.parse.quote(title.replace(' ', '_'))}",
-                'snippet': snippet[:300] if snippet else f"Artículo sobre {title}"
+                'snippet': snippet
             })
         
         return results
@@ -232,16 +255,21 @@ class CicIA:
         self.learning_active = True
         self.web_search = WebSearchEngine()
         self.auto_learning_topics = [
-            'inteligencia artificial noticias 2024',
-            'machine learning avances',
-            'python programación tutorial',
+            'inteligencia artificial aplicaciones 2024',
+            'machine learning casos de uso',
+            'python tutorial avanzado',
             'desarrollo web tendencias',
-            'ciencia de datos ejemplos',
-            'neurociencia descubrimientos',
-            'computación cuántica progreso',
-            'ciberseguridad consejos',
-            'blockchain aplicaciones',
-            'internet de las cosas iot'
+            'ciencia de datos ejemplos reales',
+            'neurociencia cognitiva',
+            'computación cuántica avances',
+            'ciberseguridad mejores prácticas',
+            'blockchain casos de uso',
+            'internet de las cosas ejemplos',
+            'procesamiento de lenguaje natural',
+            'visión por computadora aplicaciones',
+            'robótica inteligente',
+            'ética en inteligencia artificial',
+            'automatización con python'
         ]
         
         with app.app_context():
@@ -256,22 +284,23 @@ class CicIA:
     
     def _print_startup(self):
         logger.info("=" * 60)
-        logger.info("🚀 CIC_IA v7.2 - INICIADO")
+        logger.info("🚀 CIC_IA v7.3 - INICIADO")
         logger.info(f"📚 Memorias: {self.stats['memories']}")
         logger.info(f"👥 Usuarios: {self.stats['users']}")
         logger.info(f"🧠 Auto-aprendizaje: CADA 1 HORA")
+        logger.info(f"⚡ Modos: BÁSICO | RÁPIDO | AVANZADO")
         logger.info("=" * 60)
     
     def _start_auto_learning(self):
         """Inicia el hilo de auto-aprendizaje cada 1 hora"""
         def learning_loop():
-            time.sleep(30)  # Esperar 30 segundos al inicio
+            time.sleep(30)
             while self.learning_active:
                 try:
                     self._auto_learn()
                 except Exception as e:
                     logger.error(f"Error auto-aprendizaje: {e}")
-                time.sleep(3600)  # 1 hora = 3600 segundos
+                time.sleep(3600)
         
         thread = threading.Thread(target=learning_loop, daemon=True)
         thread.name = "AutoLearning"
@@ -279,7 +308,7 @@ class CicIA:
         logger.info("⏰ Auto-aprendizaje activado (cada 1 hora)")
     
     def _auto_learn(self, custom_topic=None):
-        """Realiza el aprendizaje automático - CORREGIDO"""
+        """Realiza el aprendizaje automático"""
         with app.app_context():
             topic = custom_topic or random.choice(self.auto_learning_topics)
             logger.info(f"🤖 Auto-aprendizaje: '{topic}'")
@@ -292,7 +321,6 @@ class CicIA:
             learned = 0
             for result in results:
                 try:
-                    # Verificar duplicado
                     preview = result['snippet'][:50] if result['snippet'] else ''
                     exists = Memory.query.filter(Memory.content.ilike(f'%{preview}%')).first()
                     if exists:
@@ -314,7 +342,6 @@ class CicIA:
                     logger.error(f"❌ Error guardando: {e}")
                     continue
             
-            # ✅ CORREGIDO: Actualizar log diario
             if learned > 0:
                 today = date.today()
                 log = LearningLog.query.filter_by(date=today).first()
@@ -323,9 +350,8 @@ class CicIA:
                     db.session.add(log)
                     db.session.commit()
                 
-                # Asegurar que auto_learned no sea None
-                current_value = log.auto_learned if log.auto_learned is not None else 0
-                log.auto_learned = current_value + learned
+                current = log.auto_learned if log.auto_learned is not None else 0
+                log.auto_learned = current + learned
                 db.session.commit()
             
             return learned
@@ -334,107 +360,193 @@ class CicIA:
         """Predice la intención del mensaje"""
         text_lower = text.lower()
         intents = {
-            'greeting': ['hola', 'buenas', 'saludos', 'hey', 'hi', 'buenos dias', 'buenas tardes'],
-            'question': ['que', 'qué', 'como', 'cómo', 'cuando', 'cuándo', 'donde', 'dónde', 'por que', 'por qué', '?'],
-            'farewell': ['adios', 'adiós', 'chao', 'hasta luego', 'nos vemos'],
-            'thanks': ['gracias', 'thank', 'thanks', 'agradecido'],
-            'identity': ['quien eres', 'que eres', 'tu nombre', 'cic_ia', 'cic-ia', 'presentate']
+            'greeting': ['hola', 'buenas', 'saludos', 'hey', 'hi', 'buenos dias', 'buenas tardes', 'buenas noches'],
+            'question': ['que', 'qué', 'como', 'cómo', 'cuando', 'cuándo', 'donde', 'dónde', 'por que', 'por qué', 'porque', 'cual', 'cuál', '?'],
+            'definition': ['definicion', 'definición', 'que es', 'qué es', 'significa', 'significado', 'concepto'],
+            'usage': ['usos', 'aplicaciones', 'para que sirve', 'cómo se usa', 'ejemplos', 'casos de uso', 'donde se usa'],
+            'comparison': ['diferencia', 'comparacion', 'comparación', 'versus', 'vs', 'mejor que', 'peor que'],
+            'tutorial': ['tutorial', 'guia', 'guía', 'paso a paso', 'como hacer', 'cómo hacer', 'aprender', 'enseñame'],
+            'farewell': ['adios', 'adiós', 'chao', 'hasta luego', 'nos vemos', 'bye'],
+            'thanks': ['gracias', 'thank', 'thanks', 'agradecido', 'te agradezco'],
+            'identity': ['quien eres', 'que eres', 'tu nombre', 'cic_ia', 'cic-ia', 'presentate', 'presentación']
         }
         
-        scores = {intent: sum(1 for kw in keywords if kw in text_lower) 
+        scores = {intent: sum(2 for kw in keywords if kw in text_lower) 
                   for intent, keywords in intents.items()}
         scores = {k: v for k, v in scores.items() if v > 0}
         
         if scores:
             best = max(scores, key=scores.get)
-            return {'intent': best, 'confidence': min(0.5 + scores[best] * 0.2, 0.95)}
+            return {'intent': best, 'confidence': min(0.4 + scores[best] * 0.15, 0.95)}
         
-        return {'intent': 'statement', 'confidence': 0.3}
+        return {'intent': 'general', 'confidence': 0.3}
+    
+    def extract_topic(self, text, intent):
+        """Extrae el tema principal de la pregunta"""
+        text_lower = text.lower()
+        
+        # Patrones comunes
+        patterns = [
+            r'(?:qué es|que es|define|significa)\s+(.+?)(?:\?|$)',
+            r'(?:usos de|aplicaciones de)\s+(.+?)(?:\?|$)',
+            r'(?:cómo|cómo se|como se)\s+(.+?)(?:\?|$)',
+            r'(?:diferencia entre|comparación de)\s+(.+?)(?:\?|$)',
+            r'(?:tutorial de|guía de|guia de)\s+(.+?)(?:\?|$)',
+        ]
+        
+        for pattern in patterns:
+            match = re.search(pattern, text_lower)
+            if match:
+                return match.group(1).strip()
+        
+        # Si no hay patrón, quitar palabras comunes
+        common_words = ['el', 'la', 'los', 'las', 'un', 'una', 'de', 'del', 'al', 'y', 'o', 'en', 'con', 'por', 'para', 'es', 'son']
+        words = [w for w in text_lower.split() if w not in common_words and len(w) > 3]
+        return ' '.join(words[:3]) if words else text_lower[:30]
     
     def find_best_topic(self, text):
         """Encuentra el mejor tema en la base de conocimiento"""
         text_lower = text.lower()
-        best_score = 0
-        best_topic = None
         
         for topic, data in KNOWLEDGE_BASE.items():
             if topic == 'default':
                 continue
-            score = sum(2 for kw in data['keywords'] if kw in text_lower)
-            if score > best_score:
-                best_score = score
-                best_topic = topic
+            # Verificar keywords o coincidencia exacta
+            keywords = ['ia', 'inteligencia artificial', 'machine learning'] if topic == 'ia' else \
+                      ['python', 'programacion', 'codigo'] if topic == 'python' else \
+                      ['hola', 'saludos', 'buenas'] if topic == 'hola' else \
+                      ['cic_ia', 'quien eres', 'que eres', 'tu nombre'] if topic == 'cic_ia' else []
+            
+            if any(kw in text_lower for kw in keywords):
+                return topic
         
-        return best_topic if best_score >= 2 else None
+        return None
     
-    def find_relevant_memories(self, query):
-        """Busca memorias relevantes"""
+    def find_relevant_memories(self, query, min_relevance=1):
+        """Busca memorias relevantes con scoring mejorado"""
         query_words = set(query.lower().split())
         memories = Memory.query.all()
-        relevant = []
+        scored_memories = []
         
         for mem in memories:
             mem_words = set(mem.content.lower().split())
             overlap = len(query_words & mem_words)
-            if overlap >= 2:
-                relevant.append(mem)
+            
+            # Bonus por palabras en el tópico
+            topic_bonus = 2 if mem.topic and any(w in mem.topic.lower() for w in query_words) else 0
+            
+            score = overlap + topic_bonus
+            
+            if score >= min_relevance:
+                scored_memories.append((mem, score))
                 mem.access_count += 1
         
-        if relevant:
+        if scored_memories:
             db.session.commit()
+            scored_memories.sort(key=lambda x: x[1], reverse=True)
+            return [m for m, _ in scored_memories[:3]]
         
-        return relevant
+        return []
     
-    def generate_response(self, user_input, intent_info):
-        """Genera la respuesta del bot"""
+    def format_web_result(self, result, mode):
+        """Formatea resultado web según el modo"""
+        if mode == 'basic':
+            return result['snippet'][:100] if len(result['snippet']) > 100 else result['snippet']
+        elif mode == 'fast':
+            return f"{result['title']}: {result['snippet'][:200]}"
+        else:  # advanced
+            return f"**{result['title']}**\n\n{result['snippet']}\n\n📖 Fuente: {result['url']}"
+    
+    def generate_response(self, user_input, intent_info, mode='balanced'):
+        """Genera la respuesta según el modo seleccionado"""
         input_lower = user_input.lower().strip()
         
+        # Mapear modos
+        mode_map = {
+            'basic': 'basic',
+            'basico': 'basic',
+            'rápido': 'fast',
+            'rapido': 'fast',
+            'fast': 'fast',
+            'avanzado': 'advanced',
+            'advanced': 'advanced',
+            'balanced': 'fast'
+        }
+        actual_mode = mode_map.get(mode, 'fast')
+        
         # Respuesta a fecha/hora
-        if any(kw in input_lower for kw in ['qué día', 'qué hora', 'fecha', 'hora actual', 'hoy es']):
+        if any(kw in input_lower for kw in ['qué día', 'que dia', 'qué hora', 'que hora', 'fecha', 'hora actual', 'hoy es']):
             now = datetime.now()
             dias = ['lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo']
             meses = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
                     'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
-            return f"📅 Hoy es {dias[now.weekday()]}, {now.day} de {meses[now.month-1]} de {now.year}\n🕐 Son las {now.strftime('%H:%M:%S')}"
+            
+            if actual_mode == 'basic':
+                return f"Hoy es {now.day}/{now.month}/{now.year}"
+            elif actual_mode == 'fast':
+                return f"📅 {dias[now.weekday()]}, {now.day} de {meses[now.month-1]} - 🕐 {now.strftime('%H:%M')}"
+            else:
+                return f"📅 Hoy es {dias[now.weekday()]}, {now.day} de {meses[now.month-1]} de {now.year}\n🕐 Son las {now.strftime('%H:%M:%S')}\n📍 Zona horaria: UTC"
         
-        # Buscar en knowledge base
+        # Buscar en knowledge base primero
         best_topic = self.find_best_topic(input_lower)
         if best_topic:
-            return random.choice(KNOWLEDGE_BASE[best_topic]['respuestas'])
+            return KNOWLEDGE_BASE[best_topic][actual_mode]
         
         # Buscar en memorias
-        relevant = self.find_relevant_memories(user_input)
+        relevant = self.find_relevant_memories(user_input, min_relevance=2)
         if relevant:
             mem = relevant[0]
-            return f"Según mi conocimiento: {mem.content[:300]}"
+            content = mem.content
+            
+            if actual_mode == 'basic':
+                # Solo la primera oración
+                sentences = content.split('.')
+                return sentences[0] + '.' if sentences else content[:100]
+            elif actual_mode == 'fast':
+                # Primer párrafo
+                paragraphs = content.split('\n\n')
+                return paragraphs[0][:250] if paragraphs else content[:250]
+            else:
+                # Contenido completo con fuente
+                return f"{content}\n\n📚 Aprendido de: {mem.source}"
         
         # Buscar en web
-        web_results = self.web_search.search(user_input, max_results=2)
+        web_results = self.web_search.search(user_input, max_results=3 if actual_mode == 'advanced' else 2)
         if web_results:
-            result = web_results[0]
-            # Guardar en memoria
-            try:
-                memory = Memory(
-                    content=f"{result['title']}\n\n{result['snippet']}\n\nFuente: {result['url']}",
-                    source='web_search',
-                    topic=user_input[:50],
-                    relevance_score=0.7
-                )
-                db.session.add(memory)
-                db.session.commit()
-            except:
-                pass
+            responses = []
+            for i, result in enumerate(web_results, 1):
+                formatted = self.format_web_result(result, actual_mode)
+                responses.append(f"{i}. {formatted}" if actual_mode == 'advanced' else formatted)
+                
+                # Guardar en memoria
+                try:
+                    memory = Memory(
+                        content=f"{result['title']}\n\n{result['snippet']}\n\nFuente: {result['url']}",
+                        source='web_search',
+                        topic=self.extract_topic(user_input, intent_info['intent']),
+                        relevance_score=0.7
+                    )
+                    db.session.add(memory)
+                    db.session.commit()
+                except:
+                    pass
             
-            return f"He investigado sobre esto:\n\n**{result['title']}**\n{result['snippet']}\n\nMás info: {result['url']}"
+            if actual_mode == 'advanced':
+                return f"He investigado sobre esto:\n\n" + "\n\n".join(responses)
+            elif actual_mode == 'fast':
+                return responses[0]
+            else:
+                return responses[0][:100]
         
         # Respuesta por defecto
-        tema = user_input[:40] if len(user_input) > 5 else "este tema"
-        return random.choice(KNOWLEDGE_BASE['default']['respuestas']).format(tema=tema)
+        tema = self.extract_topic(user_input, intent_info['intent'])
+        return KNOWLEDGE_BASE['default'][actual_mode].format(tema=tema)
     
-    def process_chat(self, user_input, user_id=None):
+    def process_chat(self, user_input, user_id=None, mode='balanced'):
         """Procesa el mensaje del usuario"""
         intent_info = self.predict_intent(user_input)
-        response = self.generate_response(user_input, intent_info)
+        response = self.generate_response(user_input, intent_info, mode)
         
         # Guardar conversación
         with app.app_context():
@@ -442,11 +554,12 @@ class CicIA:
                 user_message=user_input,
                 bot_response=response,
                 user_id=user_id,
-                intent_detected=intent_info['intent']
+                intent_detected=intent_info['intent'],
+                mode_used=mode
             )
             db.session.add(conv)
             
-            # Actualizar contador diario - CORREGIDO
+            # Actualizar contador diario
             today = date.today()
             log = LearningLog.query.filter_by(date=today).first()
             if not log:
@@ -454,9 +567,8 @@ class CicIA:
                 db.session.add(log)
                 db.session.commit()
             
-            # Asegurar que count no sea None
-            current_count = log.count if log.count is not None else 0
-            log.count = current_count + 1
+            current = log.count if log.count is not None else 0
+            log.count = current + 1
             db.session.commit()
             
             total_mem = Memory.query.count()
@@ -465,14 +577,35 @@ class CicIA:
             'response': response,
             'intent': intent_info['intent'],
             'confidence': intent_info['confidence'],
+            'mode': mode,
             'total_memories': total_mem
         }
     
-    def force_learn(self, topic):
+    def force_learn(self, topic, content=None):
         """Forzar aprendizaje de un tema específico (modo dev)"""
         logger.info(f"🎯 Forzando aprendizaje: '{topic}'")
-        count = self._auto_learn(custom_topic=topic)
-        return {'success': True, 'topic': topic, 'learned_count': count}
+        
+        if content:
+            # Aprendizaje manual directo
+            with app.app_context():
+                try:
+                    memory = Memory(
+                        content=content,
+                        source='manual',
+                        topic=topic,
+                        relevance_score=0.9
+                    )
+                    db.session.add(memory)
+                    db.session.commit()
+                    logger.info(f"✅ Aprendido manualmente: {topic[:50]}")
+                    return {'success': True, 'topic': topic, 'learned_count': 1, 'source': 'manual'}
+                except Exception as e:
+                    db.session.rollback()
+                    return {'success': False, 'error': str(e)}
+        else:
+            # Búsqueda web
+            count = self._auto_learn(custom_topic=topic)
+            return {'success': True, 'topic': topic, 'learned_count': count, 'source': 'web_search'}
     
     def get_stats(self):
         """Obtiene estadísticas del sistema"""
@@ -488,7 +621,13 @@ class CicIA:
                 'today_learned': log.auto_learned if log and log.auto_learned else 0,
                 'by_source': {
                     'auto_learning': Memory.query.filter_by(source='auto_learning').count(),
-                    'web_search': Memory.query.filter_by(source='web_search').count()
+                    'web_search': Memory.query.filter_by(source='web_search').count(),
+                    'manual': Memory.query.filter_by(source='manual').count()
+                },
+                'by_mode': {
+                    'basic': Conversation.query.filter_by(mode_used='basic').count(),
+                    'fast': Conversation.query.filter_by(mode_used='fast').count(),
+                    'advanced': Conversation.query.filter_by(mode_used='advanced').count()
                 }
             }
 
@@ -501,8 +640,6 @@ def dev_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
         if session.get('dev_mode') and session.get('dev_username') == DEV_USERNAME:
-            return f(*args, **kwargs)
-        if request.headers.get('X-Dev-Token') == 'dev-token-12345':
             return f(*args, **kwargs)
         return jsonify({'error': 'No autorizado - Modo desarrollador requerido'}), 401
     return decorated
@@ -539,6 +676,7 @@ def login_page():
         if user and user.check_password(password):
             session['user_id'] = user.id
             session['username'] = user.username
+            session['preferred_mode'] = user.preferred_mode
             user.last_login = datetime.utcnow()
             db.session.commit()
             return redirect(url_for('chat_page'))
@@ -554,6 +692,7 @@ def register_page():
         username = request.form.get('username', '').strip()
         email = request.form.get('email', '').strip()
         password = request.form.get('password', '').strip()
+        mode = request.form.get('mode', 'balanced')
         
         if len(username) < 3:
             error = 'Usuario mínimo 3 caracteres'
@@ -567,7 +706,7 @@ def register_page():
             error = 'Email ya registrado'
         else:
             try:
-                user = UserAccount(username=username, email=email)
+                user = UserAccount(username=username, email=email, preferred_mode=mode)
                 user.set_password(password)
                 db.session.add(user)
                 db.session.commit()
@@ -611,7 +750,8 @@ def dev_logout():
 def chat_page():
     return render_template_string(CHAT_TEMPLATE, 
                                 username=session.get('username'),
-                                is_dev=session.get('dev_mode', False))
+                                is_dev=session.get('dev_mode', False),
+                                current_mode=session.get('preferred_mode', 'balanced'))
 
 @app.route('/api/chat', methods=['POST'])
 def api_chat():
@@ -621,11 +761,13 @@ def api_chat():
             return jsonify({'error': 'No se recibieron datos'}), 400
         
         message = data.get('message', '').strip()
+        mode = data.get('mode', session.get('preferred_mode', 'balanced'))
+        
         if not message:
             return jsonify({'error': 'Mensaje vacío'}), 400
         
         user_id = session.get('user_id')
-        result = cic_ia.process_chat(message, user_id=user_id)
+        result = cic_ia.process_chat(message, user_id=user_id, mode=mode)
         return jsonify(result)
         
     except Exception as e:
@@ -638,7 +780,7 @@ def api_status():
         stats = cic_ia.get_stats()
         return jsonify({
             'status': 'online',
-            'version': '7.2',
+            'version': '7.3',
             **stats
         })
     except Exception as e:
@@ -649,7 +791,7 @@ def health_check():
     return jsonify({
         'status': 'healthy',
         'timestamp': datetime.utcnow().isoformat(),
-        'version': '7.2.0'
+        'version': '7.3.0'
     })
 
 # ========== RUTAS DESARROLLADOR ==========
@@ -669,7 +811,7 @@ def dev_stats():
         
         return jsonify({
             'system': {
-                'version': '7.2',
+                'version': '7.3',
                 'timestamp': datetime.utcnow().isoformat()
             },
             'stats': stats,
@@ -684,6 +826,7 @@ def dev_stats():
                 'id': c.id,
                 'user_message': c.user_message[:50] if c.user_message else '',
                 'intent': c.intent_detected,
+                'mode': c.mode_used,
                 'timestamp': c.timestamp.isoformat() if c.timestamp else None
             } for c in recent_conversations]
         })
@@ -696,10 +839,12 @@ def dev_force_learn():
     try:
         data = request.get_json()
         topic = data.get('topic', '').strip() if data else ''
+        content = data.get('content', '').strip() if data else None
+        
         if not topic:
             return jsonify({'error': 'Tema requerido'}), 400
         
-        result = cic_ia.force_learn(topic)
+        result = cic_ia.force_learn(topic, content)
         return jsonify(result)
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -764,12 +909,12 @@ def dev_toggle_mode():
         if mode == 'user':
             session.pop('dev_mode', None)
             if 'user_id' not in session:
-                # Crear usuario de prueba
                 test_user = UserAccount.query.filter_by(username='test_dev').first()
                 if not test_user:
                     test_user = UserAccount(
                         username='test_dev',
-                        email='test@dev.local'
+                        email='test@dev.local',
+                        preferred_mode='advanced'
                     )
                     test_user.set_password('test123')
                     db.session.add(test_user)
@@ -810,7 +955,7 @@ def internal_error(error):
     logger.error(f"Error 500: {error}")
     return jsonify({'error': 'Error interno del servidor'}), 500
 
-# ========== TEMPLATES HTML INLINE ==========
+# ========== TEMPLATES ==========
 
 LOGIN_TEMPLATE = '''
 <!DOCTYPE html>
@@ -843,11 +988,11 @@ LOGIN_TEMPLATE = '''
         .logo p { color: #888; margin-top: 5px; }
         .form-group { margin-bottom: 20px; }
         label { display: block; margin-bottom: 8px; color: #333; font-weight: 500; }
-        input {
+        input, select {
             width: 100%; padding: 12px 15px; border: 2px solid #e0e0e0;
             border-radius: 10px; font-size: 16px;
         }
-        input:focus { outline: none; border-color: #667eea; }
+        input:focus, select:focus { outline: none; border-color: #667eea; }
         .btn {
             width: 100%; padding: 14px; background: #667eea; color: white;
             border: none; border-radius: 10px; font-size: 16px; font-weight: 600;
@@ -925,11 +1070,11 @@ REGISTER_TEMPLATE = '''
         .logo h1 { font-size: 2.5em; color: #667eea; }
         .form-group { margin-bottom: 20px; }
         label { display: block; margin-bottom: 8px; color: #333; font-weight: 500; }
-        input {
+        input, select {
             width: 100%; padding: 12px 15px; border: 2px solid #e0e0e0;
             border-radius: 10px; font-size: 16px;
         }
-        input:focus { outline: none; border-color: #667eea; }
+        input:focus, select:focus { outline: none; border-color: #667eea; }
         .btn {
             width: 100%; padding: 14px; background: #667eea; color: white;
             border: none; border-radius: 10px; font-size: 16px; font-weight: 600;
@@ -941,6 +1086,9 @@ REGISTER_TEMPLATE = '''
         }
         .links { text-align: center; margin-top: 20px; }
         .links a { color: #667eea; text-decoration: none; }
+        .mode-info {
+            font-size: 12px; color: #666; margin-top: 5px;
+        }
     </style>
 </head>
 <body>
@@ -964,6 +1112,15 @@ REGISTER_TEMPLATE = '''
             <div class="form-group">
                 <label>Contraseña *</label>
                 <input type="password" name="password" required minlength="6" placeholder="Mínimo 6 caracteres">
+            </div>
+            <div class="form-group">
+                <label>Modo preferido</label>
+                <select name="mode">
+                    <option value="balanced">⚡ Rápido (recomendado)</option>
+                    <option value="basic">🔹 Básico</option>
+                    <option value="advanced">🔸 Avanzado</option>
+                </select>
+                <p class="mode-info">Básico: respuestas simples | Rápido: equilibrado | Avanzado: detallado</p>
             </div>
             <button type="submit" class="btn">Crear Cuenta</button>
         </form>
@@ -1041,7 +1198,7 @@ DEV_LOGIN_TEMPLATE = '''
     <div class="container">
         <div class="logo">
             <h1>⚡ DEV MODE</h1>
-            <p>Cic_IA v7.2 - Panel de Control</p>
+            <p>Cic_IA v7.3 - Panel de Control</p>
         </div>
         <div class="warning">
             ⚠️ Acceso restringido. Permite forzar aprendizaje, ver memorias y gestionar usuarios.
@@ -1102,6 +1259,13 @@ CHAT_TEMPLATE = '''
             font-size: 14px;
         }
         .header-right { display: flex; gap: 10px; align-items: center; }
+        .mode-selector {
+            padding: 5px 10px;
+            border-radius: 15px;
+            border: 1px solid #e0e0e0;
+            font-size: 13px;
+            cursor: pointer;
+        }
         .mode-badge {
             background: #ffebee;
             color: #c62828;
@@ -1134,6 +1298,7 @@ CHAT_TEMPLATE = '''
             padding: 15px 20px;
             border-radius: 20px;
             line-height: 1.6;
+            white-space: pre-wrap;
         }
         .message.user .message-bubble {
             background: #667eea;
@@ -1162,6 +1327,7 @@ CHAT_TEMPLATE = '''
             margin: 0 auto;
             display: flex;
             gap: 10px;
+            align-items: center;
         }
         #message-input {
             flex: 1;
@@ -1223,8 +1389,13 @@ CHAT_TEMPLATE = '''
             <span class="user-badge">@{{ username }}</span>
         </div>
         <div class="header-right">
+            <select class="mode-selector" id="mode-selector" onchange="changeMode(this.value)">
+                <option value="basic" {% if current_mode == 'basic' %}selected{% endif %}>🔹 Básico</option>
+                <option value="balanced" {% if current_mode in ['balanced', 'fast'] %}selected{% endif %}>⚡ Rápido</option>
+                <option value="advanced" {% if current_mode == 'advanced' %}selected{% endif %}>🔸 Avanzado</option>
+            </select>
             {% if is_dev %}
-            <span class="mode-badge">🔴 DEV MODE</span>
+            <span class="mode-badge">🔴 DEV</span>
             <a href="/dev" class="btn-small btn-dev">Panel Dev</a>
             {% endif %}
             <a href="/logout" class="btn-small btn-logout">Salir</a>
@@ -1234,11 +1405,11 @@ CHAT_TEMPLATE = '''
     <div class="chat-container" id="chat-container">
         <div class="welcome">
             <h2>¡Hola, {{ username }}! 👋</h2>
-            <p>Soy Cic_IA, tu asistente que aprende contigo.</p>
+            <p>Soy Cic_IA. Selecciona tu modo de respuesta arriba y empieza a conversar.</p>
             <div class="suggestions">
                 <span class="suggestion" onclick="sendSuggestion('¿Qué es la inteligencia artificial?')">¿Qué es la IA?</span>
+                <span class="suggestion" onclick="sendSuggestion('¿Cuáles son los usos de la IA?')">Usos de IA</span>
                 <span class="suggestion" onclick="sendSuggestion('Explícame Python')">Python</span>
-                <span class="suggestion" onclick="sendSuggestion('Me llamo {{ username }}')">Presentarme</span>
             </div>
         </div>
     </div>
@@ -1255,10 +1426,16 @@ CHAT_TEMPLATE = '''
     </div>
 
     <script>
+        let currentMode = '{{ current_mode }}';
         const chatContainer = document.getElementById('chat-container');
         const messageInput = document.getElementById('message-input');
         const sendBtn = document.getElementById('send-btn');
         const typing = document.getElementById('typing');
+        
+        function changeMode(mode) {
+            currentMode = mode;
+            addMessage(`Modo cambiado a: ${mode === 'basic' ? '🔹 Básico' : mode === 'advanced' ? '🔸 Avanzado' : '⚡ Rápido'}`, false);
+        }
         
         function addMessage(text, isUser = false) {
             const welcome = document.querySelector('.welcome');
@@ -1294,7 +1471,7 @@ CHAT_TEMPLATE = '''
                 const response = await fetch('/api/chat', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ message: text })
+                    body: JSON.stringify({ message: text, mode: currentMode })
                 });
                 
                 const data = await response.json();
@@ -1381,11 +1558,12 @@ DEV_DASHBOARD_TEMPLATE = '''
         .btn-danger:hover { background: #b91c1c; }
         .input-group { margin-bottom: 15px; }
         .input-group label { display: block; margin-bottom: 8px; color: #94a3b8; font-size: 14px; }
-        .input-group input {
+        .input-group input, .input-group textarea {
             width: 100%; padding: 12px; background: #0f172a;
             border: 1px solid #334155; border-radius: 8px;
             color: #e2e8f0; font-size: 14px;
         }
+        .input-group textarea { min-height: 100px; resize: vertical; }
         .memory-list { max-height: 400px; overflow-y: auto; }
         .memory-item {
             background: #0f172a;
@@ -1395,6 +1573,7 @@ DEV_DASHBOARD_TEMPLATE = '''
             border-left: 4px solid #60a5fa;
         }
         .memory-item.auto_learning { border-color: #4ade80; }
+        .memory-item.manual { border-color: #f59e0b; }
         .memory-header { display: flex; justify-content: space-between; margin-bottom: 8px; }
         .memory-topic { font-weight: 600; color: #e2e8f0; }
         .memory-source { font-size: 12px; padding: 3px 10px; border-radius: 20px; background: #334155; }
@@ -1443,7 +1622,7 @@ DEV_DASHBOARD_TEMPLATE = '''
 </head>
 <body>
     <header class="dev-header">
-        <h1><span>⚡</span> Cic_IA v7.2 - Panel de Desarrollador</h1>
+        <h1><span>⚡</span> Cic_IA v7.3 - Panel de Desarrollador</h1>
         <nav class="dev-nav">
             <button onclick="toggleMode()" id="mode-btn">🔄 Modo Usuario</button>
             <a href="/chat">💬 Ir al Chat</a>
@@ -1482,22 +1661,41 @@ DEV_DASHBOARD_TEMPLATE = '''
                     <div class="stat-label">Cuentas registradas</div>
                 </div>
             </div>
+            <div class="grid" style="margin-top: 25px;">
+                <div class="card">
+                    <h2>📈 Por Modo de Respuesta</h2>
+                    <div id="mode-stats"><div class="loading"></div></div>
+                </div>
+                <div class="card">
+                    <h2>📊 Por Fuente de Aprendizaje</h2>
+                    <div id="source-stats"><div class="loading"></div></div>
+                </div>
+            </div>
         </div>
         
         <div id="tab-learning" class="tab-content">
             <div class="grid">
                 <div class="card">
-                    <h2>🎯 Forzar Aprendizaje</h2>
+                    <h2>🌐 Forzar Aprendizaje Web</h2>
                     <div class="input-group">
-                        <label>Tema a aprender</label>
-                        <input type="text" id="learn-topic" placeholder="Ej: inteligencia artificial 2024">
+                        <label>Tema a buscar y aprender</label>
+                        <input type="text" id="learn-topic-web" placeholder="Ej: inteligencia artificial 2024">
                     </div>
-                    <button class="btn-action" onclick="forceLearn()">🚀 Iniciar Aprendizaje</button>
-                    <div id="learn-result"></div>
+                    <button class="btn-action" onclick="forceLearnWeb()">🌐 Buscar y Aprender</button>
+                    <div id="learn-result-web"></div>
                 </div>
                 <div class="card">
-                    <h2>📈 Estadísticas por Fuente</h2>
-                    <div id="source-stats"><div class="loading"></div></div>
+                    <h2>📝 Aprendizaje Manual</h2>
+                    <div class="input-group">
+                        <label>Tema</label>
+                        <input type="text" id="learn-topic-manual" placeholder="Ej: Mi empresa">
+                    </div>
+                    <div class="input-group">
+                        <label>Contenido completo</label>
+                        <textarea id="learn-content-manual" placeholder="Escribe aquí toda la información que quieres que aprenda la IA..."></textarea>
+                    </div>
+                    <button class="btn-action" onclick="forceLearnManual()" style="background: #f59e0b;">📝 Guardar Manualmente</button>
+                    <div id="learn-result-manual"></div>
                 </div>
             </div>
         </div>
@@ -1558,6 +1756,18 @@ DEV_DASHBOARD_TEMPLATE = '''
                         <div style="display: grid; gap: 10px;">
                             <div>🤖 Auto: <strong>${s.auto_learning || 0}</strong></div>
                             <div>🌐 Web: <strong>${s.web_search || 0}</strong></div>
+                            <div>📝 Manual: <strong>${s.manual || 0}</strong></div>
+                        </div>
+                    `;
+                }
+                
+                if (data.stats?.by_mode) {
+                    const m = data.stats.by_mode;
+                    document.getElementById('mode-stats').innerHTML = `
+                        <div style="display: grid; gap: 10px;">
+                            <div>🔹 Básico: <strong>${m.basic || 0}</strong></div>
+                            <div>⚡ Rápido: <strong>${m.fast || 0}</strong></div>
+                            <div>🔸 Avanzado: <strong>${m.advanced || 0}</strong></div>
                         </div>
                     `;
                 }
@@ -1566,13 +1776,13 @@ DEV_DASHBOARD_TEMPLATE = '''
             }
         }
         
-        async function forceLearn() {
-            const topic = document.getElementById('learn-topic').value.trim();
+        async function forceLearnWeb() {
+            const topic = document.getElementById('learn-topic-web').value.trim();
             if (!topic) return alert('Ingresa un tema');
             
             const btn = event.target;
             btn.disabled = true;
-            btn.textContent = '⏳ Aprendiendo...';
+            btn.textContent = '⏳ Buscando...';
             
             try {
                 const res = await fetch('/api/dev/force-learn', {
@@ -1582,21 +1792,58 @@ DEV_DASHBOARD_TEMPLATE = '''
                 });
                 
                 const data = await res.json();
-                const resultDiv = document.getElementById('learn-result');
+                const resultDiv = document.getElementById('learn-result-web');
                 
                 if (data.success) {
-                    resultDiv.innerHTML = `<div class="result-box">✅ <strong>Éxito!</strong><br>Tema: ${data.topic}<br>Elementos: ${data.learned_count}</div>`;
+                    resultDiv.innerHTML = `<div class="result-box">✅ <strong>Éxito!</strong><br>Tema: ${data.topic}<br>Elementos: ${data.learned_count}<br>Fuente: ${data.source}</div>`;
                     loadStats();
                     loadMemories();
                 } else {
                     resultDiv.innerHTML = `<div class="result-box error">❌ ${data.error}</div>`;
                 }
             } catch (e) {
-                document.getElementById('learn-result').innerHTML = `<div class="result-box error">Error: ${e.message}</div>`;
+                document.getElementById('learn-result-web').innerHTML = `<div class="result-box error">Error: ${e.message}</div>`;
             }
             
             btn.disabled = false;
-            btn.textContent = '🚀 Iniciar Aprendizaje';
+            btn.textContent = '🌐 Buscar y Aprender';
+        }
+        
+        async function forceLearnManual() {
+            const topic = document.getElementById('learn-topic-manual').value.trim();
+            const content = document.getElementById('learn-content-manual').value.trim();
+            
+            if (!topic || !content) return alert('Ingresa tema y contenido');
+            
+            const btn = event.target;
+            btn.disabled = true;
+            btn.textContent = '⏳ Guardando...';
+            
+            try {
+                const res = await fetch('/api/dev/force-learn', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ topic, content })
+                });
+                
+                const data = await res.json();
+                const resultDiv = document.getElementById('learn-result-manual');
+                
+                if (data.success) {
+                    resultDiv.innerHTML = `<div class="result-box">✅ <strong>Guardado!</strong><br>Tema: ${data.topic}<br>Fuente: ${data.source}</div>`;
+                    document.getElementById('learn-topic-manual').value = '';
+                    document.getElementById('learn-content-manual').value = '';
+                    loadStats();
+                    loadMemories();
+                } else {
+                    resultDiv.innerHTML = `<div class="result-box error">❌ ${data.error}</div>`;
+                }
+            } catch (e) {
+                document.getElementById('learn-result-manual').innerHTML = `<div class="result-box error">Error: ${e.message}</div>`;
+            }
+            
+            btn.disabled = false;
+            btn.textContent = '📝 Guardar Manualmente';
         }
         
         async function loadMemories() {
@@ -1693,7 +1940,7 @@ DEV_DASHBOARD_TEMPLATE = '''
                 container.innerHTML = `
                     <table>
                         <thead>
-                            <tr><th>ID</th><th>Usuario</th><th>Email</th><th>Registro</th><th>Último Login</th></tr>
+                            <tr><th>ID</th><th>Usuario</th><th>Email</th><th>Modo</th><th>Registro</th><th>Último Login</th></tr>
                         </thead>
                         <tbody>
                             ${data.users.map(u => `
@@ -1701,6 +1948,7 @@ DEV_DASHBOARD_TEMPLATE = '''
                                     <td>${u.id}</td>
                                     <td><strong>${u.username}</strong></td>
                                     <td>${u.email}</td>
+                                    <td>${u.preferred_mode}</td>
                                     <td>${new Date(u.created_at).toLocaleDateString()}</td>
                                     <td>${u.last_login ? new Date(u.last_login).toLocaleString() : 'Nunca'}</td>
                                 </tr>
