@@ -964,6 +964,80 @@ def dev_force_learning():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+# ✅ NUEVO ENDPOINT: Aprendizaje Manual (para el modal del frontend)
+@app.route('/api/dev/learning/manual', methods=['POST'])
+@dev_required
+def dev_manual_learning():
+    """Endpoint para aprendizaje manual desde el modal del desarrollador"""
+    try:
+        data = request.json
+        content = data.get('content', '').strip()
+        topic = data.get('topic', '').strip()
+        source_url = data.get('source_url', '')
+        priority = data.get('priority', 1)
+        
+        # Validaciones
+        if not content:
+            return jsonify({
+                'success': False,
+                'error': 'El contenido es requerido'
+            }), 400
+            
+        if not topic:
+            return jsonify({
+                'success': False,
+                'error': 'El tema es requerido'
+            }), 400
+        
+        # Construir el contenido completo
+        full_content = content
+        if source_url:
+            full_content += f"\n\nFuente: {source_url}"
+        
+        # Calcular relevancia basada en prioridad (1-3)
+        # Prioridad 1 = 0.9, 2 = 0.93, 3 = 0.96
+        relevance = 0.9 + ((priority - 1) * 0.03)
+        
+        # Guardar en memoria
+        memory = Memory(
+            content=full_content,
+            source='developer',
+            topic=topic,
+            relevance_score=relevance,
+            access_count=0
+        )
+        db.session.add(memory)
+        
+        # Registrar en evolución
+        evolution = KnowledgeEvolution(
+            topic=topic,
+            action='manual_learning',
+            new_content=content[:200],
+            source='developer'
+        )
+        db.session.add(evolution)
+        
+        db.session.commit()
+        
+        logger.info(f"✅ Aprendizaje manual guardado: {topic} (prioridad {priority})")
+        
+        return jsonify({
+            'success': True,
+            'message': f'✅ Aprendido: {topic}',
+            'memory_id': memory.id,
+            'topic': topic,
+            'priority_applied': priority,
+            'relevance_score': relevance
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"❌ Error en aprendizaje manual: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
 @app.route('/api/dev/memories/all')
 @dev_required
 def dev_memories_all():
