@@ -4,5 +4,5 @@ Werkzeug==2.3.7
 requests==2.31.0
 beautifulsoup4==4.12.2
 numpy==1.24.3
-duckduckgo_search==3.9.6  # <-- Agregar esta línea
-lxml==4.9.3  # <-- Para mejor parsing HTML
+duckduckgo_search==3.9.6
+lxml==4.9.3
