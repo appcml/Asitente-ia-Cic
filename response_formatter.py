@@ -1,185 +1,199 @@
 """
-ResponseFormatter - Formatea respuestas al estilo Kimi
+Response Formatter para Cic_IA v7.1
+Formatea respuestas al estilo Kimi: claras, estructuradas, útiles
 """
 
 import re
-import random
-from typing import List, Dict, Optional
+from typing import Dict, List, Optional, Tuple
+from datetime import datetime
 
 
 class ResponseFormatter:
     """
-    Da formato a las respuestas como lo haría Kimi:
-    - Estructura clara con markdown
-    - Ejemplos prácticos
-    - Honestidad sobre limitaciones
-    - Tono profesional pero cercano
+    Formatea respuestas para máxima claridad y utilidad
     """
     
-    # Frases de transición estilo Kimi
-    TRANSITIONS = {
-        'explicacion': [
-            "Entiendo tu pregunta. Déjame explicarte:",
-            "Buena pregunta. Aquí te lo aclaro:",
-            "Veo que te interesa este tema. Te explico:",
-        ],
-        'ejemplo': [
-            "Para que quede más claro, imagina esto:",
-            "Un ejemplo práctico sería:",
-            "Pongámoslo en contexto:",
-        ],
-        'honestidad': [
-            "Voy a ser honesto contigo:",
-            "Para no confundirte, debo aclarar:",
-            "Es importante que sepas:",
-        ],
-        'profundizar': [
-            "¿Te gustaría que profundice en algún aspecto específico?",
-            "¿Hay algo de lo que te gustaría saber más?",
-            "¿Esto responde tu pregunta o necesitas más detalles?",
-        ],
-        'no_se': [
-            "No tengo información suficiente sobre eso en mi base de conocimiento.",
-            "Específicamente sobre ese punto, no tengo datos confirmados.",
-            "Prefiero ser honesto: no tengo información precisa sobre eso.",
-        ]
+    # Plantillas de respuesta por tipo
+    TEMPLATES = {
+        'definition': {
+            'kimi': "**{concepto}** es {definicion}\n\nEn términos simples: {simple}",
+            'formal': "{concepto}: {definicion}",
+            'simple': "{concepto} = {simple}"
+        },
+        'comparison': {
+            'kimi': "Aquí la comparación entre {items}:\n\n{tabla}\n\n**Conclusión**: {conclusion}",
+            'formal': "Comparación:\n{tabla}",
+            'simple': "{items}: {conclusion}"
+        },
+        'steps': {
+            'kimi': "## Cómo {accion}\n\n{pasos}\n\n💡 **Tip**: {tip}",
+            'formal': "Procedimiento para {accion}:\n{pasos}",
+            'simple': "Pasos:\n{pasos}"
+        },
+        'uncertainty': {
+            'kimi': "No tengo información suficiente sobre '{tema}' en mi base actual.\n\n🔍 *Buscando en fuentes externas...*\n\n{resultado}",
+            'formal': "Información insuficiente sobre '{tema}'. {resultado}",
+            'simple': "No sé mucho de '{tema}'. {resultado}"
+        }
     }
     
-    def __init__(self, mode='kimi'):
-        self.mode = mode
+    def __init__(self, style: str = 'kimi'):
+        self.style = style
     
-    def format(self, content: str, context: Dict = None, 
-               topic: str = None, confidence: float = 1.0) -> str:
-        """
-        Formatea una respuesta completa
-        """
-        if confidence < 0.3:
-            return self._format_uncertain(content, topic)
+    def format_definition(self, concept: str, definition: str, 
+                         simple_explanation: str = "") -> str:
+        """Formatea definición de concepto"""
+        template = self.TEMPLATES['definition'][self.style]
         
-        parts = []
-        
-        # 1. Transición inicial (si es inicio de tema)
-        if context and context.get('conversation_stage') in ['exploracion_inicial', 'saludo']:
-            parts.append(random.choice(self.TRANSITIONS['explicacion']))
-        
-        # 2. Contenido principal estructurado
-        structured_content = self._structure_content(content)
-        parts.append(structured_content)
-        
-        # 3. Ejemplo práctico (si el contenido es explicativo)
-        if len(content) > 150 and self._needs_example(content):
-            parts.append(f"\n**💡 {random.choice(self.TRANSITIONS['ejemplo'])}**")
-            parts.append(self._generate_example(topic, content))
-        
-        # 4. Pregunta de seguimiento
-        if context and len(self.TRANSITIONS['profundizar']) > 0:
-            parts.append(f"\n\n{random.choice(self.TRANSITIONS['profundizar'])} 😊")
-        
-        return "\n\n".join(parts)
+        return template.format(
+            concepto=concept,
+            definicion=definition,
+            simple=simple_explanation or definition[:100] + "..."
+        )
     
-    def _structure_content(self, content: str) -> str:
-        """Estructura el contenido con markdown"""
-        
-        # Si ya tiene estructura, respetarla
-        if '##' in content or '**' in content:
-            return content
-        
-        # Dividir en párrafos y estructurar
-        paragraphs = [p.strip() for p in content.split('\n\n') if p.strip()]
-        
-        if len(paragraphs) == 1:
-            return paragraphs[0]
-        
-        # Múltiples párrafos: estructurar con encabezados si es largo
-        structured = []
-        
-        for i, para in enumerate(paragraphs):
-            if i == 0:
-                # Primer párrafo: introducción
-                structured.append(para)
-            elif len(para) > 100:
-                # Párrafos largos: ver si tienen punto clave
-                key_point = self._extract_key_point(para)
-                if key_point:
-                    structured.append(f"\n**{key_point}**\n\n{para}")
-                else:
-                    structured.append(para)
-            else:
-                structured.append(para)
-        
-        return "\n\n".join(structured)
-    
-    def _extract_key_point(self, paragraph: str) -> Optional[str]:
-        """Extrae el punto clave de un párrafo"""
-        # Buscar frases como "Lo importante es...", "La clave está en..."
-        patterns = [
-            r'(?:lo importante|la clave|el punto clave) es (que )?([^\.]+)',
-            r'(?:en resumen|básicamente)([^\.]+)',
-        ]
-        
-        for pattern in patterns:
-            match = re.search(pattern, paragraph.lower())
-            if match:
-                return match.group(2).strip().capitalize()
-        
-        # Si no hay patrón, usar primera oración si es corta
-        first_sentence = paragraph.split('.')[0]
-        if 10 < len(first_sentence) < 60:
-            return first_sentence
-        
-        return None
-    
-    def _needs_example(self, content: str) -> bool:
-        """Determina si el contenido necesita un ejemplo"""
-        # Conceptos abstractos suelen necesitar ejemplos
-        abstract_terms = ['concepto', 'teoría', 'método', 'sistema', 'proceso', 'algoritmo']
-        return any(term in content.lower() for term in abstract_terms)
-    
-    def _generate_example(self, topic: str, content: str) -> str:
-        """Genera un ejemplo relacionado"""
-        # Plantillas de ejemplos por tema
-        examples = {
-            'ia': "Imagina que le pides a una IA que reconozca gatos en fotos. No le dices 'busca orejas puntiagudas', sino que le muestras miles de fotos etiquetadas y ella misma descubre los patrones.",
-            'python': "Es como aprender a cocinar siguiendo recetas. Al principio sigues paso a paso, pero con práctica puedes improvisar y crear tus propios platos.",
-            'default': "Piensa en aprender a andar en bicicleta. No es solo saber la teoría, sino practicar hasta que el equilibrio se vuelva natural."
-        }
-        
-        # Buscar ejemplo relevante
-        for key, example in examples.items():
-            if key in (topic or '').lower() or key in content.lower():
-                return example
-        
-        return examples['default']
-    
-    def _format_uncertain(self, content: str, topic: str) -> str:
-        """Formatea cuando no estamos seguros"""
-        parts = [
-            random.choice(self.TRANSITIONS['honestidad']),
-            random.choice(self.TRANSITIONS['no_se']),
-        ]
-        
-        if topic:
-            parts.append(f"\nSobre '{topic[:50]}', te sugiero:")
-            parts.append("1. Verificar en fuentes oficiales o documentación actualizada")
-            parts.append("2. Consultar con expertos en el área")
-            parts.append("3. ¿Podrías darme más contexto para ayudarte mejor?")
-        
-        return "\n\n".join(parts)
-    
-    def format_comparison(self, items: List[Dict], headers: List[str]) -> str:
-        """Crea tabla comparativa markdown"""
-        if not items or not headers:
+    def format_list(self, items: List[str], title: str = "", 
+                   ordered: bool = False) -> str:
+        """Formatea lista de items"""
+        if not items:
             return ""
         
-        # Crear tabla
-        lines = ["| " + " | ".join(headers) + " |"]
-        lines.append("|" + "|".join(["---" for _ in headers]) + "|")
+        result = f"**{title}**\n\n" if title else ""
         
-        for item in items:
-            row = "| " + " | ".join(str(item.get(h.lower(), "-")) for h in headers) + " |"
-            lines.append(row)
+        for i, item in enumerate(items, 1):
+            if ordered:
+                result += f"{i}. {item}\n"
+            else:
+                result += f"• {item}\n"
         
-        return "\n".join(lines)
+        return result
     
-    def format_steps(self, steps: List[str], title: str = "Pasos a seguir") -> str:
-        """Lista numerada
+    def format_key_value(self, data: Dict[str, str], title: str = "") -> str:
+        """Formatea pares clave-valor"""
+        result = f"**{title}**\n\n" if title else ""
+        
+        for key, value in data.items():
+            result += f"**{key}**: {value}\n"
+        
+        return result
+    
+    def format_code(self, code: str, language: str = "") -> str:
+        """Formatea bloque de código"""
+        if self.style == 'kimi':
+            lang = language or "python"
+            return f"```{lang}\n{code}\n```"
+        return f"Código:\n{code}"
+    
+    def format_quote(self, text: str, author: str = "") -> str:
+        """Formatea cita"""
+        if self.style == 'kimi':
+            result = f"> {text}\n"
+            if author:
+                result += f"> — *{author}*"
+            return result
+        return f'"{text}"' + (f" - {author}" if author else "")
+    
+    def format_warning(self, message: str) -> str:
+        """Formatea advertencia"""
+        warnings = {
+            'kimi': f"⚠️ **Importante**: {message}",
+            'formal': f"NOTA: {message}",
+            'simple': f"Ojo: {message}"
+        }
+        return warnings.get(self.style, message)
+    
+    def format_success(self, message: str) -> str:
+        """Formatea mensaje de éxito"""
+        icons = {
+            'kimi': "✅",
+            'formal': "✓",
+            'simple': "OK"
+        }
+        return f"{icons.get(self.style, '✓')} {message}"
+    
+    def format_search_result(self, query: str, results: List[Dict]) -> str:
+        """Formatea resultados de búsqueda"""
+        if self.style != 'kimi':
+            # Versión simple
+            text = f"Resultados para '{query}':\n\n"
+            for i, r in enumerate(results[:3], 1):
+                text += f"{i}. {r.get('title', 'Sin título')}\n"
+            return text
+        
+        # Versión Kimi
+        text = f"He investigado sobre **'{query}'**:\n\n"
+        
+        for i, result in enumerate(results[:3], 1):
+            title = result.get('title', 'Sin título')
+            snippet = result.get('snippet', '')[:150]
+            url = result.get('url', '')
+            
+            text += f"{i}. **{title}**\n"
+            text += f"   {snippet}...\n"
+            if url:
+                text += f"   [Fuente]({url})\n"
+            text += "\n"
+        
+        return text
+    
+    def auto_format(self, content: str, content_type: str = "general") -> str:
+        """
+        Detecta automáticamente el mejor formato
+        """
+        # Detectar si es lista
+        if '\n' in content and any(line.strip().startswith(('-', '*', '1.')) for line in content.split('\n')):
+            return self._format_detected_list(content)
+        
+        # Detectar si es código
+        if 'def ' in content or 'class ' in content or 'import ' in content:
+            return self.format_code(content)
+        
+        # Detectar si es definición
+        if ' es ' in content[:100] and len(content) < 500:
+            parts = content.split(' es ', 1)
+            if len(parts) == 2:
+                return self.format_definition(parts[0], parts[1])
+        
+        # Por defecto, solo estructurar párrafos
+        return self._structure_paragraphs(content)
+    
+    def _format_detected_list(self, content: str) -> str:
+        """Formatea lista detectada automáticamente"""
+        lines = content.split('\n')
+        items = []
+        
+        for line in lines:
+            stripped = line.strip()
+            # Limpiar marcadores de lista
+            cleaned = re.sub(r'^[\d]+\.\s*', '', stripped)
+            cleaned = re.sub(r'^[-*•]\s*', '', cleaned)
+            if cleaned:
+                items.append(cleaned)
+        
+        return self.format_list(items)
+    
+    def _structure_paragraphs(self, text: str) -> str:
+        """Estructura texto en párrafos legibles"""
+        # Dividir en oraciones
+        sentences = re.split(r'(?<=[.!?])\s+', text)
+        
+        paragraphs = []
+        current_para = []
+        
+        for sentence in sentences:
+            current_para.append(sentence)
+            # Nueva cada 3-4 oraciones
+            if len(current_para) >= 3:
+                paragraphs.append(' '.join(current_para))
+                current_para = []
+        
+        if current_para:
+            paragraphs.append(' '.join(current_para))
+        
+        return '\n\n'.join(paragraphs)
+    
+    def add_timestamp(self, content: str) -> str:
+        """Agrega timestamp a la respuesta"""
+        if self.style == 'kimi':
+            ts = datetime.now().strftime("%H:%M")
+            return f"{content}\n\n---\n*Actualizado: {ts}*"
+        return content
