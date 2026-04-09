@@ -1,26 +1,10 @@
 """
 Cic_IA v7.2 - Asistente Inteligente EVOLUTIVO
-Modo Desarrollador + Modo Usuario - VERSIÓN FINAL CORREGIDA CON BÚSQUEDA MEJORADA
+Modo Desarrollador + Modo Usuario
 """
-# Forzar SQLite si no hay DATABASE_URL válido
-database_url = os.environ.get('DATABASE_URL')
-if database_url and database_url.startswith('postgres'):
-    # Usar PostgreSQL
-    if database_url.startswith('postgres://'):
-        database_url = database_url.replace('postgres://', 'postgresql://', 1)
-else:
-    # Forzar SQLite si no hay PostgreSQL configurado
-    database_url = 'sqlite:///cic_ia_v7.db'
-    logger.info("⚠️ Usando SQLite (no se encontró DATABASE_URL de PostgreSQL)")
 
-app.config['SQLALCHEMY_DATABASE_URI'] = database_url
-
-from flask import Flask, render_template, render_template_string, request, jsonify, send_from_directory, session, redirect, url_for
-from flask_sqlalchemy import SQLAlchemy
-from werkzeug.utils import secure_filename
-from werkzeug.security import generate_password_hash, check_password_hash
-from datetime import datetime, date, timedelta
-import os
+# ========== IMPORTS (CORREGIDOS - ORDEN IMPORTANTE) ==========
+import os  # <-- ESTE FALTABA
 import json
 import random
 import threading
@@ -30,11 +14,17 @@ import logging
 import urllib.parse
 import pickle
 import numpy as np
+import hashlib
+import secrets
+from datetime import datetime, date, timedelta
+
+from flask import Flask, render_template, render_template_string, request, jsonify, send_from_directory, session, redirect, url_for
+from flask_sqlalchemy import SQLAlchemy
+from werkzeug.utils import secure_filename
+from werkzeug.security import generate_password_hash, check_password_hash
 from sqlalchemy import select, func, or_
 import requests
 from bs4 import BeautifulSoup
-import hashlib
-import secrets
 
 # ========== CONFIGURACIÓN INICIAL ==========
 
@@ -43,14 +33,19 @@ app = Flask(__name__, template_folder='templates')
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'cic-ia-secret-2024-v7-desarrollo')
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=24)
 
+# Configuración de base de datos (SQLite por defecto, PostgreSQL si está disponible)
 database_url = os.environ.get('DATABASE_URL')
-if database_url:
+if database_url and database_url.startswith('postgres'):
+    # Usar PostgreSQL
     if database_url.startswith('postgres://'):
         database_url = database_url.replace('postgres://', 'postgresql://', 1)
-    app.config['SQLALCHEMY_DATABASE_URI'] = database_url
+    logger.info("✅ Usando PostgreSQL")
 else:
-    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///cic_ia_v7.db'
+    # Usar SQLite si no hay PostgreSQL
+    database_url = 'sqlite:///cic_ia_v7.db'
+    logger.info("⚠️ Usando SQLite (no se encontró DATABASE_URL de PostgreSQL)")
 
+app.config['SQLALCHEMY_DATABASE_URI'] = database_url
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
     'pool_recycle': 300,
