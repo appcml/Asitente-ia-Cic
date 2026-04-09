@@ -1,9 +1,10 @@
 """
 Cic_IA v7.2 - Asistente Inteligente EVOLUTIVO
-Modo Desarrollador + Modo Usuario - VERSIÓN CORREGIDA
+Modo Desarrollador + Modo Usuario - VERSIÓN FINAL
 """
 
-from flask import Flask, render_template, request, jsonify, send_from_directory, session, redirect, url_for
+# ========== IMPORTACIONES CORREGIDAS ==========
+from flask import Flask, render_template, render_template_string, request, jsonify, send_from_directory, session, redirect, url_for
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.utils import secure_filename
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -65,7 +66,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger('cic_ia')
 
-# ========== INICIALIZAR DB PRIMERO ==========
+# ========== INICIALIZAR DB ==========
 
 db = SQLAlchemy(app)
 
@@ -186,7 +187,7 @@ class FeedbackLog(db.Model):
 with app.app_context():
     db.create_all()
 
-# ========== INTENTAR IMPORTAR MÓDULOS AVANZADOS (OPCIONAL) ==========
+# ========== INTENTAR IMPORTAR MÓDULOS AVANZADOS ==========
 
 V7_MODULES_AVAILABLE = False
 neural_engine = None
@@ -195,7 +196,6 @@ curiosity_engine = None
 working_memory = None
 
 try:
-    # Intentar importar módulos externos si existen
     from neural_engine import CicNeuralEngine
     from feedback_system import FeedbackCollector
     from curiosity_engine import CuriosityEngine
@@ -246,20 +246,11 @@ KNOWLEDGE_BASE = {
     }
 }
 
-# ========== RED NEURONAL SIMPLE (FALLBACK) ==========
+# ========== RED NEURONAL SIMPLE ==========
 
 class SimpleNeuralNetwork:
-    """Red neuronal simple sin dependencias externas"""
-    
-    def __init__(self):
-        self.is_trained = False
-        self.training_data = []
-        self.model = None
-    
     def predict_intent(self, text):
-        """Predicción simple basada en palabras clave"""
         text_lower = text.lower()
-        
         intents = {
             'greeting': ['hola', 'buenas', 'saludos', 'hey', 'hi'],
             'question': ['que', 'qué', 'como', 'cómo', 'cuando', 'cuándo', 'donde', 'dónde', 'por que', 'por qué'],
@@ -281,8 +272,69 @@ class SimpleNeuralNetwork:
         
         return {'intent': 'statement', 'confidence': 0.3}
 
-# Instancia global de red neuronal simple
 simple_neural = SimpleNeuralNetwork()
+
+# ========== WORKING MEMORY SIMPLE ==========
+
+class SimpleWorkingMemory:
+    def __init__(self, max_turns=15):
+        self.max_turns = max_turns
+        self.turns = []
+        self.current_topic = None
+        self.user_facts = {}
+        self.session_start = datetime.utcnow()
+    
+    def add_turn(self, user_message, bot_response, intent, entities=None):
+        turn = {
+            'user': user_message,
+            'bot': bot_response,
+            'intent': intent,
+            'entities': entities or [],
+            'timestamp': datetime.utcnow(),
+            'topic': self.current_topic
+        }
+        self.turns.append(turn)
+        if len(self.turns) > self.max_turns:
+            self.turns.pop(0)
+        self._extract_facts(user_message)
+    
+    def _extract_facts(self, message):
+        message_lower = message.lower()
+        patterns = [
+            (r'me llamo (\w+)', 'nombre'),
+            (r'mi nombre es (\w+)', 'nombre'),
+            (r'trabajo (?:como|de) (\w+)', 'trabajo'),
+            (r'soy (\w+) de profesión', 'profesion'),
+            (r'tengo (\d+) años', 'edad'),
+            (r'vivo en (\w+)', 'ubicacion'),
+        ]
+        
+        for pattern, key in patterns:
+            match = re.search(pattern, message_lower)
+            if match:
+                value = match.group(1).strip()
+                self.user_facts[key] = value
+                logger.info(f"👤 Hecho extraído: {key} = {value}")
+    
+    def get_context_summary(self):
+        parts = []
+        if self.user_facts.get('nombre'):
+            parts.append(f"Usuario: {self.user_facts['nombre']}")
+        if self.current_topic:
+            parts.append(f"Tema: {self.current_topic}")
+        if self.turns:
+            recent_intents = [t['intent'] for t in self.turns[-3:]]
+            parts.append(f"Últimas intenciones: {', '.join(set(recent_intents))}")
+        return " | ".join(parts) if parts else "Nuevo contexto"
+    
+    def get_stats(self):
+        return {
+            'total_turns': len(self.turns),
+            'max_turns': self.max_turns,
+            'session_duration_min': (datetime.utcnow() - self.session_start).total_seconds() / 60,
+            'user_facts': self.user_facts,
+            'current_topic': self.current_topic
+        }
 
 # ========== SERVICIOS ==========
 
@@ -334,79 +386,6 @@ class WebSearchEngine:
             logger.error(f"Error fallback: {e}")
             return []
 
-# ========== WORKING MEMORY SIMPLE (INTEGRADO) ==========
-
-class SimpleWorkingMemory:
-    """Memoria de trabajo simplificada"""
-    
-    def __init__(self, max_turns=15):
-        self.max_turns = max_turns
-        self.turns = []
-        self.current_topic = None
-        self.user_facts = {}
-        self.session_start = datetime.utcnow()
-    
-    def add_turn(self, user_message, bot_response, intent, entities=None):
-        """Agrega un turno de conversación"""
-        turn = {
-            'user': user_message,
-            'bot': bot_response,
-            'intent': intent,
-            'entities': entities or [],
-            'timestamp': datetime.utcnow(),
-            'topic': self.current_topic
-        }
-        self.turns.append(turn)
-        if len(self.turns) > self.max_turns:
-            self.turns.pop(0)
-        
-        # Extraer hechos simples
-        self._extract_facts(user_message)
-    
-    def _extract_facts(self, message):
-        """Extrae hechos simples del usuario"""
-        message_lower = message.lower()
-        
-        # Patrones simples
-        patterns = [
-            (r'me llamo (\w+)', 'nombre'),
-            (r'mi nombre es (\w+)', 'nombre'),
-            (r'trabajo (?:como|de) (\w+)', 'trabajo'),
-            (r'soy (\w+) de profesión', 'profesion'),
-            (r'tengo (\d+) años', 'edad'),
-            (r'vivo en (\w+)', 'ubicacion'),
-        ]
-        
-        for pattern, key in patterns:
-            match = re.search(pattern, message_lower)
-            if match:
-                value = match.group(1).strip()
-                self.user_facts[key] = value
-                logger.info(f"👤 Hecho extraído: {key} = {value}")
-    
-    def get_context_summary(self):
-        """Resumen del contexto actual"""
-        parts = []
-        if self.user_facts.get('nombre'):
-            parts.append(f"Usuario: {self.user_facts['nombre']}")
-        if self.current_topic:
-            parts.append(f"Tema: {self.current_topic}")
-        if self.turns:
-            recent_intents = [t['intent'] for t in self.turns[-3:]]
-            parts.append(f"Últimas intenciones: {', '.join(set(recent_intents))}")
-        
-        return " | ".join(parts) if parts else "Nuevo contexto"
-    
-    def get_stats(self):
-        """Estadísticas de la memoria"""
-        return {
-            'total_turns': len(self.turns),
-            'max_turns': self.max_turns,
-            'session_duration_min': (datetime.utcnow() - self.session_start).total_seconds() / 60,
-            'user_facts': self.user_facts,
-            'current_topic': self.current_topic
-        }
-
 # ========== CLASE PRINCIPAL CIC_IA ==========
 
 class CicIA:
@@ -416,7 +395,6 @@ class CicIA:
         self.current_learning_topic = None
         self._auto_learned_session = 0
         
-        # Inicializar componentes (avanzados o simples)
         self.neural_engine = None
         self.feedback_collector = None
         self.curiosity_engine = None
@@ -435,21 +413,14 @@ class CicIA:
         else:
             self._init_simple_components()
         
-        # Temas de aprendizaje
         self.auto_learning_topics = [
             'física cuántica avances 2024', 'biología sintética descubrimientos',
             'neurociencia cognitiva', 'inteligencia artificial noticias 2024',
             'machine learning avances', 'computación cuántica progreso',
             'cambio climático soluciones', 'energía renovable tecnología',
-            'desarrollo software arquitectura', 'ciberseguridad tendencias',
-            'blockchain aplicaciones', 'Internet de las cosas IoT',
-            'realidad virtual aumentada', 'robótica humanoides',
-            'biotecnología longevidad', 'espacio colonización',
-            'economía global tendencias', 'educación innovación',
-            'salud mental bienestar', 'arte inteligencia artificial'
+            'desarrollo software arquitectura', 'ciberseguridad tendencias'
         ]
 
-        # Estadísticas iniciales
         with app.app_context():
             self.stats = {
                 'memories': Memory.query.count(),
@@ -462,7 +433,6 @@ class CicIA:
         self._print_startup_message()
 
     def _init_simple_components(self):
-        """Inicializa componentes simples como fallback"""
         self.neural_engine = simple_neural
         self.working_memory = SimpleWorkingMemory(max_turns=15)
         logger.info("✅ Componentes simples inicializados (fallback)")
@@ -471,7 +441,7 @@ class CicIA:
         logger.info("=" * 70)
         logger.info("🚀 CIC_IA v7.2 - MODO DESARROLLO + USUARIO")
         logger.info(f"📚 Memorias: {self.stats['memories']}")
-        logger.info(f"👥 Usuarios registrados: {self.stats['users']}")
+        logger.info(f"👥 Usuarios: {self.stats['users']}")
         logger.info(f"🧠 Auto-aprendizaje: ACTIVADO")
         logger.info(f"🔧 Módulos avanzados: {'SÍ' if V7_MODULES_AVAILABLE else 'NO (modo simple)'}")
         logger.info("=" * 70)
@@ -485,15 +455,12 @@ class CicIA:
             t = threading.Thread(target=target, daemon=True)
             t.name = name
             t.start()
-            logger.info(f"✅ Thread iniciado: {name}")
 
     def _continuous_learning_loop(self):
         time.sleep(60)
         while self.learning_active:
             try:
-                count = self._perform_auto_learning()
-                if count > 0:
-                    logger.info(f"🎉 Auto-aprendizaje: +{count} elementos")
+                self._perform_auto_learning()
             except Exception as e:
                 logger.error(f"Error auto-aprendizaje: {e}")
             time.sleep(900)
@@ -528,7 +495,6 @@ class CicIA:
                     preview = result['snippet'][:50] if result['snippet'] else ''
                     exists = Memory.query.filter(Memory.content.ilike(f'%{preview}%')).first()
                     if exists:
-                        logger.info(f"⏭️ Ya conocido: {result['title'][:50]}")
                         continue
                     
                     memory = Memory(
@@ -554,11 +520,10 @@ class CicIA:
                     logger.info(f"✅ Aprendido: {result['title'][:60]}")
                     
                 except Exception as e:
-                    logger.error(f"❌ Error procesando: {e}")
+                    logger.error(f"❌ Error: {e}")
                     db.session.rollback()
                     continue
             
-            # Actualizar log diario
             if learned_count > 0:
                 today = date.today()
                 log = LearningLog.query.filter_by(date=today).first()
@@ -572,7 +537,6 @@ class CicIA:
 
     def _perform_nightly_training(self):
         logger.info("🌙 Reentrenamiento nocturno iniciado")
-        # Implementación básica - en versión avanzada usar neural_engine
 
     def _get_today_count(self):
         today = date.today()
@@ -580,27 +544,20 @@ class CicIA:
         return log.count if log else 0
 
     def process_chat(self, user_input, mode='balanced', user_id=None):
-        """Procesa mensaje del usuario"""
         input_lower = user_input.lower().strip()
         
-        # Fecha/hora
         if self._is_date_time_question(input_lower):
             response = self._get_dynamic_date_response(input_lower)
             return self._save_conversation(user_input, response, 'system_time', user_id=user_id)
         
-        # Contexto
         context_summary = ""
         if self.working_memory:
             context_summary = self.working_memory.get_context_summary()
-            logger.info(f"🧠 Contexto: {context_summary[:100]}")
         
-        # Predecir intención
         intent_info = {'intent': 'unknown', 'confidence': 0.0}
         if self.neural_engine:
             intent_info = self.neural_engine.predict_intent(user_input)
-            logger.info(f"🎯 Intención: {intent_info['intent']} ({intent_info['confidence']:.2f})")
         
-        # Actualizar working memory
         if self.working_memory:
             entities = self._extract_entities(user_input)
             self.working_memory.add_turn(
@@ -610,7 +567,6 @@ class CicIA:
                 entities=entities
             )
         
-        # Generar respuesta
         best_topic = self._find_best_topic(input_lower)
         
         with app.app_context():
@@ -625,8 +581,7 @@ class CicIA:
                 mode=mode
             )
             
-            # Actualizar working memory con respuesta
-            if self.working_memory and hasattr(self.working_memory, 'turns') and self.working_memory.turns:
+            if self.working_memory and self.working_memory.turns:
                 if isinstance(self.working_memory.turns, list) and len(self.working_memory.turns) > 0:
                     self.working_memory.turns[-1]['bot'] = response
             
@@ -643,32 +598,16 @@ class CicIA:
         sources = []
         response = ""
         
-        # Knowledge base
         if best_topic and best_topic != 'default':
             respuestas = KNOWLEDGE_BASE[best_topic]['respuestas']
             response = random.choice(respuestas)
             sources.append('knowledge_base')
-        
-        # Memorias relevantes
         elif relevant_memories:
             mem = relevant_memories[0]
-            recall_context = ""
-            if self.working_memory and hasattr(self.working_memory, 'recall_related_info'):
-                try:
-                    recall_context = self.working_memory.recall_related_info()
-                except:
-                    pass
-            
-            if recall_context:
-                response = f"Basándome en lo que conversamos: {mem.content[:250]}"
-            else:
-                response = f"Según mi conocimiento: {mem.content[:300]}"
-            
+            response = f"Según mi conocimiento: {mem.content[:300]}"
             sources.append(f"memory_{mem.source}")
             mem.access_count += 1
             db.session.commit()
-        
-        # Búsqueda web
         else:
             tema = user_input[:40] if len(user_input) > 5 else "este tema"
             web_results = self._search_and_learn(user_input)
@@ -681,7 +620,6 @@ class CicIA:
                 response = random.choice(respuestas_default).format(tema=tema)
                 sources.append('uncertain')
         
-        # Ajustar según modo
         if mode == 'fast':
             response = response.split('.')[0] + '.' if '.' in response else response[:100]
         
@@ -691,10 +629,9 @@ class CicIA:
         if not memories:
             return []
         
-        # Usar red neuronal si está disponible y entrenada
         if (self.neural_engine and 
             hasattr(self.neural_engine, 'is_trained') and 
-            self.neural_engine.is_trained and 
+            getattr(self.neural_engine, 'is_trained', False) and 
             intent_info.get('confidence', 0) > 0.5):
             try:
                 relevant = []
@@ -710,7 +647,6 @@ class CicIA:
             except:
                 pass
         
-        # Fallback por palabras clave
         return self._keyword_memory_search(query, memories)
 
     def _keyword_memory_search(self, query, memories):
@@ -720,7 +656,6 @@ class CicIA:
         for mem in memories:
             mem_words = set(mem.content.lower().split())
             overlap = len(query_words & mem_words)
-            
             if overlap >= 2:
                 relevant.append(mem)
                 mem.access_count += 1
@@ -738,7 +673,6 @@ class CicIA:
                     return cached.results
                 
                 results = self.web_search_engine.search_duckduckgo(query, max_results=3)
-                
                 if not results:
                     return None
                 
@@ -783,7 +717,6 @@ class CicIA:
             db.session.flush()
             db.session.commit()
             
-            # Actualizar log diario
             today = date.today()
             log = LearningLog.query.filter_by(date=today).first()
             if not log:
@@ -834,18 +767,16 @@ class CicIA:
         
         fecha = f"📅 Hoy es {dias[now.weekday()]}, {now.day} de {meses[now.month-1]} de {now.year}"
         hora = f"🕐 Son las {now.strftime('%H:%M:%S')}"
-        
         return f"{fecha}\n{hora}"
 
     def force_learn(self, topic):
-        """Forzar aprendizaje de un tema específico"""
         logger.info(f"🎯 Forzando aprendizaje: '{topic}'")
         count = self._perform_auto_learning(custom_topic=topic)
         return {'success': True, 'topic': topic, 'learned_count': count}
 
     def get_learning_stats(self):
         with app.app_context():
-            stats = {
+            return {
                 'total_memories': Memory.query.count(),
                 'by_source': {
                     'auto_learning': Memory.query.filter_by(source='auto_learning').count(),
@@ -853,9 +784,7 @@ class CicIA:
                     'curiosity': Memory.query.filter_by(source='curiosity').count(),
                     'manual_learning': Memory.query.filter_by(source='manual_learning').count(),
                 },
-                'feedback': {
-                    'total': FeedbackLog.query.count(),
-                },
+                'feedback': {'total': FeedbackLog.query.count()},
                 'curiosity': {
                     'pending': CuriosityGap.query.filter_by(status='pending').count(),
                     'learned': CuriosityGap.query.filter_by(status='learned').count(),
@@ -863,41 +792,19 @@ class CicIA:
                 'users': UserAccount.query.count(),
                 'version': '7.2'
             }
-            
-            # Neural network stats
-            if self.neural_engine:
-                if hasattr(self.neural_engine, 'get_stats'):
-                    stats['neural_network'] = self.neural_engine.get_stats()
-                else:
-                    stats['neural_network'] = {
-                        'is_trained': getattr(self.neural_engine, 'is_trained', False),
-                        'type': 'simple' if isinstance(self.neural_engine, SimpleNeuralNetwork) else 'advanced'
-                    }
-            
-            # Working memory stats
-            if self.working_memory:
-                stats['working_memory'] = self.working_memory.get_stats() if hasattr(self.working_memory, 'get_stats') else {'type': 'simple'}
-            
-            return stats
 
-# Instancia global
 cic_ia = CicIA()
 
-# ========== DECORADORES DE AUTENTICACIÓN ==========
+# ========== DECORADORES ==========
 
 def dev_required(f):
     from functools import wraps
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        # Verificar sesión de desarrollador
         if session.get('dev_mode') and session.get('dev_username') == DEV_USERNAME:
             return f(*args, **kwargs)
-        
-        # Verificar header de token simple
-        token = request.headers.get('X-Dev-Token')
-        if token == 'dev-token-12345':  # Token simple para desarrollo
+        if request.headers.get('X-Dev-Token') == 'dev-token-12345':
             return f(*args, **kwargs)
-        
         return jsonify({'error': 'No autorizado - Modo desarrollador requerido'}), 401
     return decorated_function
 
@@ -911,11 +818,11 @@ def login_required(f):
             return redirect(url_for('login_page'))
         return f(*args, **kwargs)
     return decorated_function
-    # ========== RUTAS DE AUTENTICACIÓN ==========
+
+# ========== RUTAS ==========
 
 @app.route('/')
 def index():
-    """Redirige según modo"""
     if session.get('dev_mode'):
         return redirect(url_for('dev_dashboard'))
     if 'user_id' in session:
@@ -924,9 +831,7 @@ def index():
 
 @app.route('/login', methods=['GET', 'POST'])
 def login_page():
-    """Login de usuarios normales"""
     if request.method == 'POST':
-        # Aceptar tanto form como JSON
         if request.is_json:
             data = request.get_json()
             username = data.get('username', '').strip()
@@ -950,26 +855,20 @@ def login_page():
         error = 'Credenciales inválidas'
         if request.is_json:
             return jsonify({'success': False, 'error': error}), 401
+        
+        # CORREGIDO: Usar render_template_string con comillas triples
         return render_template_string(LOGIN_TEMPLATE, error=error)
     
-    # GET - mostrar formulario
+    # GET
     return render_template_string(LOGIN_TEMPLATE, error=None)
 
 @app.route('/register', methods=['GET', 'POST'])
 def register_page():
-    """Registro de nuevos usuarios"""
     if request.method == 'POST':
-        if request.is_json:
-            data = request.get_json()
-            username = data.get('username', '').strip()
-            email = data.get('email', '').strip()
-            password = data.get('password', '').strip()
-        else:
-            username = request.form.get('username', '').strip()
-            email = request.form.get('email', '').strip()
-            password = request.form.get('password', '').strip()
+        username = request.form.get('username', '').strip()
+        email = request.form.get('email', '').strip()
+        password = request.form.get('password', '').strip()
         
-        # Validaciones
         errors = []
         if len(username) < 3:
             errors.append('Usuario mínimo 3 caracteres')
@@ -979,105 +878,62 @@ def register_page():
             errors.append('Email inválido')
         
         if errors:
-            error_msg = ' | '.join(errors)
-            if request.is_json:
-                return jsonify({'success': False, 'error': error_msg}), 400
-            return render_template_string(REGISTER_TEMPLATE, error=error_msg)
+            return render_template_string(REGISTER_TEMPLATE, error=' | '.join(errors))
         
-        # Verificar existente
         if UserAccount.query.filter_by(username=username).first():
-            error_msg = 'Usuario ya existe'
-            if request.is_json:
-                return jsonify({'success': False, 'error': error_msg}), 400
-            return render_template_string(REGISTER_TEMPLATE, error=error_msg)
+            return render_template_string(REGISTER_TEMPLATE, error='Usuario ya existe')
         
         if UserAccount.query.filter_by(email=email).first():
-            error_msg = 'Email ya registrado'
-            if request.is_json:
-                return jsonify({'success': False, 'error': error_msg}), 400
-            return render_template_string(REGISTER_TEMPLATE, error=error_msg)
+            return render_template_string(REGISTER_TEMPLATE, error='Email ya registrado')
         
-        # Crear usuario
         try:
             user = UserAccount(username=username, email=email)
             user.set_password(password)
             db.session.add(user)
             db.session.commit()
-            
-            success_msg = 'Registro exitoso'
-            if request.is_json:
-                return jsonify({'success': True, 'message': success_msg})
             return redirect(url_for('login_page', registered='true'))
-            
         except Exception as e:
             db.session.rollback()
-            error_msg = f'Error creando usuario: {str(e)}'
-            if request.is_json:
-                return jsonify({'success': False, 'error': error_msg}), 500
-            return render_template_string(REGISTER_TEMPLATE, error=error_msg)
+            return render_template_string(REGISTER_TEMPLATE, error=f'Error: {str(e)}')
     
-    # GET
     return render_template_string(REGISTER_TEMPLATE, error=None)
 
 @app.route('/logout')
 def logout():
-    """Cerrar sesión"""
     session.clear()
     return redirect(url_for('login_page'))
 
 @app.route('/dev-login', methods=['GET', 'POST'])
 def dev_login_page():
-    """Login modo desarrollador"""
     if request.method == 'POST':
-        if request.is_json:
-            data = request.get_json()
-            username = data.get('username', '').strip()
-            password = data.get('password', '').strip()
-        else:
-            username = request.form.get('username', '').strip()
-            password = request.form.get('password', '').strip()
+        username = request.form.get('username', '').strip()
+        password = request.form.get('password', '').strip()
         
         if username == DEV_USERNAME and password == DEV_PASSWORD:
             session['dev_mode'] = True
             session['dev_username'] = DEV_USERNAME
             session.permanent = True
-            
-            if request.is_json:
-                return jsonify({
-                    'success': True, 
-                    'token': 'dev-token-12345',
-                    'redirect': '/dev'
-                })
             return redirect(url_for('dev_dashboard'))
         
-        error = 'Credenciales de desarrollador inválidas'
-        if request.is_json:
-            return jsonify({'success': False, 'error': error}), 401
-        return render_template_string(DEV_LOGIN_TEMPLATE, error=error)
+        return render_template_string(DEV_LOGIN_TEMPLATE, error='Credenciales inválidas')
     
-    # GET
     return render_template_string(DEV_LOGIN_TEMPLATE, error=None)
 
 @app.route('/dev-logout')
 def dev_logout():
-    """Salir modo desarrollador"""
     session.pop('dev_mode', None)
     session.pop('dev_username', None)
     return redirect(url_for('index'))
 
-# ========== RUTAS DE APLICACIÓN ==========
-
 @app.route('/chat')
 @login_required
 def chat_page():
-    """Chat para usuarios normales"""
     return render_template_string(CHAT_TEMPLATE, 
                                 username=session.get('username'),
                                 is_dev=session.get('dev_mode', False))
 
 @app.route('/api/chat', methods=['POST'])
 def api_chat():
-    """API de chat"""
     try:
         data = request.get_json()
         if not data:
@@ -1089,22 +945,16 @@ def api_chat():
         if not message:
             return jsonify({'error': 'Mensaje vacío'}), 400
         
-        # Determinar usuario
         user_id = session.get('user_id')
-        
         result = cic_ia.process_chat(message, mode=mode, user_id=user_id)
         return jsonify(result)
         
     except Exception as e:
         logger.error(f"❌ Error en /api/chat: {e}")
-        return jsonify({
-            'error': str(e),
-            'response': 'Lo siento, ocurrió un error. Por favor intenta de nuevo.'
-        }), 500
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/status')
 def api_status():
-    """Estado público del sistema"""
     try:
         stats = cic_ia.get_learning_stats()
         today = date.today()
@@ -1123,42 +973,29 @@ def api_status():
             'features': ['chat', 'web_search', 'auto_learning', 'memory', 'user_accounts', 'dev_mode']
         })
     except Exception as e:
-        logger.error(f"Error en status: {e}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/health')
 def health_check():
-    """Health check simple"""
     return jsonify({
         'status': 'healthy',
         'timestamp': datetime.utcnow().isoformat(),
-        'version': '7.2.0',
-        'database': 'connected' if db else 'disconnected'
+        'version': '7.2.0'
     })
-
-# ========== RUTAS DE DESARROLLADOR ==========
 
 @app.route('/dev')
 @dev_required
 def dev_dashboard():
-    """Dashboard de desarrollador"""
     return render_template_string(DEV_DASHBOARD_TEMPLATE)
 
 @app.route('/api/dev/stats')
 @dev_required
 def dev_stats():
-    """Estadísticas completas para desarrollador"""
     try:
         stats = cic_ia.get_learning_stats()
         
-        # Estadísticas adicionales
-        recent_memories = Memory.query.order_by(
-            Memory.created_at.desc()
-        ).limit(10).all()
-        
-        recent_conversations = Conversation.query.order_by(
-            Conversation.timestamp.desc()
-        ).limit(10).all()
+        recent_memories = Memory.query.order_by(Memory.created_at.desc()).limit(10).all()
+        recent_conversations = Conversation.query.order_by(Conversation.timestamp.desc()).limit(10).all()
         
         return jsonify({
             'system': {
@@ -1183,17 +1020,14 @@ def dev_stats():
             'working_memory': stats.get('working_memory', {})
         })
     except Exception as e:
-        logger.error(f"Error en dev_stats: {e}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/dev/force-learn', methods=['POST'])
 @dev_required
 def dev_force_learn():
-    """Forzar aprendizaje de un tema"""
     try:
         data = request.get_json()
         topic = data.get('topic', '').strip() if data else ''
-        
         if not topic:
             return jsonify({'error': 'Tema requerido'}), 400
         
@@ -1205,7 +1039,6 @@ def dev_force_learn():
 @app.route('/api/dev/memories')
 @dev_required
 def dev_memories():
-    """Listar todas las memorias"""
     try:
         page = request.args.get('page', 1, type=int)
         per_page = request.args.get('per_page', 50, type=int)
@@ -1234,7 +1067,6 @@ def dev_memories():
 @app.route('/api/dev/memories/<int:id>', methods=['DELETE'])
 @dev_required
 def dev_delete_memory(id):
-    """Eliminar una memoria"""
     try:
         memory = Memory.query.get_or_404(id)
         db.session.delete(memory)
@@ -1247,7 +1079,6 @@ def dev_delete_memory(id):
 @app.route('/api/dev/users')
 @dev_required
 def dev_users():
-    """Listar usuarios registrados"""
     try:
         users = UserAccount.query.all()
         return jsonify({
@@ -1260,15 +1091,12 @@ def dev_users():
 @app.route('/api/dev/toggle-mode', methods=['POST'])
 @dev_required
 def dev_toggle_mode():
-    """Cambiar entre modo dev y modo usuario para testing"""
     try:
         data = request.get_json()
         mode = data.get('mode', 'dev') if data else 'dev'
         
         if mode == 'user':
-            # Simular ser usuario normal
             session.pop('dev_mode', None)
-            # Crear o usar sesión de usuario de prueba
             if 'user_id' not in session:
                 test_user = UserAccount.query.filter_by(username='test_dev').first()
                 if not test_user:
@@ -1291,7 +1119,6 @@ def dev_toggle_mode():
                 'redirect': '/chat'
             })
         else:
-            # Volver a modo dev
             session['dev_mode'] = True
             session.pop('user_id', None)
             session.pop('username', None)
@@ -1301,7 +1128,6 @@ def dev_toggle_mode():
                 'message': 'Modo desarrollador reactivado',
                 'redirect': '/dev'
             })
-            
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -1319,9 +1145,9 @@ def not_found(error):
 def internal_error(error):
     db.session.rollback()
     logger.error(f"Error 500: {error}")
-    return jsonify({'error': 'Error interno del servidor'}), 500
+    return jsonify({'error': 'Error interno del servidor', 'detail': str(error)}), 500
 
-# ========== TEMPLATES INLINE (PARA EVITAR PROBLEMAS DE ARCHIVOS) ==========
+# ========== TEMPLATES INLINE ==========
 
 LOGIN_TEMPLATE = '''
 <!DOCTYPE html>
@@ -1953,7 +1779,6 @@ DEV_DASHBOARD_TEMPLATE = '''
             animation: spin 1s linear infinite;
         }
         @keyframes spin { to { transform: rotate(360deg); } }
-        .hidden { display: none !important; }
         table { width: 100%; border-collapse: collapse; font-size: 14px; }
         th, td { padding: 12px; text-align: left; border-bottom: 1px solid #334155; }
         th { color: #e94560; font-weight: 600; }
@@ -1966,7 +1791,6 @@ DEV_DASHBOARD_TEMPLATE = '''
         }
         .badge.success { background: #059669; color: white; }
         .badge.warning { background: #d97706; color: white; }
-        .badge.info { background: #2563eb; color: white; }
     </style>
 </head>
 <body>
@@ -2041,8 +1865,7 @@ DEV_DASHBOARD_TEMPLATE = '''
             <div class="card">
                 <h2>💾 Todas las Memorias</h2>
                 <div class="input-group">
-                    <input type="text" id="memory-search" placeholder="🔍 Buscar en memorias..." 
-                           onkeyup="searchMemories(this.value)">
+                    <input type="text" id="memory-search" placeholder="🔍 Buscar en memorias..." onkeyup="searchMemories(this.value)">
                 </div>
                 <div class="memory-list" id="memory-list"><div class="loading"></div></div>
                 <div style="margin-top: 15px; display: flex; gap: 10px;">
@@ -2061,7 +1884,6 @@ DEV_DASHBOARD_TEMPLATE = '''
     </div>
 
     <script>
-        let currentTab = 'overview';
         let memories = [];
         
         document.addEventListener('DOMContentLoaded', () => {
@@ -2076,7 +1898,6 @@ DEV_DASHBOARD_TEMPLATE = '''
             document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
             event.target.classList.add('active');
             document.getElementById(`tab-${tabName}`).classList.add('active');
-            currentTab = tabName;
             if (tabName === 'memories') loadMemories();
             if (tabName === 'users') loadUsers();
         }
@@ -2089,12 +1910,8 @@ DEV_DASHBOARD_TEMPLATE = '''
                 
                 document.getElementById('stat-memories').textContent = data.learning?.total_memories || 0;
                 document.getElementById('stat-users').textContent = data.learning?.users || 0;
+                document.getElementById('stat-conversations').textContent = data.recent_conversations?.length || 0;
                 
-                if (data.working_memory) {
-                    document.getElementById('stat-conversations').textContent = data.working_memory.total_turns || 0;
-                }
-                
-                // Auto learning (aproximado de recent_memories)
                 const todayLearned = data.recent_memories?.filter(m => {
                     const date = new Date(m.created_at);
                     const today = new Date();
@@ -2102,13 +1919,11 @@ DEV_DASHBOARD_TEMPLATE = '''
                 }).length || 0;
                 document.getElementById('stat-auto').textContent = todayLearned;
                 
-                // Curiosity
                 if (data.learning?.curiosity) {
                     document.getElementById('curiosity-pending').textContent = data.learning.curiosity.pending;
                     document.getElementById('curiosity-learned').textContent = data.learning.curiosity.learned;
                 }
                 
-                // Source stats
                 if (data.learning?.by_source) {
                     const s = data.learning.by_source;
                     document.getElementById('source-stats').innerHTML = `
@@ -2116,7 +1931,6 @@ DEV_DASHBOARD_TEMPLATE = '''
                             <div>🤖 Auto: <strong>${s.auto_learning || 0}</strong></div>
                             <div>🌐 Web: <strong>${s.web_search || 0}</strong></div>
                             <div>🔍 Curiosidad: <strong>${s.curiosity || 0}</strong></div>
-                            <div>✋ Manual: <strong>${s.manual_learning || 0}</strong></div>
                         </div>
                     `;
                 }
@@ -2144,13 +1958,7 @@ DEV_DASHBOARD_TEMPLATE = '''
                 const resultDiv = document.getElementById('learn-result');
                 
                 if (data.success) {
-                    resultDiv.innerHTML = `
-                        <div class="result-box">
-                            ✅ <strong>Éxito!</strong><br>
-                            Tema: ${data.topic}<br>
-                            Elementos aprendidos: ${data.learned_count}
-                        </div>
-                    `;
+                    resultDiv.innerHTML = `<div class="result-box">✅ <strong>Éxito!</strong><br>Tema: ${data.topic}<br>Elementos: ${data.learned_count}</div>`;
                     loadStats();
                     loadMemories();
                 } else {
@@ -2195,7 +2003,6 @@ DEV_DASHBOARD_TEMPLATE = '''
                         <span>📅 ${new Date(m.created_at).toLocaleString()}</span>
                         <span>⭐ ${m.relevance_score?.toFixed(2) || '-'}</span>
                         <span>👁️ ${m.access_count || 0}</span>
-                        <span>ID: ${m.id}</span>
                     </div>
                     <div style="margin-top: 10px;">
                         <button onclick="deleteMemory(${m.id})" style="background: #dc2626; color: white; border: none; padding: 5px 15px; border-radius: 5px; cursor: pointer; font-size: 12px;">🗑️ Eliminar</button>
@@ -2224,8 +2031,6 @@ DEV_DASHBOARD_TEMPLATE = '''
                 if (data.success) {
                     loadMemories();
                     loadStats();
-                } else {
-                    alert('Error: ' + data.error);
                 }
             } catch (e) {
                 alert('Error: ' + e.message);
@@ -2297,8 +2102,6 @@ DEV_DASHBOARD_TEMPLATE = '''
                 const data = await res.json();
                 if (data.success) {
                     window.location.href = data.redirect;
-                } else {
-                    alert('Error: ' + data.error);
                 }
             } catch (e) {
                 alert('Error: ' + e.message);
