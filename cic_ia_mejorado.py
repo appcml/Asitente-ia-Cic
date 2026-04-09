@@ -92,8 +92,8 @@ class LearningLog(db.Model):
     __tablename__ = 'learning_logs'
     id = db.Column(db.Integer, primary_key=True)
     date = db.Column(db.Date, unique=True, nullable=False)
-    count = db.Column(db.Integer, default=0)
-    auto_learned = db.Column(db.Integer, default=0)
+    count = db.Column(db.Integer, default=0, nullable=False)
+    auto_learned = db.Column(db.Integer, default=0, nullable=False)
 
 # Crear tablas
 with app.app_context():
@@ -279,7 +279,7 @@ class CicIA:
         logger.info("⏰ Auto-aprendizaje activado (cada 1 hora)")
     
     def _auto_learn(self, custom_topic=None):
-        """Realiza el aprendizaje automático"""
+        """Realiza el aprendizaje automático - CORREGIDO"""
         with app.app_context():
             topic = custom_topic or random.choice(self.auto_learning_topics)
             logger.info(f"🤖 Auto-aprendizaje: '{topic}'")
@@ -314,14 +314,18 @@ class CicIA:
                     logger.error(f"❌ Error guardando: {e}")
                     continue
             
-            # Actualizar log diario
+            # ✅ CORREGIDO: Actualizar log diario
             if learned > 0:
                 today = date.today()
                 log = LearningLog.query.filter_by(date=today).first()
                 if not log:
-                    log = LearningLog(date=today)
+                    log = LearningLog(date=today, count=0, auto_learned=0)
                     db.session.add(log)
-                log.auto_learned += learned
+                    db.session.commit()
+                
+                # Asegurar que auto_learned no sea None
+                current_value = log.auto_learned if log.auto_learned is not None else 0
+                log.auto_learned = current_value + learned
                 db.session.commit()
             
             return learned
@@ -442,14 +446,17 @@ class CicIA:
             )
             db.session.add(conv)
             
-            # Actualizar contador diario
+            # Actualizar contador diario - CORREGIDO
             today = date.today()
             log = LearningLog.query.filter_by(date=today).first()
             if not log:
-                log = LearningLog(date=today)
+                log = LearningLog(date=today, count=0, auto_learned=0)
                 db.session.add(log)
-            log.count += 1
+                db.session.commit()
             
+            # Asegurar que count no sea None
+            current_count = log.count if log.count is not None else 0
+            log.count = current_count + 1
             db.session.commit()
             
             total_mem = Memory.query.count()
@@ -477,8 +484,8 @@ class CicIA:
                 'total_memories': Memory.query.count(),
                 'total_conversations': Conversation.query.count(),
                 'total_users': UserAccount.query.count(),
-                'today_conversations': log.count if log else 0,
-                'today_learned': log.auto_learned if log else 0,
+                'today_conversations': log.count if log and log.count else 0,
+                'today_learned': log.auto_learned if log and log.auto_learned else 0,
                 'by_source': {
                     'auto_learning': Memory.query.filter_by(source='auto_learning').count(),
                     'web_search': Memory.query.filter_by(source='web_search').count()
