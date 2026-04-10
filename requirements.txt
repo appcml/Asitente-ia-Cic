@@ -1,18 +1,24 @@
+# Web Framework
 Flask==2.3.3
 Flask-SQLAlchemy==3.0.5
 Werkzeug==2.3.7
+gunicorn==21.2.0
+
+# Database (FALTABA - CRÍTICO)
+psycopg2-binary==2.9.9
+
+# HTTP & Parsing
 requests==2.31.0
 beautifulsoup4==4.12.2
-numpy==1.24.3
-duckduckgo_search==3.9.6
 lxml==4.9.3
-gunicorn==21.2.0
-# Database drivers
-psycopg2-binary==2.9.7
-# O si prefieres el compilado (más ligero pero requiere PostgreSQL dev libraries):
-# psycopg2==2.9.7
 
-# Otras dependencias que faltan según tu código
+# Data Analysis (FALTABA)
 pandas==2.0.3
-openpyxl==3.1.2  # Para archivos Excel
-Pillow==10.0.0   # Para procesamiento de imágenes
+numpy==1.24.3
+openpyxl==3.1.2
+
+# Image Processing (FALTABA)
+Pillow==10.0.1
+
+# Search
+duckduckgo_search==3.9.6
