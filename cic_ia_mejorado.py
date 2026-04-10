@@ -1,11 +1,11 @@
 """
 Cic_IA - Asistente Inteligente EVOLUTIVO
-Archivo principal - Versión 7.2 LIMPIA Y FUNCIONAL
+Archivo principal - Versión 8.0 PRODUCTION READY
+Mejoras: LLM real, seguridad, rendimiento, modo desarrollador completo
 """
 
-from flask import Flask
+from flask import Flask, render_template, request, jsonify, Response, stream_with_context
 from flask_sqlalchemy import SQLAlchemy
-from flask import render_template, request, jsonify
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, date, timedelta
 import os
@@ -13,120 +13,62 @@ import json
 import random
 import threading
 import time
-import urllib.request
-import urllib.parse
 import re
 import hashlib
 import requests
 import secrets
-from functools import wraps
-from bs4 import BeautifulSoup
 import logging
 import pickle
 import numpy as np
-from sqlalchemy import select, text, inspect
+from functools import wraps
+from sqlalchemy import text, inspect
 
 # ========== CONFIGURACIÓN ==========
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger('cic_ia_mejorado')
+logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(name)s: %(message)s')
+logger = logging.getLogger('cic_ia')
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'cic-ia-secret-2024')
 
-database_url = os.environ.get('DATABASE_URL')
-if database_url:
-    if database_url.startswith('postgres://'):
-        database_url = database_url.replace('postgres://', 'postgresql://', 1)
-    app.config['SQLALCHEMY_DATABASE_URI'] = database_url
-else:
-    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///cic_ia.db'
+# SECRET_KEY siempre desde entorno — nunca hardcodeado
+_secret = os.environ.get('SECRET_KEY')
+if not _secret:
+    _secret = secrets.token_hex(32)
+    logger.warning("SECRET_KEY no configurada como variable de entorno. Generando aleatoria (sesiones no persistirán entre reinicios).")
+app.config['SECRET_KEY'] = _secret
 
+# Base de datos
+database_url = os.environ.get('DATABASE_URL', '')
+if database_url.startswith('postgres://'):
+    database_url = database_url.replace('postgres://', 'postgresql://', 1)
+app.config['SQLALCHEMY_DATABASE_URI'] = database_url or 'sqlite:///cic_ia.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {'pool_pre_ping': True, 'pool_recycle': 300}
 
+# API Keys (desde entorno)
+ANTHROPIC_API_KEY = os.environ.get('ANTHROPIC_API_KEY', '')
+OPENAI_API_KEY    = os.environ.get('OPENAI_API_KEY', '')
+
+# Archivos
 UPLOAD_FOLDER = 'uploads'
-ALLOWED_EXTENSIONS = {'txt', 'pdf', 'png', 'jpg', 'jpeg', 'gif', 'doc', 'docx', 'py', 'js', 'html', 'css', 'json', 'csv', 'xlsx', 'xls', 'db', 'sqlite'}
+ALLOWED_EXTENSIONS = {'txt','pdf','png','jpg','jpeg','gif','doc','docx','py','js','html','css','json','csv','xlsx','xls','db','sqlite','md'}
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
+app.config['MAX_CONTENT_LENGTH'] = 32 * 1024 * 1024  # 32MB
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+os.makedirs('models', exist_ok=True)
 
-# Inicializar SQLAlchemy
 db = SQLAlchemy(app)
-
-# ========== MIGRACIÓN AUTOMÁTICA ==========
-
-def run_migration():
-    """Migra la base de datos automáticamente"""
-    try:
-        with app.app_context():
-            inspector = inspect(db.engine)
-            tables = inspector.get_table_names()
-
-            if 'conversation' in tables:
-                columns = {col['name'] for col in inspector.get_columns('conversation')}
-
-                with db.engine.connect() as conn:
-                    if 'user_id' not in columns:
-                        conn.execute(text("ALTER TABLE conversation ADD COLUMN user_id INTEGER"))
-                        conn.commit()
-                        logger.info("Migración: user_id agregado")
-
-                    if 'mode_used' not in columns:
-                        conn.execute(text("ALTER TABLE conversation ADD COLUMN mode_used VARCHAR(50) DEFAULT 'unknown'"))
-                        conn.commit()
-                        logger.info("Migración: mode_used agregado")
-
-            if 'user' not in tables:
-                with db.engine.connect() as conn:
-                    conn.execute(text("""
-                        CREATE TABLE "user" (
-                            id SERIAL PRIMARY KEY,
-                            username VARCHAR(80) UNIQUE NOT NULL,
-                            email VARCHAR(120) UNIQUE NOT NULL,
-                            password_hash VARCHAR(256) NOT NULL,
-                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                            is_active BOOLEAN DEFAULT TRUE,
-                            is_developer BOOLEAN DEFAULT FALSE
-                        )
-                    """))
-                    conn.commit()
-                    logger.info("Tabla user creada")
-
-            if 'user_session' not in tables:
-                with db.engine.connect() as conn:
-                    conn.execute(text("""
-                        CREATE TABLE user_session (
-                            id SERIAL PRIMARY KEY,
-                            user_id INTEGER REFERENCES "user"(id),
-                            token VARCHAR(256) UNIQUE NOT NULL,
-                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                            expires_at TIMESTAMP,
-                            last_access TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                        )
-                    """))
-                    conn.commit()
-                    logger.info("Tabla user_session creada")
-
-            logger.info("MIGRACIÓN COMPLETADA")
-
-    except Exception as e:
-        logger.error(f"Error migración: {e}")
-        import traceback
-        logger.error(traceback.format_exc())
-
-run_migration()
 
 # ========== MODELOS ==========
 
 class User(db.Model):
     __tablename__ = 'user'
-    id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(80), unique=True, nullable=False)
-    email = db.Column(db.String(120), unique=True, nullable=False)
+    id            = db.Column(db.Integer, primary_key=True)
+    username      = db.Column(db.String(80), unique=True, nullable=False)
+    email         = db.Column(db.String(120), unique=True, nullable=False)
     password_hash = db.Column(db.String(256), nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    is_active = db.Column(db.Boolean, default=True)
-    is_developer = db.Column(db.Boolean, default=False)
+    created_at    = db.Column(db.DateTime, default=datetime.utcnow)
+    is_active     = db.Column(db.Boolean, default=True)
+    is_developer  = db.Column(db.Boolean, default=False)
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
@@ -136,506 +78,668 @@ class User(db.Model):
 
 class UserSession(db.Model):
     __tablename__ = 'user_session'
-    id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    token = db.Column(db.String(256), unique=True, nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    expires_at = db.Column(db.DateTime)
+    id          = db.Column(db.Integer, primary_key=True)
+    user_id     = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    token       = db.Column(db.String(256), unique=True, nullable=False)
+    created_at  = db.Column(db.DateTime, default=datetime.utcnow)
+    expires_at  = db.Column(db.DateTime)
     last_access = db.Column(db.DateTime, default=datetime.utcnow)
 
 class Memory(db.Model):
-    __tablename__ = 'memory'
-    id = db.Column(db.Integer, primary_key=True)
-    content = db.Column(db.Text, nullable=False)
-    source = db.Column(db.String(50), default='local')
-    topic = db.Column(db.String(200))
-    file_path = db.Column(db.String(500))
-    file_type = db.Column(db.String(50))
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    access_count = db.Column(db.Integer, default=0)
+    __tablename__   = 'memory'
+    id              = db.Column(db.Integer, primary_key=True)
+    content         = db.Column(db.Text, nullable=False)
+    source          = db.Column(db.String(50), default='local')
+    topic           = db.Column(db.String(200), index=True)
+    file_path       = db.Column(db.String(500))
+    file_type       = db.Column(db.String(50))
+    created_at      = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+    access_count    = db.Column(db.Integer, default=0)
     relevance_score = db.Column(db.Float, default=0.5)
+    tags            = db.Column(db.JSON, default=list)
 
 class Conversation(db.Model):
-    __tablename__ = 'conversation'
-    id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
-    user_message = db.Column(db.Text, nullable=False)
-    bot_response = db.Column(db.Text, nullable=False)
-    has_attachment = db.Column(db.Boolean, default=False)
+    __tablename__   = 'conversation'
+    id              = db.Column(db.Integer, primary_key=True)
+    user_id         = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True, index=True)
+    user_message    = db.Column(db.Text, nullable=False)
+    bot_response    = db.Column(db.Text, nullable=False)
+    has_attachment  = db.Column(db.Boolean, default=False)
     attachment_path = db.Column(db.String(500))
-    sources_used = db.Column(db.JSON)
-    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
-    mode_used = db.Column(db.String(50), default='unknown')
+    sources_used    = db.Column(db.JSON)
+    timestamp       = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+    mode_used       = db.Column(db.String(50), default='chat')
+    tokens_used     = db.Column(db.Integer, default=0)
 
 class LearningLog(db.Model):
     __tablename__ = 'learning_log'
-    id = db.Column(db.Integer, primary_key=True)
-    date = db.Column(db.Date, default=date.today, unique=True)
-    count = db.Column(db.Integer, default=0)
+    id           = db.Column(db.Integer, primary_key=True)
+    date         = db.Column(db.Date, default=date.today, unique=True)
+    count        = db.Column(db.Integer, default=0)
     web_searches = db.Column(db.Integer, default=0)
     auto_learned = db.Column(db.Integer, default=0)
 
-class ManualLearningQueue(db.Model):
-    __tablename__ = 'manual_learning_queue'
-    id = db.Column(db.Integer, primary_key=True)
-    content = db.Column(db.Text, nullable=False)
-    topic = db.Column(db.String(200))
-    source_url = db.Column(db.String(500))
-    priority = db.Column(db.Integer, default=1)
-    status = db.Column(db.String(50), default='pending')
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    processed_at = db.Column(db.DateTime)
+class ManualKnowledge(db.Model):
+    """Conocimiento ingresado directamente por el desarrollador"""
+    __tablename__ = 'manual_knowledge'
+    id          = db.Column(db.Integer, primary_key=True)
+    title       = db.Column(db.String(200), nullable=False)
+    content     = db.Column(db.Text, nullable=False)
+    category    = db.Column(db.String(100), index=True)
+    tags        = db.Column(db.JSON, default=list)
+    priority    = db.Column(db.Integer, default=1)  # 1=normal, 2=alta, 3=crítica
+    added_by    = db.Column(db.Integer, db.ForeignKey('user.id'))
+    created_at  = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at  = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    active      = db.Column(db.Boolean, default=True)
 
 class WebSearchCache(db.Model):
     __tablename__ = 'web_search_cache'
-    id = db.Column(db.Integer, primary_key=True)
-    query = db.Column(db.String(500), unique=True)
-    results = db.Column(db.JSON)
+    id         = db.Column(db.Integer, primary_key=True)
+    query      = db.Column(db.String(500), unique=True, index=True)
+    results    = db.Column(db.JSON)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     expires_at = db.Column(db.DateTime)
 
-# ========== DECORADORES ==========
+class SystemConfig(db.Model):
+    """Configuración dinámica del sistema editable por el dev"""
+    __tablename__ = 'system_config'
+    id         = db.Column(db.Integer, primary_key=True)
+    key        = db.Column(db.String(100), unique=True, nullable=False)
+    value      = db.Column(db.Text)
+    type       = db.Column(db.String(20), default='string')  # string, int, bool, json
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+# ========== MIGRACIÓN ==========
+
+def run_migration():
+    try:
+        with app.app_context():
+            db.create_all()
+            inspector = inspect(db.engine)
+            tables = inspector.get_table_names()
+
+            # Agregar columnas faltantes en conversation si existe de versión anterior
+            if 'conversation' in tables:
+                columns = {col['name'] for col in inspector.get_columns('conversation')}
+                with db.engine.connect() as conn:
+                    if 'tokens_used' not in columns:
+                        conn.execute(text("ALTER TABLE conversation ADD COLUMN tokens_used INTEGER DEFAULT 0"))
+                        conn.commit()
+
+            # Config por defecto
+            defaults = [
+                ('ai_provider', 'anthropic', 'string'),
+                ('ai_model', 'claude-haiku-4-5-20251001', 'string'),
+                ('system_prompt', 'Eres Cic_IA, un asistente inteligente en español. Responde de forma clara, útil y amigable.', 'string'),
+                ('max_tokens', '1000', 'int'),
+                ('auto_learning_enabled', 'true', 'bool'),
+                ('auto_learning_interval_hours', '2', 'int'),
+                ('max_memory_results', '5', 'int'),
+                ('web_search_enabled', 'true', 'bool'),
+            ]
+            for key, val, typ in defaults:
+                if not SystemConfig.query.filter_by(key=key).first():
+                    db.session.add(SystemConfig(key=key, value=val, type=typ))
+            db.session.commit()
+            logger.info("✅ Migración completada")
+    except Exception as e:
+        logger.error(f"Error migración: {e}")
+
+run_migration()
+
+# ========== HELPERS DE CONFIG ==========
+
+def get_config(key, default=None):
+    try:
+        cfg = SystemConfig.query.filter_by(key=key).first()
+        if not cfg:
+            return default
+        if cfg.type == 'int':
+            return int(cfg.value)
+        if cfg.type == 'bool':
+            return cfg.value.lower() == 'true'
+        if cfg.type == 'json':
+            return json.loads(cfg.value)
+        return cfg.value
+    except Exception:
+        return default
+
+def set_config(key, value):
+    cfg = SystemConfig.query.filter_by(key=key).first()
+    if cfg:
+        cfg.value = str(value)
+        cfg.updated_at = datetime.utcnow()
+    else:
+        cfg = SystemConfig(key=key, value=str(value))
+        db.session.add(cfg)
+    db.session.commit()
+
+# ========== DECORADORES AUTH ==========
+
+def _get_token_from_request():
+    auth = request.headers.get('Authorization', '')
+    if auth.startswith('Bearer '):
+        return auth[7:]
+    if auth:
+        parts = auth.split()
+        if len(parts) == 2:
+            return parts[1]
+    return request.args.get('token') or request.json.get('token') if request.is_json else None
 
 def token_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
-        token = None
-        if 'Authorization' in request.headers:
-            try:
-                token = request.headers['Authorization'].split(" ")[1]
-            except IndexError:
-                return jsonify({'error': 'Token inválido'}), 401
-
+        token = _get_token_from_request()
         if not token:
             return jsonify({'error': 'Token requerido'}), 401
-
         session = UserSession.query.filter_by(token=token).first()
         if not session:
             return jsonify({'error': 'Token inválido'}), 401
-
         if session.expires_at and session.expires_at < datetime.utcnow():
             db.session.delete(session)
             db.session.commit()
-            return jsonify({'error': 'Token expirado'}), 401
-
+            return jsonify({'error': 'Token expirado, por favor inicia sesión de nuevo'}), 401
         session.last_access = datetime.utcnow()
         db.session.commit()
-
         current_user = User.query.get(session.user_id)
+        if not current_user or not current_user.is_active:
+            return jsonify({'error': 'Usuario inactivo'}), 401
         return f(current_user, *args, **kwargs)
     return decorated
 
 def dev_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
-        token = request.headers.get('Authorization', '').replace('Bearer ', '') if request.headers.get('Authorization') else None
+        token = _get_token_from_request()
         if not token:
             return jsonify({'error': 'No autorizado'}), 401
-
         session = UserSession.query.filter_by(token=token).first()
         if not session:
             return jsonify({'error': 'Token inválido'}), 401
-
         user = User.query.get(session.user_id)
         if not user or not user.is_developer:
-            return jsonify({'error': 'Privilegios de desarrollador requeridos'}), 403
-
+            return jsonify({'error': 'Se requieren privilegios de desarrollador'}), 403
         return f(*args, **kwargs)
     return decorated
 
-# ========== RED NEURONAL ==========
-
-class CicNeuralNetwork:
-    def __init__(self):
-        self.model_intent = None
-        self.model_module = None
-        self.is_trained = False
-        self.training_data = []
-        self.labels = []
-        self.module_labels = []
-        self.vectorizer = None
-        self.model_path = 'models/cic_neural_model.pkl'
-        self._ensure_model_dir()
-        self._load_or_create_models()
-
-    def _ensure_model_dir(self):
-        os.makedirs('models', exist_ok=True)
-
-    def _load_or_create_models(self):
-        try:
-            if os.path.exists(self.model_path):
-                with open(self.model_path, 'rb') as f:
-                    saved_data = pickle.load(f)
-                    self.model_intent = saved_data.get('intent_model')
-                    self.model_module = saved_data.get('module_model')
-                    self.vectorizer = saved_data.get('vectorizer')
-                    self.is_trained = saved_data.get('is_trained', False)
-                logger.info("Red neuronal cargada")
-            else:
-                self._create_new_models()
-        except Exception as e:
-            logger.error(f"Error cargando modelos: {e}")
-            self._create_new_models()
-
-    def _create_new_models(self):
-        try:
-            from sklearn.neural_network import MLPClassifier
-            from sklearn.feature_extraction.text import TfidfVectorizer
-
-            self.model_intent = MLPClassifier(hidden_layer_sizes=(128, 64, 32), activation='relu', solver='adam', max_iter=500, random_state=42, early_stopping=True)
-            self.model_module = MLPClassifier(hidden_layer_sizes=(64, 32), activation='relu', solver='adam', max_iter=300, random_state=42)
-            self.vectorizer = TfidfVectorizer(max_features=5000, stop_words='english')
-            self.is_trained = False
-            logger.info("Nueva red neuronal creada")
-        except ImportError:
-            logger.warning("scikit-learn no disponible")
-            self.model_intent = None
-
-    def train(self, texts, labels, module_labels=None):
-        if self.model_intent is None:
-            return False
-        try:
-            X = self.vectorizer.fit_transform(texts)
-            self.model_intent.fit(X, labels)
-            if module_labels and self.model_module:
-                self.model_module.fit(X, module_labels)
-                self.module_labels = module_labels
-            self.is_trained = True
-            self.training_data = texts
-            self.labels = labels
-            self._save_models()
-            logger.info(f"Entrenada con {len(texts)} ejemplos")
-            return True
-        except Exception as e:
-            logger.error(f"Error entrenando: {e}")
-            return False
-
-    def predict_intent(self, text):
-        if not self.is_trained or self.model_intent is None:
-            return {'intent': 'unknown', 'confidence': 0.0}
-        try:
-            X = self.vectorizer.transform([text])
-            prediction = self.model_intent.predict(X)[0]
-            confidence = np.max(self.model_intent.predict_proba(X))
-            return {'intent': prediction, 'confidence': float(confidence)}
-        except:
-            return {'intent': 'unknown', 'confidence': 0.0}
-
-    def predict_module(self, text):
-        if not self.is_trained or self.model_module is None:
-            return self._rule_based_module_detection(text)
-        try:
-            X = self.vectorizer.transform([text])
-            prediction = self.model_module.predict(X)[0]
-            confidence = np.max(self.model_module.predict_proba(X))
-            if confidence > 0.6:
-                return {'module': prediction, 'confidence': float(confidence)}
-            return self._rule_based_module_detection(text)
-        except:
-            return self._rule_based_module_detection(text)
-
-    def _rule_based_module_detection(self, text):
-        text_lower = text.lower()
-        if any(kw in text_lower for kw in ['csv', 'excel', 'datos', 'análisis', 'tabla', 'pandas', 'sql']):
-            return {'module': 'data_analysis', 'confidence': 0.8, 'method': 'rules'}
-        if any(kw in text_lower for kw in ['imagen', 'foto', 'genera imagen', 'dibuja']):
-            return {'module': 'image_generator', 'confidence': 0.8, 'method': 'rules'}
-        if any(kw in text_lower for kw in ['código', 'programa', 'python', 'javascript']):
-            return {'module': 'code_assistant', 'confidence': 0.8, 'method': 'rules'}
-        if any(kw in text_lower for kw in ['historial', 'conversaciones']):
-            return {'module': 'chat_history', 'confidence': 0.7, 'method': 'rules'}
-        if any(kw in text_lower for kw in ['archivo', 'pdf', 'subir']):
-            return {'module': 'file_manager', 'confidence': 0.7, 'method': 'rules'}
-        return {'module': 'none', 'confidence': 0.0, 'method': 'rules'}
-
-    def _save_models(self):
-        try:
-            with open(self.model_path, 'wb') as f:
-                pickle.dump({'intent_model': self.model_intent, 'module_model': self.model_module, 'vectorizer': self.vectorizer, 'is_trained': self.is_trained}, f)
-        except Exception as e:
-            logger.error(f"Error guardando: {e}")
-
-    def get_stats(self):
-        return {'is_trained': self.is_trained, 'training_samples': len(self.training_data), 'model_type': 'MLPClassifier'}
-
-neural_net = CicNeuralNetwork()
-
-# ========== MOTOR DE BÚSQUEDA ==========
+# ========== MOTOR DE BÚSQUEDA WEB ==========
 
 class WebSearchEngine:
     @staticmethod
-    def search_duckduckgo(query, max_results=5):
+    def search(query: str, max_results: int = 5) -> list:
+        """Busca usando DuckDuckGo con fallback a búsqueda simple"""
         try:
             from duckduckgo_search import DDGS
-            ddgs = DDGS()
+            with DDGS() as ddgs:
+                results = []
+                for r in ddgs.text(query, max_results=max_results):
+                    results.append({
+                        'title':   r.get('title', ''),
+                        'url':     r.get('href', ''),
+                        'snippet': r.get('body', ''),
+                        'source':  'duckduckgo'
+                    })
+                return results
+        except Exception as e:
+            logger.warning(f"DuckDuckGo falló: {e}. Intentando método alternativo.")
+            return WebSearchEngine._search_fallback(query, max_results)
+
+    @staticmethod
+    def _search_fallback(query: str, max_results: int = 3) -> list:
+        """Fallback usando urllib"""
+        try:
+            import urllib.request
+            import urllib.parse
+            encoded = urllib.parse.quote(query)
+            url = f"https://html.duckduckgo.com/html/?q={encoded}"
+            req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                html = resp.read().decode('utf-8', errors='ignore')
+            from bs4 import BeautifulSoup
+            soup = BeautifulSoup(html, 'html.parser')
             results = []
-            for r in ddgs.text(query, max_results=max_results):
-                results.append({'title': r.get('title', ''), 'url': r.get('href', ''), 'snippet': r.get('body', ''), 'source': 'duckduckgo'})
+            for result in soup.select('.result')[:max_results]:
+                title_el   = result.select_one('.result__title')
+                snippet_el = result.select_one('.result__snippet')
+                link_el    = result.select_one('.result__url')
+                if title_el:
+                    results.append({
+                        'title':   title_el.get_text(strip=True),
+                        'url':     link_el.get_text(strip=True) if link_el else '',
+                        'snippet': snippet_el.get_text(strip=True) if snippet_el else '',
+                        'source':  'duckduckgo_html'
+                    })
             return results
         except Exception as e:
-            logger.error(f"Error búsqueda: {e}")
+            logger.error(f"Fallback búsqueda falló: {e}")
             return []
+
+# ========== MOTOR LLM REAL ==========
+
+class LLMEngine:
+    """Motor de IA real — soporta Anthropic Claude y OpenAI"""
+
+    def __init__(self):
+        self.anthropic_key = ANTHROPIC_API_KEY
+        self.openai_key    = OPENAI_API_KEY
+
+    def _build_context(self, user_message: str, memories: list, manual_knowledge: list) -> str:
+        """Construye contexto enriquecido con memorias y conocimiento manual"""
+        parts = []
+
+        if manual_knowledge:
+            parts.append("=== CONOCIMIENTO BASE DEL DESARROLLADOR ===")
+            for mk in manual_knowledge[:5]:  # top 5 por prioridad
+                parts.append(f"[{mk.category or 'General'}] {mk.title}:\n{mk.content[:500]}")
+            parts.append("")
+
+        if memories:
+            parts.append("=== CONOCIMIENTO APRENDIDO ===")
+            for mem in memories[:3]:
+                parts.append(f"Tema: {mem.topic or 'general'}\n{mem.content[:300]}")
+            parts.append("")
+
+        return "\n".join(parts)
+
+    def chat(self, user_message: str, system_prompt: str, context: str = "",
+             conversation_history: list = None, max_tokens: int = 1000) -> dict:
+        """Envía mensaje al LLM configurado y retorna respuesta"""
+
+        provider = get_config('ai_provider', 'anthropic')
+
+        full_system = system_prompt
+        if context:
+            full_system += f"\n\n{context}"
+
+        if provider == 'anthropic' and self.anthropic_key:
+            return self._call_anthropic(user_message, full_system, conversation_history, max_tokens)
+        elif provider == 'openai' and self.openai_key:
+            return self._call_openai(user_message, full_system, conversation_history, max_tokens)
+        else:
+            return self._fallback_response(user_message)
+
+    def _call_anthropic(self, user_message: str, system: str,
+                        history: list = None, max_tokens: int = 1000) -> dict:
+        model = get_config('ai_model', 'claude-haiku-4-5-20251001')
+        messages = []
+
+        if history:
+            for h in history[-10:]:  # últimas 10 para no exceder contexto
+                messages.append({'role': h['role'], 'content': h['content']})
+
+        messages.append({'role': 'user', 'content': user_message})
+
+        try:
+            resp = requests.post(
+                'https://api.anthropic.com/v1/messages',
+                headers={
+                    'x-api-key':         self.anthropic_key,
+                    'anthropic-version': '2023-06-01',
+                    'content-type':      'application/json'
+                },
+                json={
+                    'model':      model,
+                    'max_tokens': max_tokens,
+                    'system':     system,
+                    'messages':   messages
+                },
+                timeout=30
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            text = data['content'][0]['text']
+            tokens = data.get('usage', {}).get('output_tokens', 0)
+            return {'success': True, 'response': text, 'tokens': tokens, 'provider': 'anthropic', 'model': model}
+        except requests.exceptions.Timeout:
+            return {'success': False, 'response': 'La IA tardó demasiado en responder. Intenta de nuevo.', 'provider': 'anthropic'}
+        except Exception as e:
+            logger.error(f"Error Anthropic: {e}")
+            return {'success': False, 'response': f'Error conectando con la IA: {str(e)}', 'provider': 'anthropic'}
+
+    def _call_openai(self, user_message: str, system: str,
+                     history: list = None, max_tokens: int = 1000) -> dict:
+        model = get_config('ai_model', 'gpt-3.5-turbo')
+        messages = [{'role': 'system', 'content': system}]
+        if history:
+            for h in history[-10:]:
+                messages.append({'role': h['role'], 'content': h['content']})
+        messages.append({'role': 'user', 'content': user_message})
+
+        try:
+            resp = requests.post(
+                'https://api.openai.com/v1/chat/completions',
+                headers={'Authorization': f'Bearer {self.openai_key}', 'Content-Type': 'application/json'},
+                json={'model': model, 'messages': messages, 'max_tokens': max_tokens},
+                timeout=30
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            text = data['choices'][0]['message']['content']
+            tokens = data.get('usage', {}).get('completion_tokens', 0)
+            return {'success': True, 'response': text, 'tokens': tokens, 'provider': 'openai', 'model': model}
+        except Exception as e:
+            logger.error(f"Error OpenAI: {e}")
+            return {'success': False, 'response': f'Error OpenAI: {str(e)}', 'provider': 'openai'}
+
+    def _fallback_response(self, user_message: str) -> dict:
+        """Respuesta cuando no hay API key configurada"""
+        msg_lower = user_message.lower()
+        if any(w in msg_lower for w in ['hola', 'buenas', 'hey']):
+            r = "¡Hola! Soy Cic_IA. Para funcionar con IA real, el desarrollador debe configurar ANTHROPIC_API_KEY o OPENAI_API_KEY en las variables de entorno."
+        elif any(w in msg_lower for w in ['qué hora', 'qué día', 'fecha']):
+            now = datetime.now()
+            dias = ['lunes','martes','miércoles','jueves','viernes','sábado','domingo']
+            meses = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre']
+            r = f"Hoy es {dias[now.weekday()]}, {now.day} de {meses[now.month-1]} de {now.year} — {now.strftime('%H:%M')}"
+        else:
+            r = (f"Recibí tu mensaje: '{user_message[:80]}'. "
+                 "⚠️ No hay API key de IA configurada. "
+                 "El desarrollador debe agregar ANTHROPIC_API_KEY o OPENAI_API_KEY como variable de entorno.")
+        return {'success': False, 'response': r, 'provider': 'fallback', 'tokens': 0}
+
+# ========== MOTOR DE BÚSQUEDA DE MEMORIAS (optimizado) ==========
+
+class MemoryEngine:
+    @staticmethod
+    def search(query: str, limit: int = 5) -> list:
+        """Búsqueda eficiente por palabras clave — sin cargar toda la BD en RAM"""
+        words = [w for w in query.lower().split() if len(w) > 3]
+        if not words:
+            return []
+
+        try:
+            # Búsqueda por topic primero (indexado)
+            results = set()
+            for word in words[:5]:
+                mems = Memory.query.filter(
+                    Memory.topic.ilike(f'%{word}%')
+                ).order_by(Memory.relevance_score.desc()).limit(10).all()
+                results.update(m.id for m in mems)
+
+            # Búsqueda en contenido si no hay suficientes resultados
+            if len(results) < 3:
+                for word in words[:3]:
+                    mems = Memory.query.filter(
+                        Memory.content.ilike(f'%{word}%')
+                    ).order_by(Memory.relevance_score.desc()).limit(10).all()
+                    results.update(m.id for m in mems)
+
+            if not results:
+                return []
+
+            memories = Memory.query.filter(Memory.id.in_(list(results))).order_by(
+                Memory.relevance_score.desc(), Memory.access_count.desc()
+            ).limit(limit).all()
+
+            # Actualizar access_count en batch (eficiente)
+            ids = [m.id for m in memories]
+            if ids:
+                Memory.query.filter(Memory.id.in_(ids)).update(
+                    {'access_count': Memory.access_count + 1},
+                    synchronize_session=False
+                )
+                db.session.commit()
+
+            return memories
+        except Exception as e:
+            logger.error(f"Error buscando memorias: {e}")
+            return []
+
+    @staticmethod
+    def search_manual_knowledge(query: str, limit: int = 5) -> list:
+        """Busca en el conocimiento manual del desarrollador"""
+        words = [w for w in query.lower().split() if len(w) > 2]
+        if not words:
+            return ManualKnowledge.query.filter_by(active=True).order_by(
+                ManualKnowledge.priority.desc()
+            ).limit(limit).all()
+
+        results = set()
+        for word in words[:5]:
+            items = ManualKnowledge.query.filter(
+                ManualKnowledge.active == True,
+                db.or_(
+                    ManualKnowledge.content.ilike(f'%{word}%'),
+                    ManualKnowledge.title.ilike(f'%{word}%'),
+                    ManualKnowledge.category.ilike(f'%{word}%')
+                )
+            ).order_by(ManualKnowledge.priority.desc()).limit(10).all()
+            results.update(m.id for m in items)
+
+        if not results:
+            return []
+
+        return ManualKnowledge.query.filter(
+            ManualKnowledge.id.in_(list(results))
+        ).order_by(ManualKnowledge.priority.desc()).limit(limit).all()
 
 # ========== CLASE PRINCIPAL CIC_IA ==========
 
 class CicIA:
     def __init__(self):
-        self.learning_active = True
-        self.web_search_engine = WebSearchEngine()
-        self.current_learning_topic = None
-        self.neural_net = neural_net
-        self.auto_learning_topics = ['inteligencia artificial 2024', 'machine learning avances', 'python novedades', 'desarrollo web tendencias']
+        self.search_engine  = WebSearchEngine()
+        self.llm            = LLMEngine()
+        self.memory_engine  = MemoryEngine()
+        self._learning_thread = None
+        self._start_auto_learning()
 
         with app.app_context():
-            self.stats = {'memories': Memory.query.count(), 'conversations': Conversation.query.count(), 'today_learned': self._get_today_count()}
+            logger.info("=" * 55)
+            logger.info("🤖 CIC_IA v8.0 INICIADA")
+            logger.info(f"   Memorias: {Memory.query.count()}")
+            logger.info(f"   Conversaciones: {Conversation.query.count()}")
+            logger.info(f"   Conocimiento manual: {ManualKnowledge.query.count()}")
+            provider = get_config('ai_provider', 'anthropic')
+            has_key  = bool(ANTHROPIC_API_KEY or OPENAI_API_KEY)
+            logger.info(f"   Proveedor IA: {provider} ({'✅ API Key OK' if has_key else '⚠️ Sin API Key'})")
+            logger.info("=" * 55)
 
-        threading.Thread(target=self._continuous_learning_loop, daemon=True).start()
+    def _start_auto_learning(self):
+        self._learning_thread = threading.Thread(
+            target=self._auto_learning_loop, daemon=True
+        )
+        self._learning_thread.start()
 
-        logger.info("=" * 50)
-        logger.info("CIC_IA INICIADA")
-        logger.info(f"Memorias: {self.stats['memories']}")
-        logger.info(f"Conversaciones: {self.stats['conversations']}")
-        logger.info("=" * 50)
-
-    def _get_today_count(self):
-        today = date.today()
-        log = LearningLog.query.filter_by(date=today).first()
-        return log.count if log else 0
-
-    def _continuous_learning_loop(self):
-        time.sleep(300)
-        while self.learning_active:
+    def _auto_learning_loop(self):
+        time.sleep(60)  # Espera inicial
+        while True:
             try:
-                self._perform_auto_learning()
+                with app.app_context():
+                    if get_config('auto_learning_enabled', True):
+                        self._perform_auto_learning()
             except Exception as e:
-                logger.error(f"Error auto-learn: {e}")
-            time.sleep(7200)
+                logger.error(f"Error auto-learning: {e}")
+            interval = get_config('auto_learning_interval_hours', 2)
+            time.sleep(interval * 3600)
 
-    def _perform_auto_learning(self, custom_topic=None):
-        with app.app_context():
-            topic = custom_topic or self.current_learning_topic or random.choice(self.auto_learning_topics)
-            self.current_learning_topic = None
+    def _perform_auto_learning(self, topic: str = None) -> dict:
+        """Aprendizaje automático desde web"""
+        default_topics = [
+            'inteligencia artificial 2025', 'machine learning novedades',
+            'python avances', 'desarrollo web tendencias', 'ciencia datos'
+        ]
+        query = topic or random.choice(default_topics)
+        logger.info(f"🔍 Auto-aprendiendo: '{query}'")
 
-            logger.info(f"Aprendiendo: '{topic}'")
-            results = self.web_search_engine.search_duckduckgo(topic, max_results=3)
+        results = self.search_engine.search(query, max_results=4)
+        if not results:
+            return {'learned': 0, 'topic': query, 'error': 'Sin resultados web'}
 
-            if not results:
-                return False
-
-            learned_count = 0
-            for result in results:
-                try:
-                    preview = result['snippet'][:100] if result['snippet'] else ''
-                    exists = Memory.query.filter(Memory.content.ilike(f'%{preview}%')).first()
-                    if exists:
-                        continue
-
-                    # CORRECCIÓN: String multilínea correctamente formateado
-                    content_text = result['title'] + '\n\n' + result['snippet'] + '\n\nFuente: ' + result['url']
-                    memory = Memory(content=content_text, source='auto_learning', topic=topic, relevance_score=0.6, access_count=0)
-                    db.session.add(memory)
-                    learned_count += 1
-                except Exception as e:
+        learned = 0
+        for r in results:
+            try:
+                snippet = r['snippet'][:120] if r['snippet'] else ''
+                if not snippet:
                     continue
-
-            if learned_count > 0:
-                db.session.commit()
-                today = date.today()
-                log = LearningLog.query.filter_by(date=today).first()
-                if not log:
-                    log = LearningLog(date=today, count=0, web_searches=0, auto_learned=0)
-                    db.session.add(log)
-                log.auto_learned += learned_count
-                db.session.commit()
-                logger.info(f"Aprendidos: {learned_count}")
-                return True
-            return False
-
-    def detect_module(self, user_input):
-        module_info = self.neural_net.predict_module(user_input)
-        if module_info['confidence'] < 0.5:
-            module_info = self._manual_module_detection(user_input)
-        return module_info
-
-    def _manual_module_detection(self, text):
-        text_lower = text.lower()
-        patterns = {
-            'data_analysis': {'keywords': ['csv', 'excel', 'datos', 'análisis', 'tabla', 'pandas'], 'prefixes': ['analiza', 'procesa']},
-            'image_generator': {'keywords': ['imagen', 'foto', 'genera imagen', 'dibuja'], 'prefixes': ['genera imagen']},
-            'code_assistant': {'keywords': ['código', 'programa', 'python', 'javascript'], 'prefixes': ['escribe código']},
-            'chat_history': {'keywords': ['historial', 'conversaciones'], 'prefixes': ['mi historial']},
-            'file_manager': {'keywords': ['archivo', 'pdf', 'subir'], 'prefixes': ['sube archivo']}
-        }
-        for module_name, data in patterns.items():
-            if any(kw in text_lower for kw in data['keywords']):
-                return {'module': module_name, 'confidence': 0.9, 'method': 'manual'}
-            if any(text_lower.startswith(p) for p in data['prefixes']):
-                return {'module': module_name, 'confidence': 0.85, 'method': 'manual'}
-        return {'module': 'none', 'confidence': 0.0, 'method': 'manual'}
-
-    def execute_module(self, module_name, user_input, context=None):
-        module = get_module(module_name)
-        if module is None:
-            return {'success': False, 'error': f'Módulo {module_name} no disponible', 'response': f'Lo siento, el módulo {module_name} no está disponible.'}
-
-        try:
-            if module_name == 'data_analysis':
-                return self._execute_data_analysis(module, user_input, context)
-            elif module_name == 'image_generator':
-                return self._execute_image_generator(module, user_input, context)
-            elif module_name == 'code_assistant':
-                return self._execute_code_assistant(module, user_input, context)
-            elif module_name == 'chat_history':
-                return self._execute_chat_history(module, user_input, context)
-            elif module_name == 'file_manager':
-                return self._execute_file_manager(module, user_input, context)
-            return {'success': False, 'error': 'Módulo no implementado'}
-        except Exception as e:
-            logger.error(f"Error módulo {module_name}: {e}")
-            return {'success': False, 'error': str(e), 'response': f'Error: {str(e)}'}
-
-    def _execute_data_analysis(self, module, user_input, context):
-        if context and context.get('file_path'):
-            result = module.load_file(context['file_path'])
-            if result.get('success'):
-                analysis = module.analyze(user_input)
-                return {'success': True, 'module': 'data_analysis', 'response': analysis.get('summary', 'Análisis completado'), 'data': analysis}
-        return {'success': True, 'module': 'data_analysis', 'response': 'Modo Análisis de Datos. Sube un archivo CSV, Excel, JSON o SQLite.', 'awaiting_file': True}
-
-    def _execute_image_generator(self, module, user_input, context):
-        prompt = user_input.replace('genera una imagen', '').replace('crea una imagen', '').replace('dibuja', '').strip()
-        if not prompt:
-            return {'success': True, 'module': 'image_generator', 'response': 'Modo Generador de Imágenes. Describe qué imagen quieres crear.'}
-        result = module.generate(prompt, style='realistic', size='1024x1024')
-        if result.get('success'):
-            return {'success': True, 'module': 'image_generator', 'response': f'Imagen generada: "{prompt[:50]}..."', 'image_data': result.get('image_data'), 'format': result.get('format')}
-        return {'success': False, 'module': 'image_generator', 'response': f'Error: {result.get("error", "Error desconocido")}'}
-
-    def _execute_code_assistant(self, module, user_input, context):
-        language = module.detect_language(user_input)
-        if any(kw in user_input.lower() for kw in ['explica', 'qué hace']):
-            return {'success': True, 'module': 'code_assistant', 'response': f'Modo Asistente de Código ({language}). Pega el código a explicar.'}
-        result = module.generate_code(user_input, language)
-        return {'success': True, 'module': 'code_assistant', 'response': f'Código en {result.get("language_name", language)}:\n\n```{language}\n{result.get("code", "")}\n```', 'code': result.get('code'), 'language': language}
-
-    def _execute_chat_history(self, module, user_input, context):
-        user_id = context.get('user_id', 1) if context else 1
-        if any(kw in user_input.lower() for kw in ['busca', 'encuentra']):
-            keyword = user_input.replace('busca', '').replace('en mi historial', '').strip()
-            results = module.search_conversations(user_id=user_id, keyword=keyword)
-            if results.get('matches', 0) > 0:
-                convs = results.get('conversations', [])
-                response = f'Encontré {results["matches"]} conversaciones:' + '\n' + '\n'.join([f'- {c["user_message"][:50]}...' for c in convs[:5]])
-                return {'success': True, 'module': 'chat_history', 'response': response}
-        stats = module.get_conversation_stats(user_id=user_id)
-        return {'success': True, 'module': 'chat_history', 'response': f'Tu Historial:\n- Total: {stats.get("total_conversations", 0)}\n- Últimos 7 días: {stats.get("last_7_days", 0)}'}
-
-    def _execute_file_manager(self, module, user_input, context):
-        return {'success': True, 'module': 'file_manager', 'response': 'Modo Gestión de Archivos. Puedes subir archivos para procesarlos.'}
-
-    def chat(self, user_input, mode='balanced', attachment_info=None, user_id=1):
-        input_lower = user_input.lower().strip()
-
-        if self._is_date_time_question(input_lower):
-            response = self._get_dynamic_date_response(input_lower)
-            return self._save_conversation(user_input, response, 'system_time', user_id=user_id)
-
-        module_info = self.detect_module(user_input)
-        if module_info['module'] != 'none' and module_info['confidence'] > 0.6:
-            context = {'user_id': user_id}
-            if attachment_info:
-                context['file_path'] = attachment_info.get('path')
-                context['file_type'] = attachment_info.get('type')
-
-            module_result = self.execute_module(module_info['module'], user_input, context)
-            result = self._save_conversation(user_input, module_result.get('response', 'Error'), f"module_{module_info['module']}", user_id=user_id, module_used=module_info['module'])
-            result['module_used'] = module_info['module']
-            result['module_confidence'] = module_info['confidence']
-            return result
-
-        intent_info = self.neural_net.predict_intent(user_input)
-        best_topic = self._find_best_topic(input_lower)
-
-        with app.app_context():
-            memories = Memory.query.all()
-            relevant_memories = self._find_relevant_memories(input_lower, memories)
-
-            sources_used = []
-            if best_topic and best_topic != 'default':
-                response = random.choice(KNOWLEDGE_BASE[best_topic]['respuestas'])
-                sources_used.append('knowledge_base')
-            elif relevant_memories:
-                mem = relevant_memories[0]
-                response = f"Basándome en mi conocimiento: {mem.content[:300]}"
-                sources_used.append(f"memory_{mem.source}")
-            else:
-                tema = user_input[:40] if len(user_input) > 5 else "este tema"
-                web_results = self._search_and_learn(user_input)
-                if web_results:
-                    response = f"He investigado sobre '{tema}':\n\n{web_results['summary']}"
-                    sources_used.append('web_search')
-                else:
-                    response = random.choice(KNOWLEDGE_BASE['default']['respuestas']).format(tema=tema)
-                    sources_used.append('learning')
-
-            if mode == 'fast':
-                response = response.split('.')[0] + '.' if '.' in response else response[:100]
-            elif mode == 'complete':
-                response += "\n\n¿Te gustaría que profundice?"
-
-            return self._save_conversation(user_input, response, sources_used[0] if sources_used else 'learning', user_id=user_id, memories_count=len(relevant_memories), sources_used=sources_used, intent=intent_info.get('intent', 'unknown'))
-
-    def _find_relevant_memories(self, text, memories):
-        relevant = []
-        text_words = set(text.split())
-        for mem in memories:
-            mem_words = set(mem.content.lower().split())
-            if len(text_words & mem_words) >= 2:
-                relevant.append(mem)
-                mem.access_count += 1
-        db.session.commit()
-        return relevant
-
-    def _search_and_learn(self, query):
-        try:
-            with app.app_context():
-                cached = WebSearchCache.query.filter_by(query=query).first()
-                if cached and cached.expires_at > datetime.utcnow():
-                    return cached.results
-
-                results = self.web_search_engine.search_duckduckgo(query, max_results=3)
-                if not results:
-                    return None
-
-                summary = ""
-                for i, result in enumerate(results, 1):
-                    summary += f"{i}. {result['title']}\n   {result['snippet']}\n\n"
-                    memory = Memory(content=result['snippet'], source='web_search', topic=query, relevance_score=0.7)
-                    db.session.add(memory)
-
-                cache_entry = WebSearchCache(query=query, results={'summary': summary}, expires_at=datetime.utcnow() + timedelta(hours=24))
-                db.session.add(cache_entry)
-                db.session.commit()
-                return {'summary': summary}
-        except Exception as e:
-            logger.error(f"Error búsqueda web: {e}")
-            return None
-
-    def _find_best_topic(self, text):
-        best_score = 0
-        best_topic = 'default'
-        for topic, data in KNOWLEDGE_BASE.items():
-            if topic == 'default':
+                # Evitar duplicados eficientemente
+                exists = Memory.query.filter(Memory.content.ilike(f'%{snippet[:60]}%')).first()
+                if exists:
+                    continue
+                content = f"{r['title']}\n\n{r['snippet']}\n\nFuente: {r['url']}"
+                mem = Memory(
+                    content=content, source='auto_learning',
+                    topic=query, relevance_score=0.6
+                )
+                db.session.add(mem)
+                learned += 1
+            except Exception:
                 continue
-            score = sum(3 for kw in data['keywords'] if kw in text)
-            if score > best_score:
-                best_score = score
-                best_topic = topic
-        return best_topic if best_score >= 2 else None
 
-    def _save_conversation(self, user_msg, bot_resp, source, user_id=1, memories_count=0, sources_used=None, intent='unknown', module_used=None):
+        if learned > 0:
+            db.session.commit()
+            today = date.today()
+            log = LearningLog.query.filter_by(date=today).first()
+            if not log:
+                log = LearningLog(date=today, count=0, web_searches=0, auto_learned=0)
+                db.session.add(log)
+            log.auto_learned += learned
+            db.session.commit()
+
+        logger.info(f"✅ Aprendidos {learned} memorias sobre '{query}'")
+        return {'learned': learned, 'topic': query}
+
+    def force_learn(self, topic: str, content: str = None, user_id: int = None) -> dict:
+        """Forzar aprendizaje sobre un tema — modo desarrollador"""
         with app.app_context():
-            conv = Conversation(user_id=user_id, user_message=user_msg, bot_response=bot_resp, sources_used={'primary': source, 'all': sources_used or [source], 'intent': intent, 'module_used': module_used}, mode_used=module_used or 'chat')
+            learned_items = []
+
+            # Si se provee contenido directo, guardarlo como conocimiento manual
+            if content:
+                mk = ManualKnowledge(
+                    title=topic,
+                    content=content,
+                    category='forzado',
+                    priority=2,
+                    added_by=user_id,
+                    tags=['forced_learning']
+                )
+                db.session.add(mk)
+                # También guardar como Memory para que el LLM lo use
+                mem = Memory(
+                    content=content,
+                    source='manual_dev',
+                    topic=topic,
+                    relevance_score=0.95,
+                    tags=['priority', 'manual']
+                )
+                db.session.add(mem)
+                db.session.commit()
+                learned_items.append({'type': 'manual', 'title': topic})
+
+            # Buscar en web también
+            web_result = self._perform_auto_learning(topic)
+            if web_result.get('learned', 0) > 0:
+                learned_items.append({'type': 'web', 'count': web_result['learned']})
+
+            return {
+                'success': True,
+                'topic': topic,
+                'manual_saved': bool(content),
+                'web_learned': web_result.get('learned', 0),
+                'total': len(learned_items)
+            }
+
+    def chat(self, user_message: str, user_id: int = None,
+             conversation_history: list = None, mode: str = 'balanced') -> dict:
+        """Procesamiento principal del chat con LLM real"""
+
+        # Validar longitud
+        if len(user_message) > 4000:
+            user_message = user_message[:4000]
+
+        # Buscar memorias relevantes
+        memories        = self.memory_engine.search(user_message, limit=get_config('max_memory_results', 5))
+        manual_knowledge = self.memory_engine.search_manual_knowledge(user_message, limit=5)
+
+        # Construir contexto
+        context = self.llm._build_context(user_message, memories, manual_knowledge)
+
+        # System prompt desde config
+        system_prompt = get_config(
+            'system_prompt',
+            'Eres Cic_IA, un asistente inteligente en español. Responde de forma clara, útil y amigable.'
+        )
+
+        # Tokens según modo
+        tokens_map = {'fast': 500, 'balanced': 1000, 'complete': 2000}
+        max_tokens = tokens_map.get(mode, 1000)
+
+        # Llamar al LLM
+        llm_result = self.llm.chat(
+            user_message=user_message,
+            system_prompt=system_prompt,
+            context=context,
+            conversation_history=conversation_history,
+            max_tokens=max_tokens
+        )
+
+        response_text = llm_result['response']
+
+        # Si el LLM no tiene key y no hay memorias, buscar en web
+        if not llm_result.get('success') and get_config('web_search_enabled', True):
+            web_data = self._search_and_cache(user_message)
+            if web_data:
+                response_text += f"\n\n📖 Información encontrada en la web:\n{web_data}"
+
+        # Guardar conversación
+        self._save_conversation(
+            user_msg=user_message,
+            bot_resp=response_text,
+            user_id=user_id,
+            tokens=llm_result.get('tokens', 0),
+            sources=['llm', llm_result.get('provider', 'unknown')]
+        )
+
+        return {
+            'response':       response_text,
+            'provider':       llm_result.get('provider', 'unknown'),
+            'model':          llm_result.get('model', 'unknown'),
+            'tokens_used':    llm_result.get('tokens', 0),
+            'memories_used':  len(memories),
+            'manual_kb_used': len(manual_knowledge),
+            'success':        llm_result.get('success', False)
+        }
+
+    def _search_and_cache(self, query: str) -> str:
+        """Busca en web con caché"""
+        try:
+            cached = WebSearchCache.query.filter_by(query=query).first()
+            if cached and cached.expires_at and cached.expires_at > datetime.utcnow():
+                return cached.results.get('summary', '')
+
+            results = self.search_engine.search(query, max_results=3)
+            if not results:
+                return ''
+
+            summary = '\n'.join(
+                f"• {r['title']}: {r['snippet'][:200]}" for r in results
+            )
+
+            # Cachear
+            cache = WebSearchCache(
+                query=query,
+                results={'summary': summary},
+                expires_at=datetime.utcnow() + timedelta(hours=6)
+            )
+            db.session.merge(cache)
+            db.session.commit()
+            return summary
+        except Exception as e:
+            logger.error(f"Error web search: {e}")
+            return ''
+
+    def _save_conversation(self, user_msg: str, bot_resp: str,
+                           user_id: int = None, tokens: int = 0, sources: list = None):
+        try:
+            conv = Conversation(
+                user_id=user_id,
+                user_message=user_msg[:2000],
+                bot_response=bot_resp[:4000],
+                sources_used={'providers': sources or []},
+                tokens_used=tokens,
+                mode_used='chat'
+            )
             db.session.add(conv)
 
             today = date.today()
@@ -645,68 +749,29 @@ class CicIA:
                 db.session.add(log)
             else:
                 log.count += 1
-
             db.session.commit()
-            total_mem = Memory.query.count()
-
-        result = {'response': bot_resp, 'model_used': 'cic_ia_modular', 'sources_used': sources_used or [source], 'memories_found': memories_count, 'total_memories': total_mem, 'intent_detected': intent}
-        if module_used:
-            result['module_used'] = module_used
-        return result
-
-    def _is_date_time_question(self, text):
-        return any(kw in text for kw in ['qué día', 'qué hora', 'fecha', 'hora actual', 'hoy es'])
-
-    def _get_dynamic_date_response(self, text):
-        now = datetime.now()
-        dias = ['lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo']
-        meses = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
-        return f"Hoy es {dias[now.weekday()]}, {now.day} de {meses[now.month-1]} de {now.year}\nSon las {now.strftime('%H:%M:%S')}"
-
-    def get_learning_stats(self):
-        with app.app_context():
-            total_memories = Memory.query.count()
-            by_source = {'auto_learning': Memory.query.filter_by(source='auto_learning').count(), 'web_search': Memory.query.filter_by(source='web_search').count(), 'manual_learning': Memory.query.filter_by(source='manual_learning').count()}
-            return {'total_memories': total_memories, 'by_source': by_source, 'neural_network': self.neural_net.get_stats(), 'modules_available': ['data_analysis', 'image_generator', 'code_assistant', 'chat_history', 'file_manager']}
-
-# ========== KNOWLEDGE BASE ==========
-
-KNOWLEDGE_BASE = {
-    'ia': {'respuestas': ["La Inteligencia Artificial (IA) es la simulación de procesos de inteligencia humana por sistemas informáticos.", "IA permite a las máquinas aprender, razonar y resolver problemas de manera autónoma."], 'keywords': ['inteligencia artificial', 'ia', 'ai', 'machine learning']},
-    'python': {'respuestas': ["Python es el lenguaje líder en IA por su sintaxis clara y bibliotecas como TensorFlow y PyTorch.", "Python fue creado por Guido van Rossum y es ideal para prototipado rápido."], 'keywords': ['python', 'programación', 'código', 'desarrollo']},
-    'hola': {'respuestas': ["¡Hola! Soy Cic_IA, tu asistente inteligente modular. ¿Qué necesitas?", "¡Bienvenido! Puedo analizar datos, generar imágenes, ayudarte con código y más."], 'keywords': ['hola', 'buenas', 'hey', 'saludos']},
-    'modulos': {'respuestas': ["Módulos disponibles: 1. Análisis de Datos 2. Generador de Imágenes 3. Asistente de Código 4. Historial 5. Archivos", "Prueba: 'analiza este CSV', 'genera una imagen de...', 'escribe código para...'"], 'keywords': ['módulos', 'modulos', 'qué puedes hacer', 'capacidades']},
-    'default': {'respuestas': ["Interesante tema sobre '{tema}'. Voy a investigar para darte la mejor respuesta.", "Estoy aprendiendo sobre '{tema}'. Déjame buscar información actualizada."], 'keywords': []}
-}
-
-# ========== IMPORTAR MÓDULOS ESPECIALIZADOS ==========
-
-_modules_cache = {}
-
-def get_module(module_name):
-    """Lazy loading de módulos"""
-    if module_name not in _modules_cache:
-        try:
-            if module_name == 'data_analysis':
-                from modules.data_analysis import DataAnalysisModule
-                _modules_cache[module_name] = DataAnalysisModule()
-            elif module_name == 'image_generator':
-                from modules.image_generator import ImageGeneratorModule
-                _modules_cache[module_name] = ImageGeneratorModule()
-            elif module_name == 'code_assistant':
-                from modules.code_assistant import CodeAssistantModule
-                _modules_cache[module_name] = CodeAssistantModule()
-            elif module_name == 'chat_history':
-                from modules.chat_history import ChatHistoryModule
-                _modules_cache[module_name] = ChatHistoryModule(db.session, Conversation, User)
-            elif module_name == 'file_manager':
-                from modules.file_manager import FileManagerModule
-                _modules_cache[module_name] = FileManagerModule()
         except Exception as e:
-            logger.error(f"Error cargando módulo {module_name}: {e}")
-            return None
-    return _modules_cache.get(module_name)
+            db.session.rollback()
+            logger.error(f"Error guardando conversación: {e}")
 
+    def get_stats(self) -> dict:
+        with app.app_context():
+            today = date.today()
+            log = LearningLog.query.filter_by(date=today).first()
+            return {
+                'total_memories':    Memory.query.count(),
+                'total_conversations': Conversation.query.count(),
+                'manual_knowledge':  ManualKnowledge.query.filter_by(active=True).count(),
+                'today_conversations': log.count if log else 0,
+                'today_auto_learned':  log.auto_learned if log else 0,
+                'ai_provider':       get_config('ai_provider', 'anthropic'),
+                'ai_model':          get_config('ai_model', 'claude-haiku-4-5-20251001'),
+                'has_api_key':       bool(ANTHROPIC_API_KEY or OPENAI_API_KEY),
+                'web_search_enabled': get_config('web_search_enabled', True),
+            }
+
+
+# Instancia global
 cic_ia = CicIA()
 
 # ========== RUTAS PÚBLICAS ==========
@@ -716,40 +781,50 @@ def index():
     return render_template('index.html')
 
 @app.route('/health')
-def health_check():
-    return jsonify({'status': 'healthy', 'timestamp': datetime.utcnow().isoformat(), 'version': '7.2_clean', 'features': ['chat', 'web_search', 'auto_learning', 'memory', 'users', 'auth', 'modules']})
+def health():
+    stats = cic_ia.get_stats()
+    return jsonify({
+        'status':    'healthy',
+        'version':   '8.0',
+        'timestamp': datetime.utcnow().isoformat(),
+        **stats
+    })
 
 # ========== AUTENTICACIÓN ==========
 
 @app.route('/api/auth/register', methods=['POST'])
 def register():
     try:
-        data = request.json
+        data     = request.json or {}
         username = data.get('username', '').strip()
-        email = data.get('email', '').strip()
+        email    = data.get('email', '').strip()
         password = data.get('password', '')
 
-        if not username or not password:
-            return jsonify({'success': False, 'error': 'Usuario y contraseña requeridos'}), 400
+        if not username or len(username) < 3:
+            return jsonify({'success': False, 'error': 'Usuario debe tener al menos 3 caracteres'}), 400
+        if not password or len(password) < 6:
+            return jsonify({'success': False, 'error': 'Contraseña debe tener al menos 6 caracteres'}), 400
 
         if User.query.filter_by(username=username).first():
-            return jsonify({'success': False, 'error': 'Usuario ya existe'}), 409
-
+            return jsonify({'success': False, 'error': 'Nombre de usuario ya existe'}), 409
         if email and User.query.filter_by(email=email).first():
             return jsonify({'success': False, 'error': 'Email ya registrado'}), 409
 
-        user = User(username=username, email=email or f"{username}@temp.com")
+        user = User(username=username, email=email or f"{username}@cic.local")
         user.set_password(password)
         db.session.add(user)
         db.session.commit()
 
-        token = secrets.token_urlsafe(32)
-        expires = datetime.utcnow() + timedelta(days=7)
-        session = UserSession(user_id=user.id, token=token, expires_at=expires)
-        db.session.add(session)
+        token   = secrets.token_urlsafe(48)
+        expires = datetime.utcnow() + timedelta(days=30)
+        sess    = UserSession(user_id=user.id, token=token, expires_at=expires)
+        db.session.add(sess)
         db.session.commit()
 
-        return jsonify({'success': True, 'token': token, 'user': {'id': user.id, 'username': user.username, 'is_developer': user.is_developer}})
+        return jsonify({
+            'success': True, 'token': token,
+            'user': {'id': user.id, 'username': user.username, 'is_developer': user.is_developer}
+        })
     except Exception as e:
         db.session.rollback()
         return jsonify({'success': False, 'error': str(e)}), 500
@@ -757,215 +832,579 @@ def register():
 @app.route('/api/auth/login', methods=['POST'])
 def login():
     try:
-        data = request.json
+        data     = request.json or {}
         username = data.get('username', '').strip()
         password = data.get('password', '')
 
         user = User.query.filter_by(username=username).first()
         if not user or not user.check_password(password):
             return jsonify({'success': False, 'error': 'Credenciales inválidas'}), 401
+        if not user.is_active:
+            return jsonify({'success': False, 'error': 'Cuenta desactivada'}), 403
 
-        token = secrets.token_urlsafe(32)
-        expires = datetime.utcnow() + timedelta(days=7)
-        session = UserSession(user_id=user.id, token=token, expires_at=expires)
-        db.session.add(session)
+        token   = secrets.token_urlsafe(48)
+        expires = datetime.utcnow() + timedelta(days=30)
+        sess    = UserSession(user_id=user.id, token=token, expires_at=expires)
+        db.session.add(sess)
         db.session.commit()
 
-        return jsonify({'success': True, 'token': token, 'user': {'id': user.id, 'username': user.username, 'is_developer': user.is_developer}})
+        return jsonify({
+            'success': True, 'token': token,
+            'user': {'id': user.id, 'username': user.username, 'is_developer': user.is_developer}
+        })
     except Exception as e:
         db.session.rollback()
         return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.route('/api/auth/verify', methods=['GET'])
-def verify_token_endpoint():
-    token = None
-    if 'Authorization' in request.headers:
-        try:
-            token = request.headers['Authorization'].split(" ")[1]
-        except IndexError:
-            return jsonify({'error': 'Token inválido'}), 401
+@token_required
+def verify_token(current_user):
+    return jsonify({
+        'success': True,
+        'user': {'id': current_user.id, 'username': current_user.username, 'is_developer': current_user.is_developer}
+    })
 
-    if not token:
-        return jsonify({'error': 'Token requerido'}), 401
-
-    session = UserSession.query.filter_by(token=token).first()
-    if not session or (session.expires_at and session.expires_at < datetime.utcnow()):
-        return jsonify({'error': 'Token inválido o expirado'}), 401
-
-    user = User.query.get(session.user_id)
-    if not user:
-        return jsonify({'error': 'Usuario no encontrado'}), 404
-
-    session.last_access = datetime.utcnow()
+@app.route('/api/auth/logout', methods=['POST'])
+@token_required
+def logout(current_user):
+    token = _get_token_from_request()
+    UserSession.query.filter_by(token=token).delete()
     db.session.commit()
+    return jsonify({'success': True, 'message': 'Sesión cerrada'})
 
-    return jsonify({'success': True, 'user': {'id': user.id, 'username': user.username, 'is_developer': user.is_developer}})
-
-# ========== RUTAS PROTEGIDAS ==========
-
-
-# ========== ENDPOINT TEMPORAL PARA CREAR USUARIO DEV (ELIMINAR DESPUÉS) ==========
-
-@app.route('/api/setup/create-dev', methods=['GET'])
-def create_dev_user():
-    """Endpoint temporal para crear usuario desarrollador - ELIMINAR DESPUÉS DE USAR"""
-    try:
-        # Verificar si ya existe un dev
-        existing = User.query.filter_by(is_developer=True).first()
-        if existing:
-            return jsonify({
-                'message': 'Ya existe un usuario desarrollador',
-                'username': existing.username,
-                'warning': 'Este endpoint se autodestruirá después de 1 uso'
-            })
-
-        # Crear usuario dev
-        dev = User(
-            username='desarrollador',
-            email='dev@cic-ia.local',
-            is_developer=True,
-            is_active=True
-        )
-        dev.set_password('cicia2024')
-        db.session.add(dev)
-        db.session.commit()
-
-        return jsonify({
-            'success': True,
-            'message': 'Usuario desarrollador creado',
-            'credentials': {
-                'username': 'desarrollador',
-                'password': 'cicia2024'
-            },
-            'warning': 'ELIMINA ESTE ENDPOINT DESPUÉS DE USAR - LÍNEA ~600'
-        })
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
+# ========== CHAT ==========
 
 @app.route('/api/chat', methods=['POST'])
 @token_required
-def chat_auth(current_user):
+def chat(current_user):
     try:
-        data = request.json
+        data    = request.json or {}
         message = data.get('message', '').strip()
-        mode = data.get('mode', 'balanced')
+        mode    = data.get('mode', 'balanced')
+        history = data.get('history', [])  # historial del frontend
 
         if not message:
             return jsonify({'error': 'Mensaje vacío'}), 400
+        if len(message) > 4000:
+            return jsonify({'error': 'Mensaje demasiado largo (máx 4000 caracteres)'}), 400
 
-        result = cic_ia.chat(message, mode=mode, user_id=current_user.id)
+        result = cic_ia.chat(
+            user_message=message,
+            user_id=current_user.id,
+            conversation_history=history,
+            mode=mode
+        )
         return jsonify(result)
     except Exception as e:
-        logger.error(f"Error en chat: {e}")
+        logger.error(f"Error chat: {e}")
         return jsonify({'error': str(e)}), 500
+
+@app.route('/api/chat/history', methods=['GET'])
+@token_required
+def chat_history(current_user):
+    page     = request.args.get('page', 1, type=int)
+    per_page = min(request.args.get('per_page', 20, type=int), 100)
+
+    pagination = Conversation.query.filter_by(
+        user_id=current_user.id
+    ).order_by(Conversation.timestamp.desc()).paginate(
+        page=page, per_page=per_page, error_out=False
+    )
+
+    return jsonify({
+        'conversations': [{
+            'id':           c.id,
+            'user_message': c.user_message,
+            'bot_response': c.bot_response,
+            'timestamp':    c.timestamp.isoformat(),
+            'tokens_used':  c.tokens_used
+        } for c in pagination.items],
+        'total': pagination.total,
+        'pages': pagination.pages,
+        'current_page': page
+    })
 
 @app.route('/api/user/stats', methods=['GET'])
 @token_required
 def user_stats(current_user):
-    try:
-        conv_count = Conversation.query.filter_by(user_id=current_user.id).count()
-        return jsonify({'success': True, 'user_id': current_user.id, 'username': current_user.username, 'conversation_count': conv_count, 'is_developer': current_user.is_developer})
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+    conv_count   = Conversation.query.filter_by(user_id=current_user.id).count()
+    total_tokens = db.session.query(
+        db.func.sum(Conversation.tokens_used)
+    ).filter_by(user_id=current_user.id).scalar() or 0
+
+    return jsonify({
+        'success':            True,
+        'user_id':            current_user.id,
+        'username':           current_user.username,
+        'conversation_count': conv_count,
+        'total_tokens_used':  total_tokens,
+        'is_developer':       current_user.is_developer,
+        'member_since':       current_user.created_at.isoformat()
+    })
 
 @app.route('/api/status')
 def status():
-    try:
-        with app.app_context():
-            today = date.today()
-            log = LearningLog.query.filter_by(date=today).first()
-            stats = cic_ia.get_learning_stats()
-            return jsonify({'stage': 'v7.2', 'total_memories': stats['total_memories'], 'total_conversations': Conversation.query.count(), 'today_learned': log.count if log else 0, 'neural_network': stats.get('neural_network', {}), 'modules': stats.get('modules_available', [])})
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+    return jsonify(cic_ia.get_stats())
+
+# ========== MÓDULOS (compatibilidad) ==========
 
 @app.route('/api/modules/list', methods=['GET'])
 def list_modules():
-    return jsonify({'modules': [{'id': 'data_analysis', 'name': 'Análisis de Datos', 'icon': '📊'}, {'id': 'image_generator', 'name': 'Generador de Imágenes', 'icon': '🎨'}, {'id': 'code_assistant', 'name': 'Asistente de Código', 'icon': '💻'}, {'id': 'chat_history', 'name': 'Historial', 'icon': '📜'}, {'id': 'file_manager', 'name': 'Archivos', 'icon': '📁'}]})
+    return jsonify({'modules': [
+        {'id': 'chat',          'name': 'Chat IA',              'icon': '🤖', 'status': 'active'},
+        {'id': 'web_search',    'name': 'Búsqueda Web',         'icon': '🔍', 'status': 'active'},
+        {'id': 'memory',        'name': 'Memoria',              'icon': '🧠', 'status': 'active'},
+        {'id': 'data_analysis', 'name': 'Análisis de Datos',    'icon': '📊', 'status': 'available'},
+        {'id': 'code_assistant','name': 'Asistente de Código',  'icon': '💻', 'status': 'available'},
+        {'id': 'file_manager',  'name': 'Archivos',             'icon': '📁', 'status': 'available'},
+    ]})
 
-# ========== RUTAS DESARROLLADOR ==========
+# ==========================================
+# ========== PANEL DESARROLLADOR ==========
+# ==========================================
 
-@app.route('/api/dev/stats/detailed')
+@app.route('/developer')
+def developer_panel():
+    """Panel de desarrollador — renderiza template o retorna info básica"""
+    try:
+        return render_template('developer.html')
+    except Exception:
+        return jsonify({'message': 'Panel desarrollador activo. Usa la API /api/dev/*'})
+
+# --- Estadísticas detalladas ---
+
+@app.route('/api/dev/stats', methods=['GET'])
 @dev_required
-def dev_stats_detailed():
+def dev_stats():
     try:
         today = date.today()
-        stats = {'general': {'total_memories': Memory.query.count(), 'total_conversations': Conversation.query.count(), 'total_users': User.query.count(), 'active_sessions': UserSession.query.count()}, 'today': {'conversations': db.session.query(db.func.sum(LearningLog.count)).filter(LearningLog.date == today).scalar() or 0}, 'neural_network': neural_net.get_stats()}
-        return jsonify(stats)
+        log   = LearningLog.query.filter_by(date=today).first()
+
+        # Historial de aprendizaje (últimos 7 días)
+        week_logs = LearningLog.query.filter(
+            LearningLog.date >= today - timedelta(days=7)
+        ).order_by(LearningLog.date.desc()).all()
+
+        # Últimas conversaciones
+        last_convs = Conversation.query.order_by(
+            Conversation.timestamp.desc()
+        ).limit(5).all()
+
+        return jsonify({
+            'system': {
+                'total_memories':      Memory.query.count(),
+                'total_conversations': Conversation.query.count(),
+                'total_users':         User.query.count(),
+                'active_sessions':     UserSession.query.count(),
+                'manual_knowledge':    ManualKnowledge.query.filter_by(active=True).count(),
+                'cached_searches':     WebSearchCache.query.count(),
+            },
+            'today': {
+                'conversations': log.count if log else 0,
+                'auto_learned':  log.auto_learned if log else 0,
+                'web_searches':  log.web_searches if log else 0,
+            },
+            'week_activity': [{
+                'date':         l.date.isoformat(),
+                'conversations': l.count,
+                'auto_learned': l.auto_learned,
+            } for l in week_logs],
+            'recent_conversations': [{
+                'user':     c.user_message[:80],
+                'bot':      c.bot_response[:80],
+                'time':     c.timestamp.isoformat(),
+                'tokens':   c.tokens_used,
+            } for c in last_convs],
+            'ai_config': {
+                'provider':        get_config('ai_provider'),
+                'model':           get_config('ai_model'),
+                'has_anthropic':   bool(ANTHROPIC_API_KEY),
+                'has_openai':      bool(OPENAI_API_KEY),
+                'system_prompt':   get_config('system_prompt'),
+                'max_tokens':      get_config('max_tokens'),
+                'auto_learning':   get_config('auto_learning_enabled'),
+                'web_search':      get_config('web_search_enabled'),
+            }
+        })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-@app.route('/api/dev/memories/all')
+# --- Gestión de conocimiento manual ---
+
+@app.route('/api/dev/knowledge', methods=['GET'])
 @dev_required
-def dev_memories_all():
-    try:
-        page = request.args.get('page', 1, type=int)
-        per_page = request.args.get('per_page', 50, type=int)
-        pagination = Memory.query.order_by(Memory.created_at.desc()).paginate(page=page, per_page=per_page, error_out=False)
-        return jsonify({'memories': [{'id': m.id, 'topic': m.topic, 'content': m.content[:200], 'source': m.source, 'created_at': m.created_at.isoformat()} for m in pagination.items], 'total': pagination.total, 'pages': pagination.pages})
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+def dev_get_knowledge():
+    """Lista todo el conocimiento manual"""
+    page     = request.args.get('page', 1, type=int)
+    category = request.args.get('category', '')
+    query    = ManualKnowledge.query.filter_by(active=True)
+    if category:
+        query = query.filter_by(category=category)
+    pagination = query.order_by(
+        ManualKnowledge.priority.desc(), ManualKnowledge.created_at.desc()
+    ).paginate(page=page, per_page=20, error_out=False)
 
-@app.route('/api/dev/neural/train', methods=['POST'])
+    return jsonify({
+        'knowledge': [{
+            'id':       k.id,
+            'title':    k.title,
+            'category': k.category,
+            'content':  k.content[:300],
+            'priority': k.priority,
+            'tags':     k.tags,
+            'created':  k.created_at.isoformat()
+        } for k in pagination.items],
+        'total': pagination.total,
+        'pages': pagination.pages
+    })
+
+@app.route('/api/dev/knowledge', methods=['POST'])
 @dev_required
-def dev_train_neural():
+def dev_add_knowledge():
+    """Agregar conocimiento manual — el dev enseña a la IA directamente"""
     try:
-        conversations = Conversation.query.order_by(Conversation.timestamp.desc()).limit(100).all()
-        if len(conversations) < 10:
-            return jsonify({'success': False, 'error': 'Se necesitan al menos 10 conversaciones'}), 400
+        data    = request.json or {}
+        title   = data.get('title', '').strip()
+        content = data.get('content', '').strip()
 
-        texts = [conv.user_message for conv in conversations]
-        labels = []
-        module_labels = []
+        if not title or not content:
+            return jsonify({'error': 'title y content son requeridos'}), 400
 
-        for text in texts:
-            text_lower = text.lower()
-            if any(kw in text_lower for kw in ['hola', 'buenas']):
-                labels.append('greeting')
-            elif any(kw in text_lower for kw in ['qué', 'cómo', 'cuándo']):
-                labels.append('question')
-            else:
-                labels.append('statement')
-            mod_info = cic_ia.detect_module(text)
-            module_labels.append(mod_info['module'])
+        # Obtener user_id del token
+        token   = _get_token_from_request()
+        session = UserSession.query.filter_by(token=token).first()
+        user_id = session.user_id if session else None
 
-        success = neural_net.train(texts, labels, module_labels)
-        if success:
-            return jsonify({'success': True, 'message': 'Red neuronal entrenada', 'samples': len(texts), 'stats': neural_net.get_stats()})
-        return jsonify({'success': False, 'error': 'Error durante entrenamiento'}), 500
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        mk = ManualKnowledge(
+            title=title,
+            content=content,
+            category=data.get('category', 'general'),
+            tags=data.get('tags', []),
+            priority=data.get('priority', 1),
+            added_by=user_id
+        )
+        db.session.add(mk)
 
-@app.route('/api/evolution/learn-now', methods=['POST'])
-@dev_required
-def evolution_learn_now():
-    try:
-        data = request.json or {}
-        topic = data.get('topic', '').strip() or None
-        if topic:
-            cic_ia.set_custom_topic(topic)
-        threading.Thread(target=cic_ia._perform_auto_learning, args=(topic,), daemon=True).start()
-        return jsonify({'success': True, 'message': 'Aprendizaje iniciado' + (f' sobre "{topic}"' if topic else ''), 'started_at': datetime.utcnow().isoformat()})
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/api/dev/system/clear-db', methods=['POST'])
-@dev_required
-def dev_clear_db():
-    try:
-        confirm = request.headers.get('X-Confirm-Delete')
-        if confirm != 'DESTRUIR_TODO':
-            return jsonify({'error': 'Confirmación requerida', 'message': 'Agrega header X-Confirm-Delete: DESTRUIR_TODO'}), 400
-
-        Memory.query.delete()
-        Conversation.query.delete()
-        LearningLog.query.delete()
-        WebSearchCache.query.delete()
-        ManualLearningQueue.query.delete()
+        # También agregar a Memory para que el LLM lo use en contexto
+        mem = Memory(
+            content=f"{title}\n\n{content}",
+            source='manual_dev',
+            topic=title,
+            relevance_score=0.9 + (data.get('priority', 1) * 0.03),
+            tags=data.get('tags', [])
+        )
+        db.session.add(mem)
         db.session.commit()
 
-        return jsonify({'success': True, 'message': 'Base de datos limpiada (usuarios preservados)'})
+        return jsonify({
+            'success':     True,
+            'id':          mk.id,
+            'message':     f'Conocimiento "{title}" agregado exitosamente',
+            'memory_id':   mem.id
+        })
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/dev/knowledge/<int:kid>', methods=['PUT'])
+@dev_required
+def dev_update_knowledge(kid):
+    """Actualizar conocimiento existente"""
+    try:
+        mk = ManualKnowledge.query.get_or_404(kid)
+        data = request.json or {}
+        if 'title'    in data: mk.title    = data['title']
+        if 'content'  in data: mk.content  = data['content']
+        if 'category' in data: mk.category = data['category']
+        if 'tags'     in data: mk.tags     = data['tags']
+        if 'priority' in data: mk.priority = data['priority']
+        if 'active'   in data: mk.active   = data['active']
+        mk.updated_at = datetime.utcnow()
+        db.session.commit()
+        return jsonify({'success': True, 'message': 'Actualizado correctamente'})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/dev/knowledge/<int:kid>', methods=['DELETE'])
+@dev_required
+def dev_delete_knowledge(kid):
+    """Eliminar conocimiento"""
+    mk = ManualKnowledge.query.get_or_404(kid)
+    mk.active = False  # Soft delete
+    db.session.commit()
+    return jsonify({'success': True, 'message': 'Conocimiento desactivado'})
+
+# --- Aprendizaje forzado ---
+
+@app.route('/api/dev/learn', methods=['POST'])
+@dev_required
+def dev_force_learn():
+    """Forzar aprendizaje sobre un tema específico"""
+    try:
+        data    = request.json or {}
+        topic   = data.get('topic', '').strip()
+        content = data.get('content', '').strip()  # Opcional: contenido directo
+
+        if not topic:
+            return jsonify({'error': 'topic es requerido'}), 400
+
+        token   = _get_token_from_request()
+        session = UserSession.query.filter_by(token=token).first()
+        user_id = session.user_id if session else None
+
+        result = cic_ia.force_learn(topic=topic, content=content or None, user_id=user_id)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/dev/learn/bulk', methods=['POST'])
+@dev_required
+def dev_bulk_learn():
+    """Aprendizaje masivo — lista de temas o textos"""
+    try:
+        data  = request.json or {}
+        items = data.get('items', [])  # [{topic, content?}, ...]
+
+        if not items:
+            return jsonify({'error': 'items es requerido'}), 400
+        if len(items) > 50:
+            return jsonify({'error': 'Máximo 50 items por lote'}), 400
+
+        results = []
+        for item in items:
+            if isinstance(item, str):
+                item = {'topic': item}
+            r = cic_ia.force_learn(
+                topic=item.get('topic', ''),
+                content=item.get('content', '') or None
+            )
+            results.append(r)
+            time.sleep(0.5)  # Respetar rate limits
+
+        total_learned = sum(r.get('web_learned', 0) for r in results)
+        return jsonify({
+            'success': True,
+            'processed': len(results),
+            'total_learned': total_learned,
+            'results': results
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# --- Configuración del sistema ---
+
+@app.route('/api/dev/config', methods=['GET'])
+@dev_required
+def dev_get_config():
+    """Ver toda la configuración del sistema"""
+    configs = SystemConfig.query.all()
+    return jsonify({
+        'config': {c.key: {'value': c.value, 'type': c.type, 'updated': c.updated_at.isoformat()} for c in configs}
+    })
+
+@app.route('/api/dev/config', methods=['PUT'])
+@dev_required
+def dev_update_config():
+    """Actualizar configuración en tiempo real"""
+    try:
+        data    = request.json or {}
+        updates = data.get('updates', {})  # {key: value, ...}
+
+        if not updates:
+            return jsonify({'error': 'updates es requerido'}), 400
+
+        # Keys protegidas que no se pueden cambiar por API
+        protected = {'SECRET_KEY', 'DATABASE_URL'}
+        updated = []
+        for key, value in updates.items():
+            if key in protected:
+                continue
+            set_config(key, value)
+            updated.append(key)
+
+        return jsonify({
+            'success': True,
+            'updated': updated,
+            'message': f'{len(updated)} configuraciones actualizadas'
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/dev/config/prompt', methods=['PUT'])
+@dev_required
+def dev_update_prompt():
+    """Actualizar el system prompt de la IA"""
+    try:
+        data   = request.json or {}
+        prompt = data.get('prompt', '').strip()
+        if not prompt:
+            return jsonify({'error': 'prompt es requerido'}), 400
+        if len(prompt) > 2000:
+            return jsonify({'error': 'Prompt muy largo (máx 2000 caracteres)'}), 400
+        set_config('system_prompt', prompt)
+        return jsonify({'success': True, 'message': 'System prompt actualizado'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# --- Gestión de memorias ---
+
+@app.route('/api/dev/memories', methods=['GET'])
+@dev_required
+def dev_get_memories():
+    page     = request.args.get('page', 1, type=int)
+    per_page = min(request.args.get('per_page', 30, type=int), 100)
+    source   = request.args.get('source', '')
+    topic    = request.args.get('topic', '')
+
+    query = Memory.query
+    if source: query = query.filter_by(source=source)
+    if topic:  query = query.filter(Memory.topic.ilike(f'%{topic}%'))
+
+    pagination = query.order_by(
+        Memory.relevance_score.desc(), Memory.created_at.desc()
+    ).paginate(page=page, per_page=per_page, error_out=False)
+
+    return jsonify({
+        'memories': [{
+            'id':        m.id,
+            'topic':     m.topic,
+            'content':   m.content[:400],
+            'source':    m.source,
+            'score':     m.relevance_score,
+            'accesses':  m.access_count,
+            'created':   m.created_at.isoformat()
+        } for m in pagination.items],
+        'total': pagination.total,
+        'pages': pagination.pages
+    })
+
+@app.route('/api/dev/memories/<int:mid>', methods=['DELETE'])
+@dev_required
+def dev_delete_memory(mid):
+    mem = Memory.query.get_or_404(mid)
+    db.session.delete(mem)
+    db.session.commit()
+    return jsonify({'success': True})
+
+@app.route('/api/dev/memories/clear', methods=['POST'])
+@dev_required
+def dev_clear_memories():
+    """Limpiar memorias por fuente"""
+    data   = request.json or {}
+    source = data.get('source', '')
+    confirm = data.get('confirm', '')
+
+    if confirm != 'CONFIRMAR':
+        return jsonify({'error': 'Agrega confirm: "CONFIRMAR" para proceder'}), 400
+
+    if source:
+        count = Memory.query.filter_by(source=source).count()
+        Memory.query.filter_by(source=source).delete()
+    else:
+        count = Memory.query.count()
+        Memory.query.delete()
+
+    db.session.commit()
+    return jsonify({'success': True, 'deleted': count})
+
+# --- Usuarios ---
+
+@app.route('/api/dev/users', methods=['GET'])
+@dev_required
+def dev_list_users():
+    users = User.query.all()
+    return jsonify({'users': [{
+        'id':          u.id,
+        'username':    u.username,
+        'email':       u.email,
+        'is_developer': u.is_developer,
+        'is_active':   u.is_active,
+        'created_at':  u.created_at.isoformat(),
+        'conversations': Conversation.query.filter_by(user_id=u.id).count()
+    } for u in users]})
+
+@app.route('/api/dev/users/<int:uid>/toggle-dev', methods=['POST'])
+@dev_required
+def dev_toggle_developer(uid):
+    """Dar/quitar rol de desarrollador"""
+    user = User.query.get_or_404(uid)
+    user.is_developer = not user.is_developer
+    db.session.commit()
+    return jsonify({'success': True, 'username': user.username, 'is_developer': user.is_developer})
+
+# --- Test de IA ---
+
+@app.route('/api/dev/test-ai', methods=['POST'])
+@dev_required
+def dev_test_ai():
+    """Probar la IA con un mensaje sin guardar en BD"""
+    try:
+        data    = request.json or {}
+        message = data.get('message', 'Hola, ¿funcionas correctamente?').strip()
+        prompt  = data.get('system_prompt', get_config('system_prompt'))
+
+        llm = LLMEngine()
+        result = llm.chat(
+            user_message=message,
+            system_prompt=prompt,
+            max_tokens=500
+        )
+        return jsonify({
+            'test_message':  message,
+            'response':      result['response'],
+            'provider':      result.get('provider'),
+            'model':         result.get('model'),
+            'tokens':        result.get('tokens', 0),
+            'success':       result.get('success', False)
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# --- Crear primer usuario desarrollador (setup inicial) ---
+
+@app.route('/api/dev/setup', methods=['POST'])
+def dev_setup():
+    """
+    Setup inicial — SOLO funciona si NO existe ningún usuario desarrollador.
+    Una vez que existe un dev, este endpoint queda bloqueado automáticamente.
+    """
+    existing_dev = User.query.filter_by(is_developer=True).first()
+    if existing_dev:
+        return jsonify({'error': 'Ya existe un usuario desarrollador. Este endpoint está deshabilitado.'}), 403
+
+    data     = request.json or {}
+    username = data.get('username', '').strip()
+    password = data.get('password', '')
+    email    = data.get('email', f'{username}@cic.local')
+    setup_key = data.get('setup_key', '')
+
+    # Requiere una clave de setup configurada como variable de entorno
+    expected_key = os.environ.get('SETUP_KEY', '')
+    if expected_key and setup_key != expected_key:
+        return jsonify({'error': 'setup_key inválida'}), 403
+
+    if not username or not password or len(password) < 8:
+        return jsonify({'error': 'username y password (mín 8 chars) requeridos'}), 400
+
+    try:
+        user = User(username=username, email=email, is_developer=True)
+        user.set_password(password)
+        db.session.add(user)
+        db.session.commit()
+
+        token   = secrets.token_urlsafe(48)
+        expires = datetime.utcnow() + timedelta(days=90)
+        sess    = UserSession(user_id=user.id, token=token, expires_at=expires)
+        db.session.add(sess)
+        db.session.commit()
+
+        return jsonify({
+            'success':  True,
+            'message':  f'Desarrollador "{username}" creado. Guarda tu token.',
+            'token':    token,
+            'user_id':  user.id
+        })
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
@@ -976,12 +1415,19 @@ def dev_clear_db():
 def not_found(error):
     if request.path.startswith('/api/'):
         return jsonify({'error': 'Endpoint no encontrado'}), 404
-    return render_template('index.html')
+    try:
+        return render_template('index.html')
+    except Exception:
+        return jsonify({'error': 'Not found'}), 404
 
 @app.errorhandler(500)
 def internal_error(error):
     db.session.rollback()
     return jsonify({'error': 'Error interno del servidor'}), 500
+
+@app.errorhandler(413)
+def too_large(error):
+    return jsonify({'error': 'Archivo demasiado grande (máx 32MB)'}), 413
 
 # ========== INICIO ==========
 
