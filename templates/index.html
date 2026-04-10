@@ -59,6 +59,11 @@
             border-radius: 20px;
             font-size: 0.8rem;
             font-weight: bold;
+            display: none;
+        }
+
+        .dev-badge.visible {
+            display: inline-block;
         }
 
         .logout-btn {
@@ -136,22 +141,35 @@
             padding: 15px;
             margin-top: 20px;
             display: none;
+            border: 1px solid #4ade80;
         }
 
         .dev-panel.visible {
             display: block;
         }
 
+        .dev-panel h3 {
+            color: #4ade80;
+            margin-bottom: 15px;
+        }
+
         .dev-btn {
             background: #4ade80;
             color: #1f2937;
             border: none;
-            padding: 8px 12px;
+            padding: 10px;
             border-radius: 6px;
             cursor: pointer;
-            font-size: 0.8rem;
-            margin-top: 5px;
+            font-size: 0.85rem;
+            margin-top: 8px;
             width: 100%;
+            font-weight: bold;
+            transition: all 0.2s;
+        }
+
+        .dev-btn:hover {
+            background: #22c55e;
+            transform: translateY(-1px);
         }
 
         .chat-container {
@@ -477,7 +495,7 @@
             </div>
             <div class="user-info">
                 <span id="userBadge" class="user-badge"></span>
-                <span id="devBadge" class="dev-badge hidden">DEV</span>
+                <span id="devBadge" class="dev-badge">DEV</span>
                 <button class="logout-btn" onclick="logout()">Cerrar Sesión</button>
             </div>
         </div>
@@ -498,11 +516,13 @@
                     <option value="complete">🔍 Completo</option>
                 </select>
 
+                <!-- Panel de Desarrollador - Siempre en DOM, controlado por JS -->
                 <div id="devPanel" class="dev-panel">
                     <h3>🔧 Dev Tools</h3>
-                    <button class="dev-btn" onclick="trainNeural()">Entrenar Red Neuronal</button>
-                    <button class="dev-btn" onclick="learnNow()">Aprender Ahora</button>
-                    <button class="dev-btn" onclick="viewStats()">Ver Stats Detalladas</button>
+                    <button class="dev-btn" onclick="trainNeural()">🧠 Entrenar Red Neuronal</button>
+                    <button class="dev-btn" onclick="learnNow()">📚 Aprender Ahora</button>
+                    <button class="dev-btn" onclick="viewStats()">📊 Ver Stats Detalladas</button>
+                    <button class="dev-btn" onclick="viewMemories()">🧠 Ver Memorias</button>
                 </div>
             </div>
 
@@ -702,9 +722,16 @@
         function updateUserInfo() {
             if (currentUser) {
                 document.getElementById('userBadge').textContent = currentUser.username;
-                if (currentUser.is_developer) {
-                    document.getElementById('devBadge').classList.remove('hidden');
+
+                // Mostrar panel de desarrollador si is_developer es true
+                if (currentUser.is_developer === true) {
+                    document.getElementById('devBadge').classList.add('visible');
                     document.getElementById('devPanel').classList.add('visible');
+                    console.log('✅ Modo desarrollador activado');
+                } else {
+                    document.getElementById('devBadge').classList.remove('visible');
+                    document.getElementById('devPanel').classList.remove('visible');
+                    console.log('❌ Usuario normal (no dev)');
                 }
             }
         }
@@ -815,12 +842,12 @@
             const messageDiv = document.createElement('div');
             messageDiv.className = `message ${sender}`;
 
-            // Formatear texto
+            // Formatear texto - CORREGIDO para no mostrar HTML crudo
             let formattedText = text
                 .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
                 .replace(/\*(.*?)\*/g, '<em>$1</em>')
                 .replace(/`(.*?)`/g, '<code>$1</code>')
-                .replace(/```(.*?)```/gs, '<pre><code>$1</code></pre>')
+                .replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>')
                 .replace(/\n/g, '<br>');
 
             messageDiv.innerHTML = formattedText;
@@ -883,9 +910,23 @@
                 });
                 const data = await response.json();
                 console.log('Stats:', data);
-                alert(`Memorias: ${data.general?.total_memories || 0}\nConversaciones: ${data.general?.total_conversations || 0}\nUsuarios: ${data.general?.total_users || 0}`);
+                alert(`📊 Stats Detalladas:\n\nMemorias: ${data.general?.total_memories || 0}\nConversaciones: ${data.general?.total_conversations || 0}\nUsuarios: ${data.general?.total_users || 0}\nSesiones activas: ${data.general?.active_sessions || 0}`);
             } catch (error) {
                 alert('Error obteniendo stats');
+            }
+        }
+
+        async function viewMemories() {
+            try {
+                const response = await fetch('/api/dev/memories/all?page=1&per_page=10', {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                const data = await response.json();
+                console.log('Memories:', data);
+                const memList = data.memories?.map(m => `- ${m.topic}: ${m.content?.substring(0, 50)}...`).join('\n') || 'No hay memorias';
+                alert(`🧠 Memorias (página 1 de ${data.pages}):\n\n${memList}`);
+            } catch (error) {
+                alert('Error obteniendo memorias');
             }
         }
 
@@ -893,7 +934,8 @@
         const savedUser = localStorage.getItem('cic_ia_user');
         if (savedUser) {
             currentUser = JSON.parse(savedUser);
-            updateUserInfo();
+            // No llamamos updateUserInfo aquí porque el DOM no está listo
+            // Se llamará en verifyToken o después de login
         }
     </script>
 </body>
