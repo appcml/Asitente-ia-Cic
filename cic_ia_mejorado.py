@@ -803,6 +803,46 @@ def verify_token_endpoint():
 
 # ========== RUTAS PROTEGIDAS ==========
 
+
+# ========== ENDPOINT TEMPORAL PARA CREAR USUARIO DEV (ELIMINAR DESPUÉS) ==========
+
+@app.route('/api/setup/create-dev', methods=['GET'])
+def create_dev_user():
+    """Endpoint temporal para crear usuario desarrollador - ELIMINAR DESPUÉS DE USAR"""
+    try:
+        # Verificar si ya existe un dev
+        existing = User.query.filter_by(is_developer=True).first()
+        if existing:
+            return jsonify({
+                'message': 'Ya existe un usuario desarrollador',
+                'username': existing.username,
+                'warning': 'Este endpoint se autodestruirá después de 1 uso'
+            })
+
+        # Crear usuario dev
+        dev = User(
+            username='desarrollador',
+            email='dev@cic-ia.local',
+            is_developer=True,
+            is_active=True
+        )
+        dev.set_password('cicia2024')
+        db.session.add(dev)
+        db.session.commit()
+
+        return jsonify({
+            'success': True,
+            'message': 'Usuario desarrollador creado',
+            'credentials': {
+                'username': 'desarrollador',
+                'password': 'cicia2024'
+            },
+            'warning': 'ELIMINA ESTE ENDPOINT DESPUÉS DE USAR - LÍNEA ~600'
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/api/chat', methods=['POST'])
 @token_required
 def chat_auth(current_user):
