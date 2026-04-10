@@ -38,35 +38,47 @@
             font-weight: bold;
         }
 
-        .logo-icon {
-            font-size: 2rem;
-        }
-
-        .status {
+        .user-info {
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 15px;
             color: white;
+        }
+
+        .user-badge {
+            background: rgba(255, 255, 255, 0.2);
+            padding: 5px 15px;
+            border-radius: 20px;
             font-size: 0.9rem;
         }
 
-        .status-dot {
-            width: 10px;
-            height: 10px;
+        .dev-badge {
             background: #4ade80;
-            border-radius: 50%;
-            animation: pulse 2s infinite;
+            color: #1f2937;
+            padding: 5px 10px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: bold;
         }
 
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.5; }
+        .logout-btn {
+            background: rgba(255, 255, 255, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .logout-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
         }
 
         .container {
             flex: 1;
             display: flex;
-            max-width: 1200px;
+            max-width: 1400px;
             width: 100%;
             margin: 0 auto;
             padding: 20px;
@@ -74,7 +86,7 @@
         }
 
         .sidebar {
-            width: 250px;
+            width: 280px;
             background: rgba(255, 255, 255, 0.1);
             backdrop-filter: blur(10px);
             border-radius: 15px;
@@ -103,6 +115,9 @@
             transition: all 0.3s;
             text-align: left;
             font-size: 0.9rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
         }
 
         .module-btn:hover {
@@ -115,6 +130,30 @@
             border-color: #4ade80;
         }
 
+        .dev-panel {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 10px;
+            padding: 15px;
+            margin-top: 20px;
+            display: none;
+        }
+
+        .dev-panel.visible {
+            display: block;
+        }
+
+        .dev-btn {
+            background: #4ade80;
+            color: #1f2937;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            margin-top: 5px;
+            width: 100%;
+        }
+
         .chat-container {
             flex: 1;
             background: rgba(255, 255, 255, 0.95);
@@ -125,6 +164,22 @@
             box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
         }
 
+        .stats-bar {
+            display: flex;
+            gap: 20px;
+            padding: 10px 20px;
+            background: rgba(102, 126, 234, 0.1);
+            border-bottom: 1px solid #e5e7eb;
+            font-size: 0.85rem;
+            color: #6b7280;
+        }
+
+        .stat-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
         .chat-messages {
             flex: 1;
             overflow-y: auto;
@@ -132,6 +187,7 @@
             display: flex;
             flex-direction: column;
             gap: 15px;
+            scroll-behavior: smooth;
         }
 
         .message {
@@ -140,6 +196,7 @@
             border-radius: 15px;
             line-height: 1.5;
             animation: fadeIn 0.3s ease;
+            word-wrap: break-word;
         }
 
         @keyframes fadeIn {
@@ -161,12 +218,8 @@
             border-bottom-left-radius: 5px;
         }
 
-        .message.bot code {
-            background: #e5e7eb;
-            padding: 2px 6px;
-            border-radius: 4px;
-            font-family: 'Courier New', monospace;
-            font-size: 0.9em;
+        .message.bot strong {
+            color: #667eea;
         }
 
         .message.bot pre {
@@ -176,6 +229,15 @@
             border-radius: 8px;
             overflow-x: auto;
             margin: 10px 0;
+            font-family: 'Courier New', monospace;
+        }
+
+        .message.bot code {
+            background: #e5e7eb;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
         }
 
         .input-area {
@@ -211,7 +273,7 @@
             transition: transform 0.2s, box-shadow 0.2s;
         }
 
-        .input-area button:hover {
+        .input-area button:hover:not(:disabled) {
             transform: translateY(-2px);
             box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
         }
@@ -219,7 +281,6 @@
         .input-area button:disabled {
             opacity: 0.6;
             cursor: not-allowed;
-            transform: none;
         }
 
         .typing-indicator {
@@ -248,19 +309,110 @@
             margin-bottom: 10px;
         }
 
-        .stats-bar {
+        /* Login Modal */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
             display: flex;
-            gap: 20px;
-            padding: 10px 20px;
-            background: rgba(255, 255, 255, 0.1);
-            color: white;
-            font-size: 0.85rem;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            backdrop-filter: blur(5px);
         }
 
-        .stat-item {
-            display: flex;
-            align-items: center;
-            gap: 5px;
+        .modal {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            width: 90%;
+            max-width: 400px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        }
+
+        .modal h2 {
+            text-align: center;
+            color: #1f2937;
+            margin-bottom: 30px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #4b5563;
+            font-weight: 500;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e5e7eb;
+            border-radius: 10px;
+            font-size: 1rem;
+            transition: border-color 0.3s;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .btn-primary {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-secondary {
+            width: 100%;
+            padding: 14px;
+            background: transparent;
+            color: #667eea;
+            border: 2px solid #667eea;
+            border-radius: 10px;
+            font-size: 1rem;
+            cursor: pointer;
+            margin-top: 10px;
+            transition: all 0.3s;
+        }
+
+        .btn-secondary:hover {
+            background: #667eea;
+            color: white;
+        }
+
+        .error-message {
+            color: #ef4444;
+            font-size: 0.9rem;
+            margin-top: 10px;
+            text-align: center;
+            display: none;
+        }
+
+        .error-message.show {
+            display: block;
+        }
+
+        .hidden {
+            display: none !important;
         }
 
         @media (max-width: 768px) {
@@ -269,91 +421,300 @@
             }
             .sidebar {
                 width: 100%;
-                flex-direction: row;
-                overflow-x: auto;
+                order: 2;
             }
-            .module-btn {
-                white-space: nowrap;
+            .chat-container {
+                order: 1;
             }
         }
     </style>
+<base target="_blank">
 </head>
 <body>
-    <div class="header">
-        <div class="logo">
-            <span class="logo-icon">🤖</span>
-            <span>Cic_IA</span>
-        </div>
-        <div class="status">
-            <span class="status-dot"></span>
-            <span>Online</span>
+    <!-- Login Modal -->
+    <div id="loginModal" class="modal-overlay">
+        <div class="modal">
+            <h2>🤖 Cic_IA</h2>
+            <div id="loginForm">
+                <div class="form-group">
+                    <label>Usuario</label>
+                    <input type="text" id="loginUsername" placeholder="Tu usuario">
+                </div>
+                <div class="form-group">
+                    <label>Contraseña</label>
+                    <input type="password" id="loginPassword" placeholder="Tu contraseña">
+                </div>
+                <button class="btn-primary" onclick="login()">Iniciar Sesión</button>
+                <button class="btn-secondary" onclick="showRegister()">Crear Cuenta</button>
+                <div id="loginError" class="error-message"></div>
+            </div>
+            <div id="registerForm" class="hidden">
+                <div class="form-group">
+                    <label>Usuario</label>
+                    <input type="text" id="regUsername" placeholder="Elige un usuario">
+                </div>
+                <div class="form-group">
+                    <label>Email</label>
+                    <input type="email" id="regEmail" placeholder="tu@email.com">
+                </div>
+                <div class="form-group">
+                    <label>Contraseña</label>
+                    <input type="password" id="regPassword" placeholder="Mínimo 6 caracteres">
+                </div>
+                <button class="btn-primary" onclick="register()">Registrarse</button>
+                <button class="btn-secondary" onclick="showLogin()">Ya tengo cuenta</button>
+                <div id="registerError" class="error-message"></div>
+            </div>
         </div>
     </div>
 
-    <div class="container">
-        <div class="sidebar">
-            <h3>🧩 Módulos</h3>
-            <button class="module-btn" onclick="setMode('chat')">💬 Chat General</button>
-            <button class="module-btn" onclick="setMode('data')">📊 Análisis de Datos</button>
-            <button class="module-btn" onclick="setMode('image')">🎨 Generar Imagen</button>
-            <button class="module-btn" onclick="setMode('code')">💻 Asistente de Código</button>
-            <button class="module-btn" onclick="setMode('history')">📜 Historial</button>
-            
-            <h3 style="margin-top: 20px;">⚡ Modo</h3>
-            <select id="modeSelect" style="padding: 8px; border-radius: 5px; border: none; background: rgba(255,255,255,0.2); color: white;">
-                <option value="balanced">⚖️ Balanceado</option>
-                <option value="fast">⚡ Rápido</option>
-                <option value="complete">🔍 Completo</option>
-            </select>
+    <!-- Main App -->
+    <div id="mainApp" class="hidden">
+        <div class="header">
+            <div class="logo">
+                <span>🤖</span>
+                <span>Cic_IA</span>
+            </div>
+            <div class="user-info">
+                <span id="userBadge" class="user-badge"></span>
+                <span id="devBadge" class="dev-badge hidden">DEV</span>
+                <button class="logout-btn" onclick="logout()">Cerrar Sesión</button>
+            </div>
         </div>
 
-        <div class="chat-container">
-            <div class="stats-bar" id="statsBar">
-                <div class="stat-item">📚 <span id="memoriesCount">-</span> memorias</div>
-                <div class="stat-item">💬 <span id="conversationsCount">-</span> conversaciones</div>
-                <div class="stat-item">🧠 Red Neuronal: <span id="neuralStatus">-</span></div>
-            </div>
-            
-            <div class="chat-messages" id="chatMessages">
-                <div class="welcome-message">
-                    <h2>¡Bienvenido a Cic_IA!</h2>
-                    <p>Soy tu asistente inteligente modular con capacidades de:</p>
-                    <br>
-                    <p>📊 Análisis de datos (CSV, Excel, JSON)</p>
-                    <p>🎨 Generación de imágenes</p>
-                    <p>💻 Asistencia de programación</p>
-                    <p>🧠 Aprendizaje automático</p>
-                    <br>
-                    <p><strong>Empieza escribiendo un mensaje...</strong></p>
+        <div class="container">
+            <div class="sidebar">
+                <h3>🧩 Módulos</h3>
+                <button class="module-btn active" onclick="setMode('chat')">💬 Chat General</button>
+                <button class="module-btn" onclick="setMode('data')">📊 Análisis de Datos</button>
+                <button class="module-btn" onclick="setMode('image')">🎨 Generar Imagen</button>
+                <button class="module-btn" onclick="setMode('code')">💻 Asistente de Código</button>
+                <button class="module-btn" onclick="setMode('history')">📜 Historial</button>
+
+                <h3 style="margin-top: 20px;">⚡ Modo Respuesta</h3>
+                <select id="modeSelect" style="width: 100%; padding: 10px; border-radius: 8px; border: none; background: rgba(255,255,255,0.2); color: white;">
+                    <option value="balanced">⚖️ Balanceado</option>
+                    <option value="fast">⚡ Rápido</option>
+                    <option value="complete">🔍 Completo</option>
+                </select>
+
+                <div id="devPanel" class="dev-panel">
+                    <h3>🔧 Dev Tools</h3>
+                    <button class="dev-btn" onclick="trainNeural()">Entrenar Red Neuronal</button>
+                    <button class="dev-btn" onclick="learnNow()">Aprender Ahora</button>
+                    <button class="dev-btn" onclick="viewStats()">Ver Stats Detalladas</button>
                 </div>
             </div>
-            
-            <div class="typing-indicator" id="typingIndicator">
-                Cic_IA está escribiendo...
-            </div>
-            
-            <div class="input-area">
-                <input 
-                    type="text" 
-                    id="messageInput" 
-                    placeholder="Escribe tu mensaje... (Ej: 'analiza este CSV' o 'genera una imagen de...')" 
-                    onkeypress="handleKeyPress(event)"
-                >
-                <button onclick="sendMessage()" id="sendBtn">Enviar</button>
+
+            <div class="chat-container">
+                <div class="stats-bar">
+                    <div class="stat-item">📚 <span id="memoriesCount">-</span> memorias</div>
+                    <div class="stat-item">💬 <span id="conversationsCount">-</span> conversaciones</div>
+                    <div class="stat-item">🧠 <span id="neuralStatus">-</span></div>
+                </div>
+
+                <div class="chat-messages" id="chatMessages">
+                    <div class="welcome-message">
+                        <h2>¡Bienvenido a Cic_IA!</h2>
+                        <p>Soy tu asistente inteligente modular con capacidades de:</p>
+                        <br>
+                        <p>📊 Análisis de datos (CSV, Excel, JSON)</p>
+                        <p>🎨 Generación de imágenes</p>
+                        <p>💻 Asistencia de programación</p>
+                        <p>🧠 Aprendizaje automático</p>
+                        <br>
+                        <p><strong>Empieza escribiendo un mensaje...</strong></p>
+                    </div>
+                </div>
+
+                <div class="typing-indicator" id="typingIndicator">
+                    Cic_IA está escribiendo...
+                </div>
+
+                <div class="input-area">
+                    <input 
+                        type="text" 
+                        id="messageInput" 
+                        placeholder="Escribe tu mensaje..." 
+                        onkeypress="handleKeyPress(event)"
+                    >
+                    <button onclick="sendMessage()" id="sendBtn">Enviar</button>
+                </div>
             </div>
         </div>
     </div>
 
     <script>
+        // Estado global
+        let currentUser = null;
+        let authToken = localStorage.getItem('cic_ia_token');
         let currentMode = 'balanced';
         let isWaiting = false;
 
-        // Cargar estadísticas al inicio
+        // Verificar token al cargar
+        document.addEventListener('DOMContentLoaded', async () => {
+            if (authToken) {
+                const valid = await verifyToken();
+                if (valid) {
+                    showMainApp();
+                    loadStats();
+                } else {
+                    showLoginModal();
+                }
+            } else {
+                showLoginModal();
+            }
+        });
+
+        // Funciones de UI
+        function showLoginModal() {
+            document.getElementById('loginModal').classList.remove('hidden');
+            document.getElementById('mainApp').classList.add('hidden');
+        }
+
+        function showMainApp() {
+            document.getElementById('loginModal').classList.add('hidden');
+            document.getElementById('mainApp').classList.remove('hidden');
+        }
+
+        function showRegister() {
+            document.getElementById('loginForm').classList.add('hidden');
+            document.getElementById('registerForm').classList.remove('hidden');
+        }
+
+        function showLogin() {
+            document.getElementById('registerForm').classList.add('hidden');
+            document.getElementById('loginForm').classList.remove('hidden');
+        }
+
+        // Autenticación
+        async function login() {
+            const username = document.getElementById('loginUsername').value.trim();
+            const password = document.getElementById('loginPassword').value;
+            const errorDiv = document.getElementById('loginError');
+
+            if (!username || !password) {
+                errorDiv.textContent = 'Usuario y contraseña requeridos';
+                errorDiv.classList.add('show');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    authToken = data.token;
+                    currentUser = data.user;
+                    localStorage.setItem('cic_ia_token', authToken);
+                    localStorage.setItem('cic_ia_user', JSON.stringify(currentUser));
+                    showMainApp();
+                    updateUserInfo();
+                    loadStats();
+                } else {
+                    errorDiv.textContent = data.error || 'Error al iniciar sesión';
+                    errorDiv.classList.add('show');
+                }
+            } catch (error) {
+                errorDiv.textContent = 'Error de conexión';
+                errorDiv.classList.add('show');
+            }
+        }
+
+        async function register() {
+            const username = document.getElementById('regUsername').value.trim();
+            const email = document.getElementById('regEmail').value.trim();
+            const password = document.getElementById('regPassword').value;
+            const errorDiv = document.getElementById('registerError');
+
+            if (!username || !password) {
+                errorDiv.textContent = 'Usuario y contraseña requeridos';
+                errorDiv.classList.add('show');
+                return;
+            }
+
+            if (password.length < 6) {
+                errorDiv.textContent = 'La contraseña debe tener al menos 6 caracteres';
+                errorDiv.classList.add('show');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/auth/register', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, email, password })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    authToken = data.token;
+                    currentUser = data.user;
+                    localStorage.setItem('cic_ia_token', authToken);
+                    localStorage.setItem('cic_ia_user', JSON.stringify(currentUser));
+                    showMainApp();
+                    updateUserInfo();
+                    loadStats();
+                } else {
+                    errorDiv.textContent = data.error || 'Error al registrarse';
+                    errorDiv.classList.add('show');
+                }
+            } catch (error) {
+                errorDiv.textContent = 'Error de conexión';
+                errorDiv.classList.add('show');
+            }
+        }
+
+        async function verifyToken() {
+            try {
+                const response = await fetch('/api/auth/verify', {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    currentUser = data.user;
+                    localStorage.setItem('cic_ia_user', JSON.stringify(currentUser));
+                    return true;
+                }
+                return false;
+            } catch (error) {
+                return false;
+            }
+        }
+
+        function logout() {
+            localStorage.removeItem('cic_ia_token');
+            localStorage.removeItem('cic_ia_user');
+            authToken = null;
+            currentUser = null;
+            showLoginModal();
+            document.getElementById('loginUsername').value = '';
+            document.getElementById('loginPassword').value = '';
+        }
+
+        function updateUserInfo() {
+            if (currentUser) {
+                document.getElementById('userBadge').textContent = currentUser.username;
+                if (currentUser.is_developer) {
+                    document.getElementById('devBadge').classList.remove('hidden');
+                    document.getElementById('devPanel').classList.add('visible');
+                }
+            }
+        }
+
+        // Chat functions
         async function loadStats() {
             try {
                 const response = await fetch('/api/status');
                 const data = await response.json();
-                
+
                 document.getElementById('memoriesCount').textContent = data.total_memories || 0;
                 document.getElementById('conversationsCount').textContent = data.total_conversations || 0;
                 document.getElementById('neuralStatus').textContent = 
@@ -363,7 +724,6 @@
             }
         }
 
-        // Cambiar modo
         function setMode(mode) {
             const input = document.getElementById('messageInput');
             const placeholders = {
@@ -374,56 +734,50 @@
                 'history': 'Busca en tu historial: encuentra conversaciones sobre...'
             };
             input.placeholder = placeholders[mode] || placeholders['chat'];
-            
-            // Actualizar botones activos
+
             document.querySelectorAll('.module-btn').forEach(btn => {
                 btn.classList.remove('active');
             });
             event.target.classList.add('active');
         }
 
-        // Cambiar modo de respuesta
         document.getElementById('modeSelect').addEventListener('change', (e) => {
             currentMode = e.target.value;
         });
 
-        // Enviar mensaje
         async function sendMessage() {
             const input = document.getElementById('messageInput');
             const message = input.value.trim();
-            
+
             if (!message || isWaiting) return;
-            
-            // Agregar mensaje del usuario
+
             addMessage(message, 'user');
             input.value = '';
-            
-            // Mostrar indicador de escritura
+
             showTyping(true);
             isWaiting = true;
             document.getElementById('sendBtn').disabled = true;
-            
+
             try {
                 const response = await fetch('/api/chat', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
                     },
                     body: JSON.stringify({
                         message: message,
-                        mode: currentMode,
-                        user_id: 1
+                        mode: currentMode
                     })
                 });
-                
+
                 const data = await response.json();
-                
+
                 if (data.error) {
                     addMessage('❌ Error: ' + data.error, 'bot');
                 } else {
                     let responseText = data.response;
-                    
-                    // Agregar info de módulo si se usó
+
                     if (data.module_used) {
                         const moduleIcons = {
                             'data_analysis': '📊',
@@ -432,17 +786,14 @@
                             'chat_history': '📜',
                             'file_manager': '📁'
                         };
-                        responseText = `${moduleIcons[data.module_used] || '🧩'} **Modo ${data.module_used}**\\n\\n${responseText}`;
+                        responseText = `${moduleIcons[data.module_used] || '🧩'} **Modo ${data.module_used}**\n\n${responseText}`;
                     }
-                    
-                    // Agregar info de fuentes si existe
+
                     if (data.sources_used && data.sources_used.length > 0) {
-                        responseText += `\\n\\n---\\n*Fuentes: ${data.sources_used.join(', ')}*`;
+                        responseText += `\n\n---\n*Fuentes: ${data.sources_used.join(', ')}*`;
                     }
-                    
+
                     addMessage(responseText, 'bot');
-                    
-                    // Actualizar stats
                     loadStats();
                 }
             } catch (error) {
@@ -455,46 +806,95 @@
             }
         }
 
-        // Agregar mensaje al chat
         function addMessage(text, sender) {
             const container = document.getElementById('chatMessages');
-            
-            // Remover mensaje de bienvenida si existe
+
             const welcome = container.querySelector('.welcome-message');
             if (welcome) welcome.remove();
-            
+
             const messageDiv = document.createElement('div');
             messageDiv.className = `message ${sender}`;
-            
-            // Convertir markdown básico
+
+            // Formatear texto
             let formattedText = text
-                .replace(/\\*\\*(.*?)\\*\\*/g, '<strong>$1</strong>')
-                .replace(/\\*(.*?)\\*/g, '<em>$1</em>')
+                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                .replace(/\*(.*?)\*/g, '<em>$1</em>')
                 .replace(/`(.*?)`/g, '<code>$1</code>')
                 .replace(/```(.*?)```/gs, '<pre><code>$1</code></pre>')
-                .replace(/\\n/g, '<br>');
-            
+                .replace(/\n/g, '<br>');
+
             messageDiv.innerHTML = formattedText;
             container.appendChild(messageDiv);
+
+            // Auto-scroll
             container.scrollTop = container.scrollHeight;
         }
 
-        // Mostrar/ocultar indicador de escritura
         function showTyping(show) {
             document.getElementById('typingIndicator').classList.toggle('show', show);
+            if (show) {
+                const container = document.getElementById('chatMessages');
+                container.scrollTop = container.scrollHeight;
+            }
         }
 
-        // Manejar tecla Enter
         function handleKeyPress(event) {
             if (event.key === 'Enter') {
                 sendMessage();
             }
         }
 
-        // Cargar stats al iniciar
-        loadStats();
-        // Actualizar stats cada 30 segundos
-        setInterval(loadStats, 30000);
+        // Dev Tools
+        async function trainNeural() {
+            try {
+                const response = await fetch('/api/dev/neural/train', {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                const data = await response.json();
+                alert(data.message || data.error);
+            } catch (error) {
+                alert('Error entrenando red neuronal');
+            }
+        }
+
+        async function learnNow() {
+            const topic = prompt('¿Sobre qué tema quieres que aprenda? (deja vacío para auto)');
+            try {
+                const response = await fetch('/api/evolution/learn-now', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify({ topic: topic || null })
+                });
+                const data = await response.json();
+                alert(data.message || data.error);
+            } catch (error) {
+                alert('Error iniciando aprendizaje');
+            }
+        }
+
+        async function viewStats() {
+            try {
+                const response = await fetch('/api/dev/stats/detailed', {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                const data = await response.json();
+                console.log('Stats:', data);
+                alert(`Memorias: ${data.general?.total_memories || 0}\nConversaciones: ${data.general?.total_conversations || 0}\nUsuarios: ${data.general?.total_users || 0}`);
+            } catch (error) {
+                alert('Error obteniendo stats');
+            }
+        }
+
+        // Actualizar info del usuario si existe en localStorage
+        const savedUser = localStorage.getItem('cic_ia_user');
+        if (savedUser) {
+            currentUser = JSON.parse(savedUser);
+            updateUserInfo();
+        }
     </script>
 </body>
 </html>
