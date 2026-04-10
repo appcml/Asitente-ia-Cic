@@ -1,942 +1,969 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cic_IA - Asistente Inteligente</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cic_IA — Panel Desarrollador</title>
+<style>
+  :root {
+    --bg: #0f1117; --bg2: #1a1d2e; --bg3: #242840;
+    --accent: #6c63ff; --accent2: #48dbfb; --green: #1dd1a1;
+    --red: #ff6b6b; --yellow: #ffd93d; --text: #e2e8f0; --text2: #94a3b8;
+    --radius: 10px; --shadow: 0 4px 24px rgba(0,0,0,0.4);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
 
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-        }
+  /* Layout */
+  .layout { display: flex; min-height: 100vh; }
+  .sidebar { width: 240px; background: var(--bg2); padding: 24px 0; display: flex; flex-direction: column; border-right: 1px solid #2d3561; flex-shrink: 0; }
+  .main { flex: 1; padding: 32px; overflow-y: auto; }
 
-        .header {
-            background: rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(10px);
-            padding: 1rem 2rem;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.2);
-        }
+  /* Sidebar */
+  .logo { padding: 0 24px 24px; border-bottom: 1px solid #2d3561; }
+  .logo h1 { font-size: 1.3rem; color: var(--accent); }
+  .logo span { font-size: 0.75rem; color: var(--text2); }
+  .nav { padding: 16px 0; flex: 1; }
+  .nav-item { display: flex; align-items: center; gap: 10px; padding: 12px 24px; cursor: pointer; color: var(--text2); font-size: 0.9rem; transition: all .2s; border-left: 3px solid transparent; }
+  .nav-item:hover, .nav-item.active { color: var(--text); background: rgba(108,99,255,.1); border-left-color: var(--accent); }
+  .nav-item .icon { font-size: 1.1rem; width: 20px; text-align: center; }
 
-        .logo {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            color: white;
-            font-size: 1.5rem;
-            font-weight: bold;
-        }
+  /* Sections */
+  .section { display: none; }
+  .section.active { display: block; }
+  h2 { font-size: 1.5rem; margin-bottom: 8px; }
+  .subtitle { color: var(--text2); margin-bottom: 24px; font-size: 0.9rem; }
 
-        .user-info {
-            display: flex;
-            align-items: center;
-            gap: 15px;
-            color: white;
-        }
+  /* Cards */
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 24px; }
+  .card { background: var(--bg2); border-radius: var(--radius); padding: 20px; border: 1px solid #2d3561; }
+  .card .value { font-size: 2rem; font-weight: 700; color: var(--accent); }
+  .card .label { font-size: 0.8rem; color: var(--text2); margin-top: 4px; }
+  .card.green .value { color: var(--green); }
+  .card.yellow .value { color: var(--yellow); }
+  .card.red .value { color: var(--red); }
 
-        .user-badge {
-            background: rgba(255, 255, 255, 0.2);
-            padding: 5px 15px;
-            border-radius: 20px;
-            font-size: 0.9rem;
-        }
+  /* Alerts */
+  .alert { padding: 12px 16px; border-radius: var(--radius); margin-bottom: 16px; font-size: 0.9rem; }
+  .alert-warn { background: rgba(255,211,61,.1); border: 1px solid var(--yellow); color: var(--yellow); }
+  .alert-ok   { background: rgba(29,209,161,.1); border: 1px solid var(--green);  color: var(--green); }
+  .alert-err  { background: rgba(255,107,107,.1); border: 1px solid var(--red);   color: var(--red); }
+  .alert-info { background: rgba(108,99,255,.1);  border: 1px solid var(--accent); color: var(--accent2); }
 
-        .dev-badge {
-            background: #4ade80;
-            color: #1f2937;
-            padding: 5px 10px;
-            border-radius: 20px;
-            font-size: 0.8rem;
-            font-weight: bold;
-            display: none;
-        }
+  /* Forms */
+  .form-group { margin-bottom: 16px; }
+  label { display: block; font-size: 0.85rem; color: var(--text2); margin-bottom: 6px; }
+  input, textarea, select {
+    width: 100%; padding: 10px 14px; background: var(--bg3);
+    border: 1px solid #2d3561; border-radius: 8px; color: var(--text);
+    font-size: 0.9rem; font-family: inherit; transition: border .2s;
+  }
+  input:focus, textarea:focus, select:focus { outline: none; border-color: var(--accent); }
+  textarea { resize: vertical; min-height: 100px; }
 
-        .dev-badge.visible {
-            display: inline-block;
-        }
+  /* Buttons */
+  .btn { padding: 10px 20px; border-radius: 8px; border: none; cursor: pointer; font-size: 0.9rem; font-weight: 600; transition: all .2s; }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover { background: #5a52e0; }
+  .btn-green { background: var(--green); color: #0f1117; }
+  .btn-green:hover { background: #15b88b; }
+  .btn-red { background: var(--red); color: #fff; }
+  .btn-red:hover { background: #e55a5a; }
+  .btn-outline { background: transparent; border: 1px solid var(--accent); color: var(--accent); }
+  .btn-outline:hover { background: rgba(108,99,255,.1); }
+  .btn-sm { padding: 6px 12px; font-size: 0.8rem; }
+  .btn:disabled { opacity: .5; cursor: not-allowed; }
 
-        .logout-btn {
-            background: rgba(255, 255, 255, 0.2);
-            border: 1px solid rgba(255, 255, 255, 0.3);
-            color: white;
-            padding: 8px 16px;
-            border-radius: 8px;
-            cursor: pointer;
-            transition: all 0.3s;
-        }
+  /* Table */
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+  th { padding: 12px 16px; text-align: left; color: var(--text2); border-bottom: 1px solid #2d3561; font-weight: 600; }
+  td { padding: 12px 16px; border-bottom: 1px solid #1e2340; }
+  tr:hover td { background: rgba(108,99,255,.05); }
 
-        .logout-btn:hover {
-            background: rgba(255, 255, 255, 0.3);
-        }
+  /* Badges */
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: 0.75rem; font-weight: 600; }
+  .badge-green  { background: rgba(29,209,161,.15); color: var(--green); }
+  .badge-yellow { background: rgba(255,211,61,.15);  color: var(--yellow); }
+  .badge-red    { background: rgba(255,107,107,.15); color: var(--red); }
+  .badge-blue   { background: rgba(72,219,251,.15);  color: var(--accent2); }
 
-        .container {
-            flex: 1;
-            display: flex;
-            max-width: 1400px;
-            width: 100%;
-            margin: 0 auto;
-            padding: 20px;
-            gap: 20px;
-        }
+  /* Chat test */
+  .chat-box { background: var(--bg2); border-radius: var(--radius); padding: 20px; min-height: 200px; max-height: 400px; overflow-y: auto; margin-bottom: 12px; border: 1px solid #2d3561; }
+  .msg { margin-bottom: 12px; }
+  .msg.user .bubble { background: var(--accent); color: #fff; border-radius: 12px 12px 4px 12px; padding: 10px 14px; display: inline-block; max-width: 80%; }
+  .msg.bot  .bubble { background: var(--bg3); color: var(--text); border-radius: 12px 12px 12px 4px; padding: 10px 14px; display: inline-block; max-width: 80%; }
+  .msg.user { text-align: right; }
+  .msg-meta { font-size: 0.75rem; color: var(--text2); margin-top: 4px; }
 
-        .sidebar {
-            width: 280px;
-            background: rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(10px);
-            border-radius: 15px;
-            padding: 20px;
-            color: white;
-            display: flex;
-            flex-direction: column;
-            gap: 15px;
-        }
+  /* Code */
+  pre { background: #0d0f1a; border: 1px solid #2d3561; border-radius: 8px; padding: 16px; overflow-x: auto; font-size: 0.85rem; color: var(--accent2); }
 
-        .sidebar h3 {
-            font-size: 0.9rem;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            opacity: 0.8;
-            margin-bottom: 10px;
-        }
+  /* Row actions */
+  .row-actions { display: flex; gap: 8px; }
 
-        .module-btn {
-            background: rgba(255, 255, 255, 0.1);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            color: white;
-            padding: 12px;
-            border-radius: 8px;
-            cursor: pointer;
-            transition: all 0.3s;
-            text-align: left;
-            font-size: 0.9rem;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
+  /* Status dot */
+  .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 6px; }
+  .dot-green  { background: var(--green); box-shadow: 0 0 6px var(--green); }
+  .dot-yellow { background: var(--yellow); }
+  .dot-red    { background: var(--red); }
 
-        .module-btn:hover {
-            background: rgba(255, 255, 255, 0.2);
-            transform: translateX(5px);
-        }
+  /* Responsive */
+  @media (max-width: 768px) {
+    .sidebar { width: 60px; }
+    .logo h1, .logo span, .nav-item span { display: none; }
+    .nav-item { justify-content: center; padding: 14px; }
+    .main { padding: 16px; }
+  }
 
-        .module-btn.active {
-            background: rgba(255, 255, 255, 0.3);
-            border-color: #4ade80;
-        }
+  /* Login screen */
+  .login-screen { display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+  .login-box { background: var(--bg2); padding: 40px; border-radius: 16px; width: 100%; max-width: 400px; border: 1px solid #2d3561; }
+  .login-box h1 { text-align: center; margin-bottom: 8px; }
+  .login-box p  { text-align: center; color: var(--text2); margin-bottom: 28px; font-size: 0.9rem; }
 
-        .dev-panel {
-            background: rgba(0, 0, 0, 0.3);
-            border-radius: 10px;
-            padding: 15px;
-            margin-top: 20px;
-            display: none;
-            border: 1px solid #4ade80;
-        }
-
-        .dev-panel.visible {
-            display: block;
-        }
-
-        .dev-panel h3 {
-            color: #4ade80;
-            margin-bottom: 15px;
-        }
-
-        .dev-btn {
-            background: #4ade80;
-            color: #1f2937;
-            border: none;
-            padding: 10px;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 0.85rem;
-            margin-top: 8px;
-            width: 100%;
-            font-weight: bold;
-            transition: all 0.2s;
-        }
-
-        .dev-btn:hover {
-            background: #22c55e;
-            transform: translateY(-1px);
-        }
-
-        .chat-container {
-            flex: 1;
-            background: rgba(255, 255, 255, 0.95);
-            border-radius: 15px;
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-        }
-
-        .stats-bar {
-            display: flex;
-            gap: 20px;
-            padding: 10px 20px;
-            background: rgba(102, 126, 234, 0.1);
-            border-bottom: 1px solid #e5e7eb;
-            font-size: 0.85rem;
-            color: #6b7280;
-        }
-
-        .stat-item {
-            display: flex;
-            align-items: center;
-            gap: 5px;
-        }
-
-        .chat-messages {
-            flex: 1;
-            overflow-y: auto;
-            padding: 20px;
-            display: flex;
-            flex-direction: column;
-            gap: 15px;
-            scroll-behavior: smooth;
-        }
-
-        .message {
-            max-width: 80%;
-            padding: 12px 16px;
-            border-radius: 15px;
-            line-height: 1.5;
-            animation: fadeIn 0.3s ease;
-            word-wrap: break-word;
-        }
-
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
-        .message.user {
-            align-self: flex-end;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            border-bottom-right-radius: 5px;
-        }
-
-        .message.bot {
-            align-self: flex-start;
-            background: #f3f4f6;
-            color: #1f2937;
-            border-bottom-left-radius: 5px;
-        }
-
-        .message.bot strong {
-            color: #667eea;
-        }
-
-        .message.bot pre {
-            background: #1f2937;
-            color: #e5e7eb;
-            padding: 15px;
-            border-radius: 8px;
-            overflow-x: auto;
-            margin: 10px 0;
-            font-family: 'Courier New', monospace;
-        }
-
-        .message.bot code {
-            background: #e5e7eb;
-            padding: 2px 6px;
-            border-radius: 4px;
-            font-family: 'Courier New', monospace;
-            font-size: 0.9em;
-        }
-
-        .input-area {
-            padding: 20px;
-            background: #f9fafb;
-            border-top: 1px solid #e5e7eb;
-            display: flex;
-            gap: 10px;
-        }
-
-        .input-area input {
-            flex: 1;
-            padding: 12px 20px;
-            border: 2px solid #e5e7eb;
-            border-radius: 25px;
-            font-size: 1rem;
-            outline: none;
-            transition: border-color 0.3s;
-        }
-
-        .input-area input:focus {
-            border-color: #667eea;
-        }
-
-        .input-area button {
-            padding: 12px 24px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            border: none;
-            border-radius: 25px;
-            cursor: pointer;
-            font-size: 1rem;
-            transition: transform 0.2s, box-shadow 0.2s;
-        }
-
-        .input-area button:hover:not(:disabled) {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
-        }
-
-        .input-area button:disabled {
-            opacity: 0.6;
-            cursor: not-allowed;
-        }
-
-        .typing-indicator {
-            display: none;
-            align-self: flex-start;
-            background: #f3f4f6;
-            padding: 12px 16px;
-            border-radius: 15px;
-            border-bottom-left-radius: 5px;
-            color: #6b7280;
-            font-style: italic;
-        }
-
-        .typing-indicator.show {
-            display: block;
-        }
-
-        .welcome-message {
-            text-align: center;
-            color: #6b7280;
-            padding: 40px;
-        }
-
-        .welcome-message h2 {
-            color: #1f2937;
-            margin-bottom: 10px;
-        }
-
-        /* Login Modal */
-        .modal-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(0, 0, 0, 0.7);
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            z-index: 1000;
-            backdrop-filter: blur(5px);
-        }
-
-        .modal {
-            background: white;
-            border-radius: 20px;
-            padding: 40px;
-            width: 90%;
-            max-width: 400px;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-        }
-
-        .modal h2 {
-            text-align: center;
-            color: #1f2937;
-            margin-bottom: 30px;
-        }
-
-        .form-group {
-            margin-bottom: 20px;
-        }
-
-        .form-group label {
-            display: block;
-            margin-bottom: 8px;
-            color: #4b5563;
-            font-weight: 500;
-        }
-
-        .form-group input {
-            width: 100%;
-            padding: 12px;
-            border: 2px solid #e5e7eb;
-            border-radius: 10px;
-            font-size: 1rem;
-            transition: border-color 0.3s;
-        }
-
-        .form-group input:focus {
-            outline: none;
-            border-color: #667eea;
-        }
-
-        .btn-primary {
-            width: 100%;
-            padding: 14px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            border: none;
-            border-radius: 10px;
-            font-size: 1rem;
-            cursor: pointer;
-            transition: transform 0.2s, box-shadow 0.2s;
-        }
-
-        .btn-primary:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
-        }
-
-        .btn-secondary {
-            width: 100%;
-            padding: 14px;
-            background: transparent;
-            color: #667eea;
-            border: 2px solid #667eea;
-            border-radius: 10px;
-            font-size: 1rem;
-            cursor: pointer;
-            margin-top: 10px;
-            transition: all 0.3s;
-        }
-
-        .btn-secondary:hover {
-            background: #667eea;
-            color: white;
-        }
-
-        .error-message {
-            color: #ef4444;
-            font-size: 0.9rem;
-            margin-top: 10px;
-            text-align: center;
-            display: none;
-        }
-
-        .error-message.show {
-            display: block;
-        }
-
-        .hidden {
-            display: none !important;
-        }
-
-        @media (max-width: 768px) {
-            .container {
-                flex-direction: column;
-            }
-            .sidebar {
-                width: 100%;
-                order: 2;
-            }
-            .chat-container {
-                order: 1;
-            }
-        }
-    </style>
-<base target="_blank">
+  .tabs { display: flex; gap: 0; margin-bottom: 20px; border-bottom: 1px solid #2d3561; }
+  .tab { padding: 10px 20px; cursor: pointer; color: var(--text2); font-size: 0.9rem; border-bottom: 2px solid transparent; }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+</style>
 </head>
 <body>
-    <!-- Login Modal -->
-    <div id="loginModal" class="modal-overlay">
-        <div class="modal">
-            <h2>🤖 Cic_IA</h2>
-            <div id="loginForm">
-                <div class="form-group">
-                    <label>Usuario</label>
-                    <input type="text" id="loginUsername" placeholder="Tu usuario">
-                </div>
-                <div class="form-group">
-                    <label>Contraseña</label>
-                    <input type="password" id="loginPassword" placeholder="Tu contraseña">
-                </div>
-                <button class="btn-primary" onclick="login()">Iniciar Sesión</button>
-                <button class="btn-secondary" onclick="showRegister()">Crear Cuenta</button>
-                <div id="loginError" class="error-message"></div>
-            </div>
-            <div id="registerForm" class="hidden">
-                <div class="form-group">
-                    <label>Usuario</label>
-                    <input type="text" id="regUsername" placeholder="Elige un usuario">
-                </div>
-                <div class="form-group">
-                    <label>Email</label>
-                    <input type="email" id="regEmail" placeholder="tu@email.com">
-                </div>
-                <div class="form-group">
-                    <label>Contraseña</label>
-                    <input type="password" id="regPassword" placeholder="Mínimo 6 caracteres">
-                </div>
-                <button class="btn-primary" onclick="register()">Registrarse</button>
-                <button class="btn-secondary" onclick="showLogin()">Ya tengo cuenta</button>
-                <div id="registerError" class="error-message"></div>
-            </div>
-        </div>
+
+<!-- =========================================== -->
+<!-- LOGIN                                        -->
+<!-- =========================================== -->
+<div id="loginScreen" class="login-screen">
+  <div class="login-box">
+    <h1>🤖 Cic_IA</h1>
+    <p>Panel de Desarrollador v8.0</p>
+    <div id="loginAlert"></div>
+    <div class="form-group">
+      <label>Usuario</label>
+      <input type="text" id="loginUser" placeholder="tu_usuario" />
     </div>
-
-    <!-- Main App -->
-    <div id="mainApp" class="hidden">
-        <div class="header">
-            <div class="logo">
-                <span>🤖</span>
-                <span>Cic_IA</span>
-            </div>
-            <div class="user-info">
-                <span id="userBadge" class="user-badge"></span>
-                <span id="devBadge" class="dev-badge">DEV</span>
-                <button class="logout-btn" onclick="logout()">Cerrar Sesión</button>
-            </div>
-        </div>
-
-        <div class="container">
-            <div class="sidebar">
-                <h3>🧩 Módulos</h3>
-                <button class="module-btn active" onclick="setMode('chat')">💬 Chat General</button>
-                <button class="module-btn" onclick="setMode('data')">📊 Análisis de Datos</button>
-                <button class="module-btn" onclick="setMode('image')">🎨 Generar Imagen</button>
-                <button class="module-btn" onclick="setMode('code')">💻 Asistente de Código</button>
-                <button class="module-btn" onclick="setMode('history')">📜 Historial</button>
-
-                <h3 style="margin-top: 20px;">⚡ Modo Respuesta</h3>
-                <select id="modeSelect" style="width: 100%; padding: 10px; border-radius: 8px; border: none; background: rgba(255,255,255,0.2); color: white;">
-                    <option value="balanced">⚖️ Balanceado</option>
-                    <option value="fast">⚡ Rápido</option>
-                    <option value="complete">🔍 Completo</option>
-                </select>
-
-                <!-- Panel de Desarrollador - Siempre en DOM, controlado por JS -->
-                <div id="devPanel" class="dev-panel">
-                    <h3>🔧 Dev Tools</h3>
-                    <button class="dev-btn" onclick="trainNeural()">🧠 Entrenar Red Neuronal</button>
-                    <button class="dev-btn" onclick="learnNow()">📚 Aprender Ahora</button>
-                    <button class="dev-btn" onclick="viewStats()">📊 Ver Stats Detalladas</button>
-                    <button class="dev-btn" onclick="viewMemories()">🧠 Ver Memorias</button>
-                </div>
-            </div>
-
-            <div class="chat-container">
-                <div class="stats-bar">
-                    <div class="stat-item">📚 <span id="memoriesCount">-</span> memorias</div>
-                    <div class="stat-item">💬 <span id="conversationsCount">-</span> conversaciones</div>
-                    <div class="stat-item">🧠 <span id="neuralStatus">-</span></div>
-                </div>
-
-                <div class="chat-messages" id="chatMessages">
-                    <div class="welcome-message">
-                        <h2>¡Bienvenido a Cic_IA!</h2>
-                        <p>Soy tu asistente inteligente modular con capacidades de:</p>
-                        <br>
-                        <p>📊 Análisis de datos (CSV, Excel, JSON)</p>
-                        <p>🎨 Generación de imágenes</p>
-                        <p>💻 Asistencia de programación</p>
-                        <p>🧠 Aprendizaje automático</p>
-                        <br>
-                        <p><strong>Empieza escribiendo un mensaje...</strong></p>
-                    </div>
-                </div>
-
-                <div class="typing-indicator" id="typingIndicator">
-                    Cic_IA está escribiendo...
-                </div>
-
-                <div class="input-area">
-                    <input 
-                        type="text" 
-                        id="messageInput" 
-                        placeholder="Escribe tu mensaje..." 
-                        onkeypress="handleKeyPress(event)"
-                    >
-                    <button onclick="sendMessage()" id="sendBtn">Enviar</button>
-                </div>
-            </div>
-        </div>
+    <div class="form-group">
+      <label>Contraseña</label>
+      <input type="password" id="loginPass" placeholder="••••••••" onkeydown="if(event.key==='Enter') doLogin()" />
     </div>
+    <button class="btn btn-primary" style="width:100%" onclick="doLogin()">Iniciar Sesión</button>
+    <div style="text-align:center;margin-top:16px;font-size:0.8rem;color:var(--text2)">
+      ¿Primer uso? <a href="#" onclick="showSetup()" style="color:var(--accent)">Configurar acceso inicial</a>
+    </div>
+  </div>
+</div>
 
-    <script>
-        // Estado global
-        let currentUser = null;
-        let authToken = localStorage.getItem('cic_ia_token');
-        let currentMode = 'balanced';
-        let isWaiting = false;
+<!-- Setup modal -->
+<div id="setupModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:100;display:none;align-items:center;justify-content:center">
+  <div class="login-box" style="max-width:440px">
+    <h1 style="font-size:1.2rem;margin-bottom:16px">⚙️ Configuración Inicial</h1>
+    <div id="setupAlert"></div>
+    <div class="form-group"><label>Usuario dev</label><input type="text" id="setupUser" /></div>
+    <div class="form-group"><label>Contraseña (mín 8 chars)</label><input type="password" id="setupPass" /></div>
+    <div class="form-group"><label>Setup Key (variable SETUP_KEY en entorno, puede estar vacía)</label><input type="text" id="setupKey" /></div>
+    <div style="display:flex;gap:10px">
+      <button class="btn btn-primary" style="flex:1" onclick="doSetup()">Crear cuenta dev</button>
+      <button class="btn btn-outline" onclick="hideSetup()">Cancelar</button>
+    </div>
+  </div>
+</div>
 
-        // Verificar token al cargar
-        document.addEventListener('DOMContentLoaded', async () => {
-            if (authToken) {
-                const valid = await verifyToken();
-                if (valid) {
-                    showMainApp();
-                    loadStats();
-                } else {
-                    showLoginModal();
-                }
-            } else {
-                showLoginModal();
-            }
-        });
+<!-- =========================================== -->
+<!-- PANEL PRINCIPAL                             -->
+<!-- =========================================== -->
+<div id="panel" class="layout" style="display:none">
 
-        // Funciones de UI
-        function showLoginModal() {
-            document.getElementById('loginModal').classList.remove('hidden');
-            document.getElementById('mainApp').classList.add('hidden');
-        }
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="logo">
+      <h1>🤖 Cic_IA</h1>
+      <span>Panel Dev v8.0</span>
+    </div>
+    <nav class="nav">
+      <div class="nav-item active" onclick="showSection('dashboard')">
+        <span class="icon">📊</span><span>Dashboard</span>
+      </div>
+      <div class="nav-item" onclick="showSection('knowledge')">
+        <span class="icon">🧠</span><span>Conocimiento</span>
+      </div>
+      <div class="nav-item" onclick="showSection('learn')">
+        <span class="icon">📚</span><span>Aprendizaje</span>
+      </div>
+      <div class="nav-item" onclick="showSection('memories')">
+        <span class="icon">💾</span><span>Memorias</span>
+      </div>
+      <div class="nav-item" onclick="showSection('config')">
+        <span class="icon">⚙️</span><span>Configuración</span>
+      </div>
+      <div class="nav-item" onclick="showSection('chat')">
+        <span class="icon">💬</span><span>Test Chat</span>
+      </div>
+      <div class="nav-item" onclick="showSection('users')">
+        <span class="icon">👥</span><span>Usuarios</span>
+      </div>
+    </nav>
+    <div style="padding:16px 24px;border-top:1px solid #2d3561">
+      <div style="font-size:0.8rem;color:var(--text2)" id="sidebarUser">—</div>
+      <button class="btn btn-outline btn-sm" style="margin-top:8px;width:100%" onclick="doLogout()">Salir</button>
+    </div>
+  </aside>
 
-        function showMainApp() {
-            document.getElementById('loginModal').classList.add('hidden');
-            document.getElementById('mainApp').classList.remove('hidden');
-        }
+  <!-- Main content -->
+  <main class="main">
 
-        function showRegister() {
-            document.getElementById('loginForm').classList.add('hidden');
-            document.getElementById('registerForm').classList.remove('hidden');
-        }
+    <!-- DASHBOARD -->
+    <section id="sec-dashboard" class="section active">
+      <h2>Dashboard</h2>
+      <p class="subtitle">Resumen del sistema en tiempo real</p>
+      <div id="dashAlert"></div>
+      <div class="cards" id="dashCards">
+        <div class="card"><div class="value" id="d-memories">—</div><div class="label">Memorias totales</div></div>
+        <div class="card green"><div class="value" id="d-convs">—</div><div class="label">Conversaciones</div></div>
+        <div class="card yellow"><div class="value" id="d-kb">—</div><div class="label">Conocimiento manual</div></div>
+        <div class="card"><div class="value" id="d-today">—</div><div class="label">Mensajes hoy</div></div>
+        <div class="card" id="d-aicard"><div class="value" id="d-ai">—</div><div class="label">Proveedor IA</div></div>
+      </div>
 
-        function showLogin() {
-            document.getElementById('registerForm').classList.add('hidden');
-            document.getElementById('loginForm').classList.remove('hidden');
-        }
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+        <div>
+          <h3 style="margin-bottom:12px;font-size:1rem">Últimas conversaciones</h3>
+          <div id="recentConvs" style="background:var(--bg2);border-radius:var(--radius);border:1px solid #2d3561;overflow:hidden">
+            <div style="padding:16px;color:var(--text2);font-size:0.85rem">Cargando...</div>
+          </div>
+        </div>
+        <div>
+          <h3 style="margin-bottom:12px;font-size:1rem">Actividad (7 días)</h3>
+          <div id="weekActivity" style="background:var(--bg2);border-radius:var(--radius);border:1px solid #2d3561;overflow:hidden">
+            <div style="padding:16px;color:var(--text2);font-size:0.85rem">Cargando...</div>
+          </div>
+        </div>
+      </div>
+    </section>
 
-        // Autenticación
-        async function login() {
-            const username = document.getElementById('loginUsername').value.trim();
-            const password = document.getElementById('loginPassword').value;
-            const errorDiv = document.getElementById('loginError');
+    <!-- CONOCIMIENTO MANUAL -->
+    <section id="sec-knowledge" class="section">
+      <h2>🧠 Conocimiento Manual</h2>
+      <p class="subtitle">Enseña directamente a la IA — este conocimiento se usa en cada respuesta</p>
 
-            if (!username || !password) {
-                errorDiv.textContent = 'Usuario y contraseña requeridos';
-                errorDiv.classList.add('show');
-                return;
-            }
+      <div style="background:var(--bg2);border-radius:var(--radius);padding:24px;border:1px solid #2d3561;margin-bottom:24px">
+        <h3 style="margin-bottom:16px;font-size:1rem">➕ Agregar nuevo conocimiento</h3>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+          <div class="form-group">
+            <label>Título / Tema *</label>
+            <input type="text" id="kb-title" placeholder="Ej: Horarios de atención, Cómo funciona X..." />
+          </div>
+          <div class="form-group">
+            <label>Categoría</label>
+            <input type="text" id="kb-category" placeholder="Ej: empresa, producto, soporte..." />
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Contenido *</label>
+          <textarea id="kb-content" rows="5" placeholder="Escribe aquí la información que quieres que la IA sepa y use en sus respuestas..."></textarea>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr auto;gap:16px;align-items:end">
+          <div class="form-group" style="margin:0">
+            <label>Tags (separados por coma)</label>
+            <input type="text" id="kb-tags" placeholder="tag1, tag2, tag3" />
+          </div>
+          <div style="display:flex;gap:8px">
+            <select id="kb-priority" style="width:auto">
+              <option value="1">Prioridad Normal</option>
+              <option value="2">Prioridad Alta</option>
+              <option value="3">Crítica</option>
+            </select>
+            <button class="btn btn-primary" onclick="addKnowledge()">Guardar</button>
+          </div>
+        </div>
+        <div id="kbAddAlert" style="margin-top:12px"></div>
+      </div>
 
-            try {
-                const response = await fetch('/api/auth/login', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ username, password })
-                });
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+        <h3 style="font-size:1rem">Base de conocimiento</h3>
+        <button class="btn btn-outline btn-sm" onclick="loadKnowledge()">🔄 Actualizar</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Título</th><th>Categoría</th><th>Prioridad</th><th>Preview</th><th>Fecha</th><th>Acciones</th></tr></thead>
+          <tbody id="kbTable"><tr><td colspan="6" style="color:var(--text2);text-align:center;padding:24px">Cargando...</td></tr></tbody>
+        </table>
+      </div>
+      <div id="kbPagination" style="margin-top:16px;display:flex;gap:8px;justify-content:center"></div>
+    </section>
 
-                const data = await response.json();
+    <!-- APRENDIZAJE FORZADO -->
+    <section id="sec-learn" class="section">
+      <h2>📚 Aprendizaje Forzado</h2>
+      <p class="subtitle">Fuerza a la IA a aprender sobre temas específicos desde la web o texto directo</p>
 
-                if (data.success) {
-                    authToken = data.token;
-                    currentUser = data.user;
-                    localStorage.setItem('cic_ia_token', authToken);
-                    localStorage.setItem('cic_ia_user', JSON.stringify(currentUser));
-                    showMainApp();
-                    updateUserInfo();
-                    loadStats();
-                } else {
-                    errorDiv.textContent = data.error || 'Error al iniciar sesión';
-                    errorDiv.classList.add('show');
-                }
-            } catch (error) {
-                errorDiv.textContent = 'Error de conexión';
-                errorDiv.classList.add('show');
-            }
-        }
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
 
-        async function register() {
-            const username = document.getElementById('regUsername').value.trim();
-            const email = document.getElementById('regEmail').value.trim();
-            const password = document.getElementById('regPassword').value;
-            const errorDiv = document.getElementById('registerError');
+        <div style="background:var(--bg2);border-radius:var(--radius);padding:24px;border:1px solid #2d3561">
+          <h3 style="margin-bottom:16px;font-size:1rem">🔍 Aprender desde la Web</h3>
+          <div class="form-group">
+            <label>Tema a buscar</label>
+            <input type="text" id="learn-topic" placeholder="Ej: Python avanzado, Historia de Chile..." />
+          </div>
+          <div class="form-group">
+            <label>Contenido adicional (opcional)</label>
+            <textarea id="learn-content" rows="4" placeholder="Si tienes texto específico que quieres que la IA aprenda, pégalo aquí..."></textarea>
+          </div>
+          <button class="btn btn-primary" style="width:100%" onclick="forceLearning()">🚀 Iniciar aprendizaje</button>
+          <div id="learnAlert" style="margin-top:12px"></div>
+        </div>
 
-            if (!username || !password) {
-                errorDiv.textContent = 'Usuario y contraseña requeridos';
-                errorDiv.classList.add('show');
-                return;
-            }
+        <div style="background:var(--bg2);border-radius:var(--radius);padding:24px;border:1px solid #2d3561">
+          <h3 style="margin-bottom:16px;font-size:1rem">📋 Aprendizaje Masivo</h3>
+          <div class="form-group">
+            <label>Lista de temas (uno por línea)</label>
+            <textarea id="bulk-topics" rows="8" placeholder="Inteligencia artificial&#10;Python programación&#10;Historia de Chile&#10;..."></textarea>
+          </div>
+          <button class="btn btn-green" style="width:100%" onclick="bulkLearning()">⚡ Aprender todos</button>
+          <div id="bulkAlert" style="margin-top:12px"></div>
+        </div>
+      </div>
 
-            if (password.length < 6) {
-                errorDiv.textContent = 'La contraseña debe tener al menos 6 caracteres';
-                errorDiv.classList.add('show');
-                return;
-            }
+      <div style="margin-top:24px;background:var(--bg2);border-radius:var(--radius);padding:24px;border:1px solid #2d3561">
+        <h3 style="margin-bottom:12px;font-size:1rem">📅 Log de aprendizaje reciente</h3>
+        <div id="learningLog" style="color:var(--text2);font-size:0.85rem">Cargando...</div>
+      </div>
+    </section>
 
-            try {
-                const response = await fetch('/api/auth/register', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ username, email, password })
-                });
+    <!-- MEMORIAS -->
+    <section id="sec-memories" class="section">
+      <h2>💾 Memorias</h2>
+      <p class="subtitle">Todo lo que la IA ha aprendido y almacenado</p>
+      <div style="display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap">
+        <input type="text" id="mem-search" placeholder="Buscar por tema..." style="max-width:300px" />
+        <select id="mem-source">
+          <option value="">Todas las fuentes</option>
+          <option value="auto_learning">Auto-aprendizaje</option>
+          <option value="web_search">Búsqueda web</option>
+          <option value="manual_dev">Manual (dev)</option>
+        </select>
+        <button class="btn btn-outline btn-sm" onclick="loadMemories()">🔍 Filtrar</button>
+        <button class="btn btn-red btn-sm" onclick="clearMemories()" style="margin-left:auto">🗑️ Limpiar selección</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Tema</th><th>Fuente</th><th>Score</th><th>Accesos</th><th>Fecha</th><th>Preview</th><th></th></tr></thead>
+          <tbody id="memTable"><tr><td colspan="7" style="color:var(--text2);text-align:center;padding:24px">Cargando...</td></tr></tbody>
+        </table>
+      </div>
+      <div id="memPagination" style="margin-top:16px;display:flex;gap:8px;justify-content:center"></div>
+    </section>
 
-                const data = await response.json();
+    <!-- CONFIGURACIÓN -->
+    <section id="sec-config" class="section">
+      <h2>⚙️ Configuración</h2>
+      <p class="subtitle">Ajusta el comportamiento de la IA en tiempo real</p>
 
-                if (data.success) {
-                    authToken = data.token;
-                    currentUser = data.user;
-                    localStorage.setItem('cic_ia_token', authToken);
-                    localStorage.setItem('cic_ia_user', JSON.stringify(currentUser));
-                    showMainApp();
-                    updateUserInfo();
-                    loadStats();
-                } else {
-                    errorDiv.textContent = data.error || 'Error al registrarse';
-                    errorDiv.classList.add('show');
-                }
-            } catch (error) {
-                errorDiv.textContent = 'Error de conexión';
-                errorDiv.classList.add('show');
-            }
-        }
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
 
-        async function verifyToken() {
-            try {
-                const response = await fetch('/api/auth/verify', {
-                    headers: { 'Authorization': `Bearer ${authToken}` }
-                });
+        <div style="background:var(--bg2);border-radius:var(--radius);padding:24px;border:1px solid #2d3561">
+          <h3 style="margin-bottom:16px;font-size:1rem">🤖 Proveedor de IA</h3>
+          <div class="form-group">
+            <label>Proveedor</label>
+            <select id="cfg-provider">
+              <option value="anthropic">Anthropic (Claude)</option>
+              <option value="openai">OpenAI (GPT)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Modelo</label>
+            <input type="text" id="cfg-model" placeholder="claude-haiku-4-5-20251001" />
+          </div>
+          <div class="form-group">
+            <label>Máximo de tokens por respuesta</label>
+            <input type="number" id="cfg-tokens" min="100" max="4000" value="1000" />
+          </div>
+          <button class="btn btn-primary" onclick="saveAIConfig()">Guardar</button>
+        </div>
 
-                if (response.ok) {
-                    const data = await response.json();
-                    currentUser = data.user;
-                    localStorage.setItem('cic_ia_user', JSON.stringify(currentUser));
-                    return true;
-                }
-                return false;
-            } catch (error) {
-                return false;
-            }
-        }
+        <div style="background:var(--bg2);border-radius:var(--radius);padding:24px;border:1px solid #2d3561">
+          <h3 style="margin-bottom:16px;font-size:1rem">🔄 Auto-aprendizaje</h3>
+          <div class="form-group">
+            <label>Auto-aprendizaje activado</label>
+            <select id="cfg-autolearn">
+              <option value="true">✅ Activado</option>
+              <option value="false">❌ Desactivado</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Intervalo (horas)</label>
+            <input type="number" id="cfg-interval" min="1" max="24" value="2" />
+          </div>
+          <div class="form-group">
+            <label>Búsqueda web en respuestas</label>
+            <select id="cfg-websearch">
+              <option value="true">✅ Activada</option>
+              <option value="false">❌ Desactivada</option>
+            </select>
+          </div>
+          <button class="btn btn-primary" onclick="saveLearningConfig()">Guardar</button>
+        </div>
+      </div>
 
-        function logout() {
-            localStorage.removeItem('cic_ia_token');
-            localStorage.removeItem('cic_ia_user');
-            authToken = null;
-            currentUser = null;
-            showLoginModal();
-            document.getElementById('loginUsername').value = '';
-            document.getElementById('loginPassword').value = '';
-        }
+      <div style="background:var(--bg2);border-radius:var(--radius);padding:24px;border:1px solid #2d3561;margin-top:20px">
+        <h3 style="margin-bottom:16px;font-size:1rem">💬 System Prompt (Personalidad de la IA)</h3>
+        <div class="form-group">
+          <textarea id="cfg-prompt" rows="5" placeholder="Eres Cic_IA..."></textarea>
+        </div>
+        <div style="display:flex;gap:12px">
+          <button class="btn btn-primary" onclick="savePrompt()">Guardar Prompt</button>
+          <button class="btn btn-outline" onclick="resetPrompt()">Restablecer</button>
+        </div>
+        <div id="cfgAlert" style="margin-top:12px"></div>
+      </div>
+    </section>
 
-        function updateUserInfo() {
-            if (currentUser) {
-                document.getElementById('userBadge').textContent = currentUser.username;
+    <!-- TEST CHAT -->
+    <section id="sec-chat" class="section">
+      <h2>💬 Test de Chat</h2>
+      <p class="subtitle">Prueba la IA directamente desde el panel</p>
 
-                // Mostrar panel de desarrollador si is_developer es true
-                if (currentUser.is_developer === true) {
-                    document.getElementById('devBadge').classList.add('visible');
-                    document.getElementById('devPanel').classList.add('visible');
-                    console.log('✅ Modo desarrollador activado');
-                } else {
-                    document.getElementById('devBadge').classList.remove('visible');
-                    document.getElementById('devPanel').classList.remove('visible');
-                    console.log('❌ Usuario normal (no dev)');
-                }
-            }
-        }
+      <div style="background:var(--bg2);border-radius:var(--radius);padding:24px;border:1px solid #2d3561">
+        <div style="display:flex;gap:12px;margin-bottom:16px;align-items:center">
+          <label style="color:var(--text2);font-size:0.85rem;white-space:nowrap">System prompt:</label>
+          <input type="text" id="test-prompt" placeholder="Opcional — usa el configurado por defecto" style="flex:1" />
+          <select id="test-mode">
+            <option value="balanced">Balanceado</option>
+            <option value="fast">Rápido</option>
+            <option value="complete">Completo</option>
+          </select>
+        </div>
+        <div class="chat-box" id="testChat">
+          <div style="text-align:center;color:var(--text2);font-size:0.85rem;padding:40px 0">Escribe un mensaje para probar la IA</div>
+        </div>
+        <div style="display:flex;gap:10px">
+          <input type="text" id="testMsg" placeholder="Escribe un mensaje..." onkeydown="if(event.key==='Enter')sendTestMsg()" style="flex:1" />
+          <button class="btn btn-primary" onclick="sendTestMsg()">Enviar</button>
+          <button class="btn btn-outline" onclick="clearChat()">Limpiar</button>
+        </div>
+        <div id="testInfo" style="margin-top:10px;font-size:0.8rem;color:var(--text2)"></div>
+      </div>
 
-        // Chat functions
-        async function loadStats() {
-            try {
-                const response = await fetch('/api/status');
-                const data = await response.json();
+      <div style="margin-top:20px;background:var(--bg2);border-radius:var(--radius);padding:20px;border:1px solid #2d3561">
+        <h3 style="margin-bottom:12px;font-size:1rem">📡 API Reference</h3>
+        <pre id="apiRef">Cargando configuración...</pre>
+      </div>
+    </section>
 
-                document.getElementById('memoriesCount').textContent = data.total_memories || 0;
-                document.getElementById('conversationsCount').textContent = data.total_conversations || 0;
-                document.getElementById('neuralStatus').textContent = 
-                    data.neural_network?.is_trained ? 'Entrenada ✅' : 'En espera ⏳';
-            } catch (error) {
-                console.error('Error cargando stats:', error);
-            }
-        }
+    <!-- USUARIOS -->
+    <section id="sec-users" class="section">
+      <h2>👥 Usuarios</h2>
+      <p class="subtitle">Gestión de usuarios del sistema</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>ID</th><th>Usuario</th><th>Email</th><th>Rol</th><th>Estado</th><th>Mensajes</th><th>Registro</th><th>Acciones</th></tr></thead>
+          <tbody id="usersTable"><tr><td colspan="8" style="color:var(--text2);text-align:center;padding:24px">Cargando...</td></tr></tbody>
+        </table>
+      </div>
+    </section>
 
-        function setMode(mode) {
-            const input = document.getElementById('messageInput');
-            const placeholders = {
-                'chat': 'Escribe tu mensaje...',
-                'data': 'Sube un archivo y escribe: analiza estos datos...',
-                'image': 'Describe la imagen que quieres generar...',
-                'code': 'Describe el código que necesitas (Python, JS, HTML, etc.)...',
-                'history': 'Busca en tu historial: encuentra conversaciones sobre...'
-            };
-            input.placeholder = placeholders[mode] || placeholders['chat'];
+  </main>
+</div>
 
-            document.querySelectorAll('.module-btn').forEach(btn => {
-                btn.classList.remove('active');
-            });
-            event.target.classList.add('active');
-        }
+<script>
+const API = '';
+let TOKEN = localStorage.getItem('dev_token') || '';
+let currentUser = null;
+let currentPage = { memories: 1, knowledge: 1 };
 
-        document.getElementById('modeSelect').addEventListener('change', (e) => {
-            currentMode = e.target.value;
-        });
+// ============ AUTH ============
 
-        async function sendMessage() {
-            const input = document.getElementById('messageInput');
-            const message = input.value.trim();
+async function doLogin() {
+  const user = document.getElementById('loginUser').value.trim();
+  const pass = document.getElementById('loginPass').value;
+  showAlert('loginAlert', '', '');
+  if (!user || !pass) return showAlert('loginAlert', 'Completa todos los campos', 'err');
 
-            if (!message || isWaiting) return;
+  try {
+    const r = await api('/api/auth/login', 'POST', { username: user, password: pass }, false);
+    if (r.success) {
+      TOKEN = r.token;
+      currentUser = r.user;
+      localStorage.setItem('dev_token', TOKEN);
+      if (!r.user.is_developer) {
+        showAlert('loginAlert', 'Esta cuenta no tiene privilegios de desarrollador', 'err');
+        TOKEN = ''; localStorage.removeItem('dev_token');
+        return;
+      }
+      showPanel();
+    } else {
+      showAlert('loginAlert', r.error || 'Error de login', 'err');
+    }
+  } catch(e) {
+    showAlert('loginAlert', 'Error de conexión: ' + e.message, 'err');
+  }
+}
 
-            addMessage(message, 'user');
-            input.value = '';
+async function doLogout() {
+  try { await api('/api/auth/logout', 'POST'); } catch {}
+  TOKEN = ''; localStorage.removeItem('dev_token');
+  location.reload();
+}
 
-            showTyping(true);
-            isWaiting = true;
-            document.getElementById('sendBtn').disabled = true;
+function showSetup() {
+  document.getElementById('setupModal').style.display = 'flex';
+}
+function hideSetup() {
+  document.getElementById('setupModal').style.display = 'none';
+}
 
-            try {
-                const response = await fetch('/api/chat', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${authToken}`
-                    },
-                    body: JSON.stringify({
-                        message: message,
-                        mode: currentMode
-                    })
-                });
+async function doSetup() {
+  const user = document.getElementById('setupUser').value.trim();
+  const pass = document.getElementById('setupPass').value;
+  const key  = document.getElementById('setupKey').value.trim();
+  showAlert('setupAlert', '', '');
 
-                const data = await response.json();
+  try {
+    const r = await api('/api/dev/setup', 'POST', { username: user, password: pass, setup_key: key }, false);
+    if (r.success) {
+      showAlert('setupAlert', '✅ ' + r.message, 'ok');
+      setTimeout(() => hideSetup(), 2000);
+    } else {
+      showAlert('setupAlert', r.error || 'Error', 'err');
+    }
+  } catch(e) {
+    showAlert('setupAlert', e.message, 'err');
+  }
+}
 
-                if (data.error) {
-                    addMessage('❌ Error: ' + data.error, 'bot');
-                } else {
-                    let responseText = data.response;
+// ============ LAYOUT ============
 
-                    if (data.module_used) {
-                        const moduleIcons = {
-                            'data_analysis': '📊',
-                            'image_generator': '🎨',
-                            'code_assistant': '💻',
-                            'chat_history': '📜',
-                            'file_manager': '📁'
-                        };
-                        responseText = `${moduleIcons[data.module_used] || '🧩'} **Modo ${data.module_used}**\n\n${responseText}`;
-                    }
+function showPanel() {
+  document.getElementById('loginScreen').style.display = 'none';
+  document.getElementById('panel').style.display = 'flex';
+  document.getElementById('sidebarUser').textContent = currentUser?.username || '—';
+  loadDashboard();
+}
 
-                    if (data.sources_used && data.sources_used.length > 0) {
-                        responseText += `\n\n---\n*Fuentes: ${data.sources_used.join(', ')}*`;
-                    }
+function showSection(name) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('sec-' + name).classList.add('active');
+  event.currentTarget.classList.add('active');
 
-                    addMessage(responseText, 'bot');
-                    loadStats();
-                }
-            } catch (error) {
-                addMessage('❌ Error de conexión. Intenta de nuevo.', 'bot');
-                console.error('Error:', error);
-            } finally {
-                showTyping(false);
-                isWaiting = false;
-                document.getElementById('sendBtn').disabled = false;
-            }
-        }
+  // Lazy load
+  if (name === 'knowledge') loadKnowledge();
+  if (name === 'memories')  loadMemories();
+  if (name === 'config')    loadConfig();
+  if (name === 'users')     loadUsers();
+  if (name === 'learn')     loadLearningLog();
+  if (name === 'chat')      loadAPIRef();
+}
 
-        function addMessage(text, sender) {
-            const container = document.getElementById('chatMessages');
+// ============ API HELPER ============
 
-            const welcome = container.querySelector('.welcome-message');
-            if (welcome) welcome.remove();
+async function api(path, method = 'GET', body = null, auth = true) {
+  const headers = { 'Content-Type': 'application/json' };
+  if (auth && TOKEN) headers['Authorization'] = 'Bearer ' + TOKEN;
+  const opts = { method, headers };
+  if (body) opts.body = JSON.stringify(body);
+  const r = await fetch(API + path, opts);
+  const data = await r.json();
+  if (!r.ok && data.error) throw new Error(data.error);
+  return data;
+}
 
-            const messageDiv = document.createElement('div');
-            messageDiv.className = `message ${sender}`;
+function showAlert(id, msg, type) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  if (!msg) { el.innerHTML = ''; return; }
+  const cls = { ok: 'alert-ok', err: 'alert-err', warn: 'alert-warn', info: 'alert-info' }[type] || 'alert-info';
+  el.innerHTML = `<div class="alert ${cls}">${msg}</div>`;
+}
 
-            // Formatear texto - CORREGIDO para no mostrar HTML crudo
-            let formattedText = text
-                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-                .replace(/\*(.*?)\*/g, '<em>$1</em>')
-                .replace(/`(.*?)`/g, '<code>$1</code>')
-                .replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>')
-                .replace(/\n/g, '<br>');
+// ============ DASHBOARD ============
 
-            messageDiv.innerHTML = formattedText;
-            container.appendChild(messageDiv);
+async function loadDashboard() {
+  try {
+    const d = await api('/api/dev/stats');
+    document.getElementById('d-memories').textContent = d.system.total_memories.toLocaleString();
+    document.getElementById('d-convs').textContent    = d.system.total_conversations.toLocaleString();
+    document.getElementById('d-kb').textContent       = d.system.manual_knowledge.toLocaleString();
+    document.getElementById('d-today').textContent    = d.today.conversations;
 
-            // Auto-scroll
-            container.scrollTop = container.scrollHeight;
-        }
+    const hasKey = d.ai_config.has_anthropic || d.ai_config.has_openai;
+    document.getElementById('d-ai').innerHTML = `<span class="dot ${hasKey ? 'dot-green' : 'dot-red'}"></span>${d.ai_config.provider}`;
+    if (!hasKey) showAlert('dashAlert', '⚠️ No hay API Key configurada. La IA usará modo fallback. Configura ANTHROPIC_API_KEY o OPENAI_API_KEY como variable de entorno.', 'warn');
 
-        function showTyping(show) {
-            document.getElementById('typingIndicator').classList.toggle('show', show);
-            if (show) {
-                const container = document.getElementById('chatMessages');
-                container.scrollTop = container.scrollHeight;
-            }
-        }
+    // Recent conversations
+    const rc = document.getElementById('recentConvs');
+    if (d.recent_conversations?.length) {
+      rc.innerHTML = d.recent_conversations.map(c => `
+        <div style="padding:12px 16px;border-bottom:1px solid #1e2340">
+          <div style="font-size:0.85rem;color:var(--text2)">👤 ${esc(c.user.substring(0,80))}</div>
+          <div style="font-size:0.85rem;margin-top:4px">🤖 ${esc(c.bot.substring(0,80))}</div>
+          <div style="font-size:0.75rem;color:var(--text2);margin-top:4px">${new Date(c.time).toLocaleString()} · ${c.tokens} tokens</div>
+        </div>
+      `).join('');
+    } else {
+      rc.innerHTML = '<div style="padding:20px;color:var(--text2);text-align:center;font-size:0.85rem">Sin conversaciones aún</div>';
+    }
 
-        function handleKeyPress(event) {
-            if (event.key === 'Enter') {
-                sendMessage();
-            }
-        }
+    // Week activity
+    const wa = document.getElementById('weekActivity');
+    if (d.week_activity?.length) {
+      wa.innerHTML = `<table style="width:100%"><thead><tr><th>Fecha</th><th>Mensajes</th><th>Aprendido</th></tr></thead><tbody>` +
+        d.week_activity.map(w => `<tr><td>${w.date}</td><td>${w.conversations}</td><td>${w.auto_learned}</td></tr>`).join('') +
+        '</tbody></table>';
+    }
+  } catch(e) {
+    showAlert('dashAlert', 'Error cargando stats: ' + e.message, 'err');
+  }
+}
 
-        // Dev Tools
-        async function trainNeural() {
-            try {
-                const response = await fetch('/api/dev/neural/train', {
-                    method: 'POST',
-                    headers: { 'Authorization': `Bearer ${authToken}` }
-                });
-                const data = await response.json();
-                alert(data.message || data.error);
-            } catch (error) {
-                alert('Error entrenando red neuronal');
-            }
-        }
+// ============ KNOWLEDGE ============
 
-        async function learnNow() {
-            const topic = prompt('¿Sobre qué tema quieres que aprenda? (deja vacío para auto)');
-            try {
-                const response = await fetch('/api/evolution/learn-now', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${authToken}`
-                    },
-                    body: JSON.stringify({ topic: topic || null })
-                });
-                const data = await response.json();
-                alert(data.message || data.error);
-            } catch (error) {
-                alert('Error iniciando aprendizaje');
-            }
-        }
+let kbPage = 1;
+async function loadKnowledge(page = 1) {
+  kbPage = page;
+  try {
+    const d = await api(`/api/dev/knowledge?page=${page}`);
+    const priorityLabel = { 1: 'Normal', 2: '<span class="badge badge-yellow">Alta</span>', 3: '<span class="badge badge-red">Crítica</span>' };
+    document.getElementById('kbTable').innerHTML = d.knowledge.length ? d.knowledge.map(k => `
+      <tr>
+        <td><strong>${esc(k.title)}</strong></td>
+        <td><span class="badge badge-blue">${esc(k.category || '—')}</span></td>
+        <td>${priorityLabel[k.priority] || k.priority}</td>
+        <td style="color:var(--text2);font-size:0.82rem">${esc(k.content)}</td>
+        <td style="font-size:0.8rem;color:var(--text2)">${new Date(k.created).toLocaleDateString()}</td>
+        <td><div class="row-actions">
+          <button class="btn btn-red btn-sm" onclick="deleteKnowledge(${k.id})">🗑️</button>
+        </div></td>
+      </tr>
+    `).join('') : '<tr><td colspan="6" style="text-align:center;color:var(--text2);padding:24px">Sin conocimiento aún. ¡Agrega el primero!</td></tr>';
 
-        async function viewStats() {
-            try {
-                const response = await fetch('/api/dev/stats/detailed', {
-                    headers: { 'Authorization': `Bearer ${authToken}` }
-                });
-                const data = await response.json();
-                console.log('Stats:', data);
-                alert(`📊 Stats Detalladas:\n\nMemorias: ${data.general?.total_memories || 0}\nConversaciones: ${data.general?.total_conversations || 0}\nUsuarios: ${data.general?.total_users || 0}\nSesiones activas: ${data.general?.active_sessions || 0}`);
-            } catch (error) {
-                alert('Error obteniendo stats');
-            }
-        }
+    renderPagination('kbPagination', d.pages, kbPage, loadKnowledge);
+  } catch(e) {
+    document.getElementById('kbTable').innerHTML = `<tr><td colspan="6" style="color:var(--red)">${e.message}</td></tr>`;
+  }
+}
 
-        async function viewMemories() {
-            try {
-                const response = await fetch('/api/dev/memories/all?page=1&per_page=10', {
-                    headers: { 'Authorization': `Bearer ${authToken}` }
-                });
-                const data = await response.json();
-                console.log('Memories:', data);
-                const memList = data.memories?.map(m => `- ${m.topic}: ${m.content?.substring(0, 50)}...`).join('\n') || 'No hay memorias';
-                alert(`🧠 Memorias (página 1 de ${data.pages}):\n\n${memList}`);
-            } catch (error) {
-                alert('Error obteniendo memorias');
-            }
-        }
+async function addKnowledge() {
+  const title    = document.getElementById('kb-title').value.trim();
+  const content  = document.getElementById('kb-content').value.trim();
+  const category = document.getElementById('kb-category').value.trim();
+  const tags     = document.getElementById('kb-tags').value.split(',').map(t => t.trim()).filter(Boolean);
+  const priority = parseInt(document.getElementById('kb-priority').value);
 
-        // Actualizar info del usuario si existe en localStorage
-        const savedUser = localStorage.getItem('cic_ia_user');
-        if (savedUser) {
-            currentUser = JSON.parse(savedUser);
-            // No llamamos updateUserInfo aquí porque el DOM no está listo
-            // Se llamará en verifyToken o después de login
-        }
-    </script>
+  if (!title || !content) return showAlert('kbAddAlert', 'Título y contenido son requeridos', 'err');
+
+  try {
+    showAlert('kbAddAlert', 'Guardando...', 'info');
+    const r = await api('/api/dev/knowledge', 'POST', { title, content, category, tags, priority });
+    showAlert('kbAddAlert', '✅ ' + r.message, 'ok');
+    ['kb-title','kb-content','kb-category','kb-tags'].forEach(id => document.getElementById(id).value = '');
+    loadKnowledge();
+  } catch(e) {
+    showAlert('kbAddAlert', '❌ ' + e.message, 'err');
+  }
+}
+
+async function deleteKnowledge(id) {
+  if (!confirm('¿Desactivar este conocimiento?')) return;
+  try {
+    await api(`/api/dev/knowledge/${id}`, 'DELETE');
+    loadKnowledge(kbPage);
+  } catch(e) { alert(e.message); }
+}
+
+// ============ LEARNING ============
+
+async function forceLearning() {
+  const topic   = document.getElementById('learn-topic').value.trim();
+  const content = document.getElementById('learn-content').value.trim();
+  if (!topic) return showAlert('learnAlert', 'El tema es requerido', 'err');
+
+  try {
+    showAlert('learnAlert', '⏳ Aprendiendo...', 'info');
+    const r = await api('/api/dev/learn', 'POST', { topic, content: content || undefined });
+    showAlert('learnAlert', `✅ Completado — ${r.web_learned} memorias web aprendidas${r.manual_saved ? ' + conocimiento manual guardado' : ''}`, 'ok');
+    loadLearningLog();
+  } catch(e) {
+    showAlert('learnAlert', '❌ ' + e.message, 'err');
+  }
+}
+
+async function bulkLearning() {
+  const text   = document.getElementById('bulk-topics').value.trim();
+  const topics = text.split('\n').map(t => t.trim()).filter(Boolean);
+  if (!topics.length) return showAlert('bulkAlert', 'Agrega al menos un tema', 'err');
+
+  try {
+    showAlert('bulkAlert', `⏳ Procesando ${topics.length} temas...`, 'info');
+    const items = topics.map(t => ({ topic: t }));
+    const r = await api('/api/dev/learn/bulk', 'POST', { items });
+    showAlert('bulkAlert', `✅ Procesados ${r.processed} temas — ${r.total_learned} memorias aprendidas`, 'ok');
+    loadLearningLog();
+  } catch(e) {
+    showAlert('bulkAlert', '❌ ' + e.message, 'err');
+  }
+}
+
+async function loadLearningLog() {
+  try {
+    const d = await api('/api/dev/stats');
+    const el = document.getElementById('learningLog');
+    if (d.week_activity?.length) {
+      el.innerHTML = d.week_activity.map(w =>
+        `<div style="display:flex;gap:16px;padding:8px 0;border-bottom:1px solid #1e2340">
+          <span style="width:100px">${w.date}</span>
+          <span><strong>${w.conversations}</strong> mensajes</span>
+          <span><strong style="color:var(--green)">${w.auto_learned}</strong> aprendidos</span>
+        </div>`
+      ).join('');
+    } else {
+      el.innerHTML = 'Sin actividad reciente';
+    }
+  } catch {}
+}
+
+// ============ MEMORIES ============
+
+let memPage = 1;
+async function loadMemories(page = 1) {
+  memPage = page;
+  const topic  = document.getElementById('mem-search').value.trim();
+  const source = document.getElementById('mem-source').value;
+  let url = `/api/dev/memories?page=${page}`;
+  if (topic)  url += `&topic=${encodeURIComponent(topic)}`;
+  if (source) url += `&source=${source}`;
+
+  try {
+    const d = await api(url);
+    document.getElementById('memTable').innerHTML = d.memories.length ? d.memories.map(m => `
+      <tr>
+        <td style="max-width:150px">${esc((m.topic || '—').substring(0,50))}</td>
+        <td><span class="badge ${m.source === 'manual_dev' ? 'badge-blue' : 'badge-green'}">${m.source}</span></td>
+        <td>${(m.score || 0).toFixed(2)}</td>
+        <td>${m.accesses}</td>
+        <td style="font-size:0.8rem;color:var(--text2)">${new Date(m.created).toLocaleDateString()}</td>
+        <td style="color:var(--text2);font-size:0.82rem;max-width:200px">${esc(m.content)}</td>
+        <td><button class="btn btn-red btn-sm" onclick="deleteMemory(${m.id})">🗑️</button></td>
+      </tr>
+    `).join('') : '<tr><td colspan="7" style="text-align:center;color:var(--text2);padding:24px">Sin memorias</td></tr>';
+    renderPagination('memPagination', d.pages, memPage, loadMemories);
+  } catch(e) {
+    document.getElementById('memTable').innerHTML = `<tr><td colspan="7" style="color:var(--red)">${e.message}</td></tr>`;
+  }
+}
+
+async function deleteMemory(id) {
+  if (!confirm('¿Eliminar esta memoria?')) return;
+  try {
+    await api(`/api/dev/memories/${id}`, 'DELETE');
+    loadMemories(memPage);
+  } catch(e) { alert(e.message); }
+}
+
+async function clearMemories() {
+  const source  = document.getElementById('mem-source').value;
+  const confirm_text = source ? `¿Limpiar memorias de fuente "${source}"?` : '¿Limpiar TODAS las memorias? Esta acción no se puede deshacer.';
+  if (!confirm(confirm_text)) return;
+  try {
+    const r = await api('/api/dev/memories/clear', 'POST', { source: source || undefined, confirm: 'CONFIRMAR' });
+    alert(`✅ Eliminadas ${r.deleted} memorias`);
+    loadMemories(1);
+  } catch(e) { alert(e.message); }
+}
+
+// ============ CONFIG ============
+
+async function loadConfig() {
+  try {
+    const d = await api('/api/dev/config');
+    const c = d.config;
+    const v = key => c[key]?.value || '';
+    document.getElementById('cfg-provider').value   = v('ai_provider');
+    document.getElementById('cfg-model').value      = v('ai_model');
+    document.getElementById('cfg-tokens').value     = v('max_tokens') || '1000';
+    document.getElementById('cfg-autolearn').value  = v('auto_learning_enabled') || 'true';
+    document.getElementById('cfg-interval').value   = v('auto_learning_interval_hours') || '2';
+    document.getElementById('cfg-websearch').value  = v('web_search_enabled') || 'true';
+    document.getElementById('cfg-prompt').value     = v('system_prompt');
+  } catch(e) {
+    showAlert('cfgAlert', 'Error: ' + e.message, 'err');
+  }
+}
+
+async function saveAIConfig() {
+  try {
+    await api('/api/dev/config', 'PUT', { updates: {
+      ai_provider: document.getElementById('cfg-provider').value,
+      ai_model:    document.getElementById('cfg-model').value,
+      max_tokens:  document.getElementById('cfg-tokens').value,
+    }});
+    showAlert('cfgAlert', '✅ Configuración de IA guardada', 'ok');
+  } catch(e) { showAlert('cfgAlert', '❌ ' + e.message, 'err'); }
+}
+
+async function saveLearningConfig() {
+  try {
+    await api('/api/dev/config', 'PUT', { updates: {
+      auto_learning_enabled:        document.getElementById('cfg-autolearn').value,
+      auto_learning_interval_hours: document.getElementById('cfg-interval').value,
+      web_search_enabled:           document.getElementById('cfg-websearch').value,
+    }});
+    showAlert('cfgAlert', '✅ Configuración de aprendizaje guardada', 'ok');
+  } catch(e) { showAlert('cfgAlert', '❌ ' + e.message, 'err'); }
+}
+
+async function savePrompt() {
+  const prompt = document.getElementById('cfg-prompt').value.trim();
+  if (!prompt) return showAlert('cfgAlert', 'El prompt no puede estar vacío', 'err');
+  try {
+    await api('/api/dev/config/prompt', 'PUT', { prompt });
+    showAlert('cfgAlert', '✅ System prompt actualizado', 'ok');
+  } catch(e) { showAlert('cfgAlert', '❌ ' + e.message, 'err'); }
+}
+
+function resetPrompt() {
+  document.getElementById('cfg-prompt').value = 'Eres Cic_IA, un asistente inteligente en español. Responde de forma clara, útil y amigable.';
+}
+
+// ============ TEST CHAT ============
+
+const chatHistory = [];
+
+async function sendTestMsg() {
+  const msg = document.getElementById('testMsg').value.trim();
+  if (!msg) return;
+  document.getElementById('testMsg').value = '';
+
+  const box = document.getElementById('testChat');
+  box.innerHTML += `<div class="msg user"><div class="bubble">${esc(msg)}</div></div>`;
+  box.innerHTML += `<div class="msg bot" id="lastBot"><div class="bubble" style="color:var(--text2)">⏳ Pensando...</div></div>`;
+  box.scrollTop = box.scrollHeight;
+
+  const customPrompt = document.getElementById('test-prompt').value.trim();
+  const mode = document.getElementById('test-mode').value;
+
+  try {
+    let payload = { message: msg };
+    if (customPrompt) payload.system_prompt = customPrompt;
+
+    // Usar endpoint de test si hay prompt personalizado, sino chat normal
+    let r;
+    if (customPrompt) {
+      r = await api('/api/dev/test-ai', 'POST', { message: msg, system_prompt: customPrompt });
+    } else {
+      r = await api('/api/chat', 'POST', { message: msg, mode, history: chatHistory });
+    }
+
+    chatHistory.push({ role: 'user', content: msg });
+    chatHistory.push({ role: 'assistant', content: r.response });
+    if (chatHistory.length > 20) chatHistory.splice(0, 2);
+
+    document.getElementById('lastBot').innerHTML =
+      `<div class="bubble">${esc(r.response).replace(/\n/g,'<br>')}</div>`;
+    document.getElementById('testInfo').textContent =
+      `Provider: ${r.provider || '—'} | Model: ${r.model || '—'} | Tokens: ${r.tokens_used ?? r.tokens ?? 0}`;
+  } catch(e) {
+    document.getElementById('lastBot').innerHTML =
+      `<div class="bubble" style="color:var(--red)">Error: ${esc(e.message)}</div>`;
+  }
+  box.scrollTop = box.scrollHeight;
+}
+
+function clearChat() {
+  chatHistory.length = 0;
+  document.getElementById('testChat').innerHTML = '<div style="text-align:center;color:var(--text2);font-size:0.85rem;padding:40px 0">Chat limpiado</div>';
+  document.getElementById('testInfo').textContent = '';
+}
+
+function loadAPIRef() {
+  document.getElementById('apiRef').textContent = `# Endpoints principales — requieren Authorization: Bearer <TOKEN>
+
+POST /api/chat              — Chat con la IA
+GET  /api/chat/history      — Historial del usuario
+GET  /api/user/stats        — Stats del usuario
+
+# Endpoints desarrollador — requieren cuenta dev
+
+GET  /api/dev/stats                    — Stats completas del sistema
+GET  /api/dev/knowledge                — Listar conocimiento manual
+POST /api/dev/knowledge                — Agregar conocimiento
+PUT  /api/dev/knowledge/:id            — Editar conocimiento
+DEL  /api/dev/knowledge/:id            — Desactivar conocimiento
+POST /api/dev/learn                    — Forzar aprendizaje (topic, content?)
+POST /api/dev/learn/bulk               — Aprendizaje masivo [{topic, content?}]
+GET  /api/dev/config                   — Ver configuración
+PUT  /api/dev/config                   — Actualizar config {updates: {key: val}}
+PUT  /api/dev/config/prompt            — Actualizar system prompt
+GET  /api/dev/memories                 — Listar memorias
+DEL  /api/dev/memories/:id             — Eliminar memoria
+POST /api/dev/memories/clear           — Limpiar memorias {source?, confirm: "CONFIRMAR"}
+POST /api/dev/test-ai                  — Test IA sin guardar {message, system_prompt?}
+GET  /api/dev/users                    — Listar usuarios
+POST /api/dev/users/:id/toggle-dev     — Dar/quitar rol dev`;
+}
+
+// ============ USERS ============
+
+async function loadUsers() {
+  try {
+    const d = await api('/api/dev/users');
+    document.getElementById('usersTable').innerHTML = d.users.map(u => `
+      <tr>
+        <td>${u.id}</td>
+        <td><strong>${esc(u.username)}</strong></td>
+        <td style="color:var(--text2);font-size:0.85rem">${esc(u.email)}</td>
+        <td>${u.is_developer ? '<span class="badge badge-red">Dev</span>' : '<span class="badge badge-green">Usuario</span>'}</td>
+        <td>${u.is_active ? '<span class="badge badge-green">Activo</span>' : '<span class="badge badge-red">Inactivo</span>'}</td>
+        <td>${u.conversations}</td>
+        <td style="font-size:0.8rem;color:var(--text2)">${new Date(u.created_at).toLocaleDateString()}</td>
+        <td>
+          <button class="btn btn-outline btn-sm" onclick="toggleDev(${u.id})" title="Cambiar rol dev">
+            ${u.is_developer ? '👤 Quitar dev' : '👨‍💻 Hacer dev'}
+          </button>
+        </td>
+      </tr>
+    `).join('');
+  } catch(e) {
+    document.getElementById('usersTable').innerHTML = `<tr><td colspan="8" style="color:var(--red)">Error: ${e.message}</td></tr>`;
+  }
+}
+
+async function toggleDev(id) {
+  try {
+    const r = await api(`/api/dev/users/${id}/toggle-dev`, 'POST');
+    loadUsers();
+  } catch(e) { alert(e.message); }
+}
+
+// ============ UTILS ============
+
+function esc(str) {
+  return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function renderPagination(containerId, totalPages, currentPage, loadFn) {
+  const el = document.getElementById(containerId);
+  if (totalPages <= 1) { el.innerHTML = ''; return; }
+  let html = '';
+  for (let i = 1; i <= totalPages; i++) {
+    html += `<button class="btn btn-sm ${i === currentPage ? 'btn-primary' : 'btn-outline'}" onclick="${loadFn.name}(${i})">${i}</button>`;
+  }
+  el.innerHTML = html;
+}
+
+// ============ INIT ============
+
+window.addEventListener('load', async () => {
+  if (TOKEN) {
+    try {
+      const r = await api('/api/auth/verify', 'GET');
+      if (r.success && r.user.is_developer) {
+        currentUser = r.user;
+        showPanel();
+        return;
+      }
+    } catch {}
+    TOKEN = ''; localStorage.removeItem('dev_token');
+  }
+});
+</script>
 </body>
 </html>
