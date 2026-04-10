@@ -1,3 +1,29 @@
+# ========== MIGRACIÓN AUTOMÁTICA ==========
+def migrate_database():
+    """Migra la base de datos automáticamente"""
+    try:
+        from sqlalchemy import text, inspect
+        
+        with app.app_context():
+            inspector = inspect(db.engine)
+            columns = [col['name'] for col in inspector.get_columns('conversation')]
+            
+            # Agregar columnas faltantes
+            if 'user_id' not in columns:
+                db.session.execute(text("ALTER TABLE conversation ADD COLUMN user_id INTEGER"))
+                print("✅ Columna user_id agregada")
+            
+            if 'mode_used' not in columns:
+                db.session.execute(text("ALTER TABLE conversation ADD COLUMN mode_used VARCHAR(50) DEFAULT 'unknown'"))
+                print("✅ Columna mode_used agregada")
+            
+            db.session.commit()
+            print("✅ Migración completada")
+    except Exception as e:
+        print(f"⚠️ Error en migración: {e}")
+
+# Ejecutar migración al inicio
+migrate_database()
 """
 Cic_IA - Asistente Inteligente EVOLUTIVO con ARQUITECTURA MODULAR
 Archivo principal - Versión 7.0 con Sistema de Usuarios + Modo Desarrollador
