@@ -1,13 +1,11 @@
 """
 Cic_IA - Asistente Inteligente EVOLUTIVO
-Versión 7.1 - CON MIGRACIÓN AUTOMÁTICA INTEGRADA
-Archivo único y completo
+Archivo principal - Versión 7.2 LIMPIA Y FUNCIONAL
 """
 
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
-from flask import render_template, request, jsonify, send_from_directory
-from werkzeug.utils import secure_filename
+from flask import render_template, request, jsonify
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, date, timedelta
 import os
@@ -52,6 +50,7 @@ app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
+# Inicializar SQLAlchemy
 db = SQLAlchemy(app)
 
 # ========== MIGRACIÓN AUTOMÁTICA ==========
@@ -70,12 +69,12 @@ def run_migration():
                     if 'user_id' not in columns:
                         conn.execute(text("ALTER TABLE conversation ADD COLUMN user_id INTEGER"))
                         conn.commit()
-                        logger.info("✅ Migración: user_id agregado")
+                        logger.info("Migración: user_id agregado")
 
                     if 'mode_used' not in columns:
                         conn.execute(text("ALTER TABLE conversation ADD COLUMN mode_used VARCHAR(50) DEFAULT 'unknown'"))
                         conn.commit()
-                        logger.info("✅ Migración: mode_used agregado")
+                        logger.info("Migración: mode_used agregado")
 
             if 'user' not in tables:
                 with db.engine.connect() as conn:
@@ -91,7 +90,7 @@ def run_migration():
                         )
                     """))
                     conn.commit()
-                    logger.info("✅ Tabla user creada")
+                    logger.info("Tabla user creada")
 
             if 'user_session' not in tables:
                 with db.engine.connect() as conn:
@@ -106,11 +105,14 @@ def run_migration():
                         )
                     """))
                     conn.commit()
-                    logger.info("✅ Tabla user_session creada")
+                    logger.info("Tabla user_session creada")
 
-            logger.info("✅ MIGRACIÓN COMPLETADA")
+            logger.info("MIGRACIÓN COMPLETADA")
+
     except Exception as e:
-        logger.error(f"⚠️ Error migración: {e}")
+        logger.error(f"Error migración: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
 
 run_migration()
 
@@ -173,32 +175,6 @@ class LearningLog(db.Model):
     web_searches = db.Column(db.Integer, default=0)
     auto_learned = db.Column(db.Integer, default=0)
 
-class DeveloperSession(db.Model):
-    __tablename__ = 'developer_session'
-    id = db.Column(db.Integer, primary_key=True)
-    token = db.Column(db.String(64), unique=True)
-    username = db.Column(db.String(50))
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    last_access = db.Column(db.DateTime, default=datetime.utcnow)
-
-class WebSearchCache(db.Model):
-    __tablename__ = 'web_search_cache'
-    id = db.Column(db.Integer, primary_key=True)
-    query = db.Column(db.String(500), unique=True)
-    results = db.Column(db.JSON)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    expires_at = db.Column(db.DateTime)
-
-class KnowledgeEvolution(db.Model):
-    __tablename__ = 'knowledge_evolution'
-    id = db.Column(db.Integer, primary_key=True)
-    date = db.Column(db.DateTime, default=datetime.utcnow)
-    topic = db.Column(db.String(200))
-    action = db.Column(db.String(50))
-    old_content = db.Column(db.Text)
-    new_content = db.Column(db.Text)
-    source = db.Column(db.String(50))
-
 class ManualLearningQueue(db.Model):
     __tablename__ = 'manual_learning_queue'
     id = db.Column(db.Integer, primary_key=True)
@@ -209,6 +185,14 @@ class ManualLearningQueue(db.Model):
     status = db.Column(db.String(50), default='pending')
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     processed_at = db.Column(db.DateTime)
+
+class WebSearchCache(db.Model):
+    __tablename__ = 'web_search_cache'
+    id = db.Column(db.Integer, primary_key=True)
+    query = db.Column(db.String(500), unique=True)
+    results = db.Column(db.JSON)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    expires_at = db.Column(db.DateTime)
 
 # ========== DECORADORES ==========
 
@@ -265,7 +249,6 @@ class CicNeuralNetwork:
     def __init__(self):
         self.model_intent = None
         self.model_module = None
-        self.model_relevance = None
         self.is_trained = False
         self.training_data = []
         self.labels = []
@@ -285,10 +268,9 @@ class CicNeuralNetwork:
                     saved_data = pickle.load(f)
                     self.model_intent = saved_data.get('intent_model')
                     self.model_module = saved_data.get('module_model')
-                    self.model_relevance = saved_data.get('relevance_model')
                     self.vectorizer = saved_data.get('vectorizer')
                     self.is_trained = saved_data.get('is_trained', False)
-                logger.info("🧠 Red neuronal cargada")
+                logger.info("Red neuronal cargada")
             else:
                 self._create_new_models()
         except Exception as e:
@@ -302,10 +284,9 @@ class CicNeuralNetwork:
 
             self.model_intent = MLPClassifier(hidden_layer_sizes=(128, 64, 32), activation='relu', solver='adam', max_iter=500, random_state=42, early_stopping=True)
             self.model_module = MLPClassifier(hidden_layer_sizes=(64, 32), activation='relu', solver='adam', max_iter=300, random_state=42)
-            self.model_relevance = MLPClassifier(hidden_layer_sizes=(64, 32), activation='tanh', solver='adam', max_iter=300, random_state=42)
             self.vectorizer = TfidfVectorizer(max_features=5000, stop_words='english')
             self.is_trained = False
-            logger.info("🧠 Nueva red neuronal creada")
+            logger.info("Nueva red neuronal creada")
         except ImportError:
             logger.warning("scikit-learn no disponible")
             self.model_intent = None
@@ -323,7 +304,7 @@ class CicNeuralNetwork:
             self.training_data = texts
             self.labels = labels
             self._save_models()
-            logger.info(f"🧠 Entrenada con {len(texts)} ejemplos")
+            logger.info(f"Entrenada con {len(texts)} ejemplos")
             return True
         except Exception as e:
             logger.error(f"Error entrenando: {e}")
@@ -359,29 +340,18 @@ class CicNeuralNetwork:
             return {'module': 'data_analysis', 'confidence': 0.8, 'method': 'rules'}
         if any(kw in text_lower for kw in ['imagen', 'foto', 'genera imagen', 'dibuja']):
             return {'module': 'image_generator', 'confidence': 0.8, 'method': 'rules'}
-        if any(kw in text_lower for kw in ['código', 'programa', 'python', 'javascript', 'html', 'debug']):
+        if any(kw in text_lower for kw in ['código', 'programa', 'python', 'javascript']):
             return {'module': 'code_assistant', 'confidence': 0.8, 'method': 'rules'}
-        if any(kw in text_lower for kw in ['historial', 'conversaciones anteriores']):
+        if any(kw in text_lower for kw in ['historial', 'conversaciones']):
             return {'module': 'chat_history', 'confidence': 0.7, 'method': 'rules'}
-        if any(kw in text_lower for kw in ['archivo', 'pdf', 'documento', 'subir']):
+        if any(kw in text_lower for kw in ['archivo', 'pdf', 'subir']):
             return {'module': 'file_manager', 'confidence': 0.7, 'method': 'rules'}
         return {'module': 'none', 'confidence': 0.0, 'method': 'rules'}
-
-    def predict_relevance(self, query, memory_content):
-        if not self.is_trained or self.model_relevance is None:
-            return 0.5
-        try:
-            combined = f"{query} {memory_content}"
-            X = self.vectorizer.transform([combined])
-            relevance = self.model_relevance.predict_proba(X)[0][1]
-            return float(relevance)
-        except:
-            return 0.5
 
     def _save_models(self):
         try:
             with open(self.model_path, 'wb') as f:
-                pickle.dump({'intent_model': self.model_intent, 'module_model': self.model_module, 'relevance_model': self.model_relevance, 'vectorizer': self.vectorizer, 'is_trained': self.is_trained}, f)
+                pickle.dump({'intent_model': self.model_intent, 'module_model': self.model_module, 'vectorizer': self.vectorizer, 'is_trained': self.is_trained}, f)
         except Exception as e:
             logger.error(f"Error guardando: {e}")
 
@@ -389,33 +359,6 @@ class CicNeuralNetwork:
         return {'is_trained': self.is_trained, 'training_samples': len(self.training_data), 'model_type': 'MLPClassifier'}
 
 neural_net = CicNeuralNetwork()
-
-# ========== MÓDULOS ESPECIALIZADOS (LAZY LOADING) ==========
-
-_modules_cache = {}
-
-def get_module(module_name):
-    if module_name not in _modules_cache:
-        try:
-            if module_name == 'data_analysis':
-                from modules.data_analysis import DataAnalysisModule
-                _modules_cache[module_name] = DataAnalysisModule()
-            elif module_name == 'image_generator':
-                from modules.image_generator import ImageGeneratorModule
-                _modules_cache[module_name] = ImageGeneratorModule()
-            elif module_name == 'code_assistant':
-                from modules.code_assistant import CodeAssistantModule
-                _modules_cache[module_name] = CodeAssistantModule()
-            elif module_name == 'chat_history':
-                from modules.chat_history import ChatHistoryModule
-                _modules_cache[module_name] = ChatHistoryModule(db.session, Conversation, Memory)
-            elif module_name == 'file_manager':
-                from modules.file_manager import FileManagerModule
-                _modules_cache[module_name] = FileManagerModule()
-        except Exception as e:
-            logging.error(f"Error cargando módulo {module_name}: {e}")
-            return None
-    return _modules_cache.get(module_name)
 
 # ========== MOTOR DE BÚSQUEDA ==========
 
@@ -430,7 +373,7 @@ class WebSearchEngine:
                 results.append({'title': r.get('title', ''), 'url': r.get('href', ''), 'snippet': r.get('body', ''), 'source': 'duckduckgo'})
             return results
         except Exception as e:
-            logger.error(f"❌ Error búsqueda: {e}")
+            logger.error(f"Error búsqueda: {e}")
             return []
 
 # ========== CLASE PRINCIPAL CIC_IA ==========
@@ -441,18 +384,17 @@ class CicIA:
         self.web_search_engine = WebSearchEngine()
         self.current_learning_topic = None
         self.neural_net = neural_net
-        self.auto_learning_topics = ['inteligencia artificial 2024', 'machine learning avances', 'python novedades', 'desarrollo web tendencias', 'ciberseguridad noticias']
+        self.auto_learning_topics = ['inteligencia artificial 2024', 'machine learning avances', 'python novedades', 'desarrollo web tendencias']
 
         with app.app_context():
-            self.stats = {'memories': Memory.query.count(), 'conversations': Conversation.query.count(), 'today_learned': self._get_today_count(), 'auto_learned_total': self._get_auto_learned_total()}
+            self.stats = {'memories': Memory.query.count(), 'conversations': Conversation.query.count(), 'today_learned': self._get_today_count()}
 
         threading.Thread(target=self._continuous_learning_loop, daemon=True).start()
-        threading.Thread(target=self._process_manual_learning_queue, daemon=True).start()
 
         logger.info("=" * 50)
-        logger.info("🚀 CIC_IA INICIADA")
-        logger.info(f"📚 Memorias: {self.stats['memories']}")
-        logger.info(f"💬 Conversaciones: {self.stats['conversations']}")
+        logger.info("CIC_IA INICIADA")
+        logger.info(f"Memorias: {self.stats['memories']}")
+        logger.info(f"Conversaciones: {self.stats['conversations']}")
         logger.info("=" * 50)
 
     def _get_today_count(self):
@@ -460,17 +402,13 @@ class CicIA:
         log = LearningLog.query.filter_by(date=today).first()
         return log.count if log else 0
 
-    def _get_auto_learned_total(self):
-        total = db.session.query(db.func.sum(LearningLog.auto_learned)).scalar()
-        return int(total) if total else 0
-
     def _continuous_learning_loop(self):
         time.sleep(300)
         while self.learning_active:
             try:
                 self._perform_auto_learning()
             except Exception as e:
-                logger.error(f"❌ Error auto-learn: {e}")
+                logger.error(f"Error auto-learn: {e}")
             time.sleep(7200)
 
     def _perform_auto_learning(self, custom_topic=None):
@@ -478,7 +416,7 @@ class CicIA:
             topic = custom_topic or self.current_learning_topic or random.choice(self.auto_learning_topics)
             self.current_learning_topic = None
 
-            logger.info(f"🤖 Aprendiendo: '{topic}'")
+            logger.info(f"Aprendiendo: '{topic}'")
             results = self.web_search_engine.search_duckduckgo(topic, max_results=3)
 
             if not results:
@@ -492,14 +430,12 @@ class CicIA:
                     if exists:
                         continue
 
-                    memory = Memory(content=f"{result['title']}
-
-{result['snippet']}
-
-Fuente: {result['url']}", source='auto_learning', topic=topic, relevance_score=0.6, access_count=0)
+                    # CORRECCIÓN: String multilínea correctamente formateado
+                    content_text = result['title'] + '\n\n' + result['snippet'] + '\n\nFuente: ' + result['url']
+                    memory = Memory(content=content_text, source='auto_learning', topic=topic, relevance_score=0.6, access_count=0)
                     db.session.add(memory)
                     learned_count += 1
-                except:
+                except Exception as e:
                     continue
 
             if learned_count > 0:
@@ -511,36 +447,9 @@ Fuente: {result['url']}", source='auto_learning', topic=topic, relevance_score=0
                     db.session.add(log)
                 log.auto_learned += learned_count
                 db.session.commit()
-                logger.info(f"🎉 Aprendidos: {learned_count}")
+                logger.info(f"Aprendidos: {learned_count}")
                 return True
             return False
-
-    def _process_manual_learning_queue(self):
-        while self.learning_active:
-            try:
-                with app.app_context():
-                    pending = ManualLearningQueue.query.filter_by(status='pending').order_by(ManualLearningQueue.priority.desc()).limit(5).all()
-                    for item in pending:
-                        item.status = 'processing'
-                        db.session.commit()
-
-                        exists = Memory.query.filter(Memory.content.ilike(f'%{item.content[:100]}%')).first()
-                        if exists:
-                            item.status = 'completed'
-                            item.processed_at = datetime.utcnow()
-                            db.session.commit()
-                            continue
-
-                        memory = Memory(content=f"{item.content}
-
-Fuente: {item.source_url or 'Manual'}", source='manual_learning', topic=item.topic, relevance_score=0.9 if item.priority >= 2 else 0.8)
-                        db.session.add(memory)
-                        item.status = 'completed'
-                        item.processed_at = datetime.utcnow()
-                        db.session.commit()
-            except Exception as e:
-                logger.error(f"❌ Error cola manual: {e}")
-            time.sleep(300)
 
     def detect_module(self, user_input):
         module_info = self.neural_net.predict_module(user_input)
@@ -582,7 +491,7 @@ Fuente: {item.source_url or 'Manual'}", source='manual_learning', topic=item.top
                 return self._execute_file_manager(module, user_input, context)
             return {'success': False, 'error': 'Módulo no implementado'}
         except Exception as e:
-            logger.error(f"❌ Error módulo {module_name}: {e}")
+            logger.error(f"Error módulo {module_name}: {e}")
             return {'success': False, 'error': str(e), 'response': f'Error: {str(e)}'}
 
     def _execute_data_analysis(self, module, user_input, context):
@@ -591,27 +500,23 @@ Fuente: {item.source_url or 'Manual'}", source='manual_learning', topic=item.top
             if result.get('success'):
                 analysis = module.analyze(user_input)
                 return {'success': True, 'module': 'data_analysis', 'response': analysis.get('summary', 'Análisis completado'), 'data': analysis}
-        return {'success': True, 'module': 'data_analysis', 'response': '📊 Modo Análisis de Datos. Sube un archivo CSV, Excel, JSON o SQLite.', 'awaiting_file': True}
+        return {'success': True, 'module': 'data_analysis', 'response': 'Modo Análisis de Datos. Sube un archivo CSV, Excel, JSON o SQLite.', 'awaiting_file': True}
 
     def _execute_image_generator(self, module, user_input, context):
         prompt = user_input.replace('genera una imagen', '').replace('crea una imagen', '').replace('dibuja', '').strip()
         if not prompt:
-            return {'success': True, 'module': 'image_generator', 'response': '🎨 Modo Generador de Imágenes. Describe qué imagen quieres crear.'}
+            return {'success': True, 'module': 'image_generator', 'response': 'Modo Generador de Imágenes. Describe qué imagen quieres crear.'}
         result = module.generate(prompt, style='realistic', size='1024x1024')
         if result.get('success'):
-            return {'success': True, 'module': 'image_generator', 'response': f'🎨 Imagen generada: "{prompt[:50]}..."', 'image_data': result.get('image_data'), 'format': result.get('format')}
-        return {'success': False, 'module': 'image_generator', 'response': f'⚠️ Error: {result.get("error", "Error desconocido")}'}
+            return {'success': True, 'module': 'image_generator', 'response': f'Imagen generada: "{prompt[:50]}..."', 'image_data': result.get('image_data'), 'format': result.get('format')}
+        return {'success': False, 'module': 'image_generator', 'response': f'Error: {result.get("error", "Error desconocido")}'}
 
     def _execute_code_assistant(self, module, user_input, context):
         language = module.detect_language(user_input)
         if any(kw in user_input.lower() for kw in ['explica', 'qué hace']):
-            return {'success': True, 'module': 'code_assistant', 'response': f'💻 Modo Asistente de Código ({language}). Pega el código a explicar.'}
+            return {'success': True, 'module': 'code_assistant', 'response': f'Modo Asistente de Código ({language}). Pega el código a explicar.'}
         result = module.generate_code(user_input, language)
-        return {'success': True, 'module': 'code_assistant', 'response': f'💻 Código en {result.get("language_name", language)}:
-
-```{language}
-{result.get("code", "")}
-```', 'code': result.get('code'), 'language': language}
+        return {'success': True, 'module': 'code_assistant', 'response': f'Código en {result.get("language_name", language)}:\n\n```{language}\n{result.get("code", "")}\n```', 'code': result.get('code'), 'language': language}
 
     def _execute_chat_history(self, module, user_input, context):
         user_id = context.get('user_id', 1) if context else 1
@@ -620,17 +525,13 @@ Fuente: {item.source_url or 'Manual'}", source='manual_learning', topic=item.top
             results = module.search_conversations(user_id=user_id, keyword=keyword)
             if results.get('matches', 0) > 0:
                 convs = results.get('conversations', [])
-                response = f'🔍 Encontré {results["matches"]} conversaciones:
-' + '
-'.join([f'- **{c["user_message"][:50]}...**' for c in convs[:5]])
+                response = f'Encontré {results["matches"]} conversaciones:' + '\n' + '\n'.join([f'- {c["user_message"][:50]}...' for c in convs[:5]])
                 return {'success': True, 'module': 'chat_history', 'response': response}
         stats = module.get_conversation_stats(user_id=user_id)
-        return {'success': True, 'module': 'chat_history', 'response': f'📊 Tu Historial:
-- Total: {stats.get("total_conversations", 0)}
-- Últimos 7 días: {stats.get("last_7_days", 0)}'}
+        return {'success': True, 'module': 'chat_history', 'response': f'Tu Historial:\n- Total: {stats.get("total_conversations", 0)}\n- Últimos 7 días: {stats.get("last_7_days", 0)}'}
 
     def _execute_file_manager(self, module, user_input, context):
-        return {'success': True, 'module': 'file_manager', 'response': '📁 Modo Gestión de Archivos. Puedes subir archivos para procesarlos.'}
+        return {'success': True, 'module': 'file_manager', 'response': 'Modo Gestión de Archivos. Puedes subir archivos para procesarlos.'}
 
     def chat(self, user_input, mode='balanced', attachment_info=None, user_id=1):
         input_lower = user_input.lower().strip()
@@ -657,7 +558,7 @@ Fuente: {item.source_url or 'Manual'}", source='manual_learning', topic=item.top
 
         with app.app_context():
             memories = Memory.query.all()
-            relevant_memories = self._find_relevant_memories(input_lower, memories) if not self.neural_net.is_trained else self._find_relevant_memories_neural(user_input, memories)
+            relevant_memories = self._find_relevant_memories(input_lower, memories)
 
             sources_used = []
             if best_topic and best_topic != 'default':
@@ -671,9 +572,7 @@ Fuente: {item.source_url or 'Manual'}", source='manual_learning', topic=item.top
                 tema = user_input[:40] if len(user_input) > 5 else "este tema"
                 web_results = self._search_and_learn(user_input)
                 if web_results:
-                    response = f"He investigado sobre '{tema}':
-
-{web_results['summary']}"
+                    response = f"He investigado sobre '{tema}':\n\n{web_results['summary']}"
                     sources_used.append('web_search')
                 else:
                     response = random.choice(KNOWLEDGE_BASE['default']['respuestas']).format(tema=tema)
@@ -682,22 +581,9 @@ Fuente: {item.source_url or 'Manual'}", source='manual_learning', topic=item.top
             if mode == 'fast':
                 response = response.split('.')[0] + '.' if '.' in response else response[:100]
             elif mode == 'complete':
-                response += "
-
-¿Te gustaría que profundice?"
+                response += "\n\n¿Te gustaría que profundice?"
 
             return self._save_conversation(user_input, response, sources_used[0] if sources_used else 'learning', user_id=user_id, memories_count=len(relevant_memories), sources_used=sources_used, intent=intent_info.get('intent', 'unknown'))
-
-    def _find_relevant_memories_neural(self, query, memories):
-        relevant = []
-        for mem in memories:
-            relevance = self.neural_net.predict_relevance(query, mem.content)
-            if relevance > 0.6:
-                relevant.append((mem, relevance))
-                mem.access_count += 1
-        relevant.sort(key=lambda x: x[1], reverse=True)
-        db.session.commit()
-        return [mem for mem, _ in relevant[:5]]
 
     def _find_relevant_memories(self, text, memories):
         relevant = []
@@ -723,10 +609,7 @@ Fuente: {item.source_url or 'Manual'}", source='manual_learning', topic=item.top
 
                 summary = ""
                 for i, result in enumerate(results, 1):
-                    summary += f"{i}. **{result['title']}**
-   {result['snippet']}
-
-"
+                    summary += f"{i}. {result['title']}\n   {result['snippet']}\n\n"
                     memory = Memory(content=result['snippet'], source='web_search', topic=query, relevance_score=0.7)
                     db.session.add(memory)
 
@@ -735,7 +618,7 @@ Fuente: {item.source_url or 'Manual'}", source='manual_learning', topic=item.top
                 db.session.commit()
                 return {'summary': summary}
         except Exception as e:
-            logger.error(f"❌ Error búsqueda web: {e}")
+            logger.error(f"Error búsqueda web: {e}")
             return None
 
     def _find_best_topic(self, text):
@@ -778,33 +661,55 @@ Fuente: {item.source_url or 'Manual'}", source='manual_learning', topic=item.top
         now = datetime.now()
         dias = ['lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo']
         meses = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
-        return f"📅 Hoy es {dias[now.weekday()]}, {now.day} de {meses[now.month-1]} de {now.year}
-🕐 Son las {now.strftime('%H:%M:%S')}"
+        return f"Hoy es {dias[now.weekday()]}, {now.day} de {meses[now.month-1]} de {now.year}\nSon las {now.strftime('%H:%M:%S')}"
 
     def get_learning_stats(self):
         with app.app_context():
             total_memories = Memory.query.count()
             by_source = {'auto_learning': Memory.query.filter_by(source='auto_learning').count(), 'web_search': Memory.query.filter_by(source='web_search').count(), 'manual_learning': Memory.query.filter_by(source='manual_learning').count()}
-            manual_pending = ManualLearningQueue.query.filter_by(status='pending').count()
-            manual_completed = ManualLearningQueue.query.filter_by(status='completed').count()
-            return {'total_memories': total_memories, 'by_source': by_source, 'neural_network': self.neural_net.get_stats(), 'manual_learning_queue': {'pending': manual_pending, 'completed': manual_completed}, 'modules_available': ['data_analysis', 'image_generator', 'code_assistant', 'chat_history', 'file_manager']}
+            return {'total_memories': total_memories, 'by_source': by_source, 'neural_network': self.neural_net.get_stats(), 'modules_available': ['data_analysis', 'image_generator', 'code_assistant', 'chat_history', 'file_manager']}
+
+# ========== KNOWLEDGE BASE ==========
 
 KNOWLEDGE_BASE = {
     'ia': {'respuestas': ["La Inteligencia Artificial (IA) es la simulación de procesos de inteligencia humana por sistemas informáticos.", "IA permite a las máquinas aprender, razonar y resolver problemas de manera autónoma."], 'keywords': ['inteligencia artificial', 'ia', 'ai', 'machine learning']},
     'python': {'respuestas': ["Python es el lenguaje líder en IA por su sintaxis clara y bibliotecas como TensorFlow y PyTorch.", "Python fue creado por Guido van Rossum y es ideal para prototipado rápido."], 'keywords': ['python', 'programación', 'código', 'desarrollo']},
     'hola': {'respuestas': ["¡Hola! Soy Cic_IA, tu asistente inteligente modular. ¿Qué necesitas?", "¡Bienvenido! Puedo analizar datos, generar imágenes, ayudarte con código y más."], 'keywords': ['hola', 'buenas', 'hey', 'saludos']},
-    'modulos': {'respuestas': ["🧩 **Módulos disponibles:**
-1. 📊 Análisis de Datos
-2. 🎨 Generador de Imágenes
-3. 💻 Asistente de Código
-4. 📜 Historial
-5. 📁 Archivos", "Prueba: 'analiza este CSV', 'genera una imagen de...', 'escribe código para...'"], 'keywords': ['módulos', 'modulos', 'qué puedes hacer', 'capacidades']},
+    'modulos': {'respuestas': ["Módulos disponibles: 1. Análisis de Datos 2. Generador de Imágenes 3. Asistente de Código 4. Historial 5. Archivos", "Prueba: 'analiza este CSV', 'genera una imagen de...', 'escribe código para...'"], 'keywords': ['módulos', 'modulos', 'qué puedes hacer', 'capacidades']},
     'default': {'respuestas': ["Interesante tema sobre '{tema}'. Voy a investigar para darte la mejor respuesta.", "Estoy aprendiendo sobre '{tema}'. Déjame buscar información actualizada."], 'keywords': []}
 }
 
+# ========== IMPORTAR MÓDULOS ESPECIALIZADOS ==========
+
+_modules_cache = {}
+
+def get_module(module_name):
+    """Lazy loading de módulos"""
+    if module_name not in _modules_cache:
+        try:
+            if module_name == 'data_analysis':
+                from modules.data_analysis import DataAnalysisModule
+                _modules_cache[module_name] = DataAnalysisModule()
+            elif module_name == 'image_generator':
+                from modules.image_generator import ImageGeneratorModule
+                _modules_cache[module_name] = ImageGeneratorModule()
+            elif module_name == 'code_assistant':
+                from modules.code_assistant import CodeAssistantModule
+                _modules_cache[module_name] = CodeAssistantModule()
+            elif module_name == 'chat_history':
+                from modules.chat_history import ChatHistoryModule
+                _modules_cache[module_name] = ChatHistoryModule(db.session, Conversation, User)
+            elif module_name == 'file_manager':
+                from modules.file_manager import FileManagerModule
+                _modules_cache[module_name] = FileManagerModule()
+        except Exception as e:
+            logger.error(f"Error cargando módulo {module_name}: {e}")
+            return None
+    return _modules_cache.get(module_name)
+
 cic_ia = CicIA()
 
-# ========== RUTAS ==========
+# ========== RUTAS PÚBLICAS ==========
 
 @app.route('/')
 def index():
@@ -812,7 +717,9 @@ def index():
 
 @app.route('/health')
 def health_check():
-    return jsonify({'status': 'healthy', 'timestamp': datetime.utcnow().isoformat(), 'version': '7.1', 'features': ['chat', 'web_search', 'auto_learning', 'memory', 'users', 'auth', 'modules']})
+    return jsonify({'status': 'healthy', 'timestamp': datetime.utcnow().isoformat(), 'version': '7.2_clean', 'features': ['chat', 'web_search', 'auto_learning', 'memory', 'users', 'auth', 'modules']})
+
+# ========== AUTENTICACIÓN ==========
 
 @app.route('/api/auth/register', methods=['POST'])
 def register():
@@ -894,6 +801,8 @@ def verify_token_endpoint():
 
     return jsonify({'success': True, 'user': {'id': user.id, 'username': user.username, 'is_developer': user.is_developer}})
 
+# ========== RUTAS PROTEGIDAS ==========
+
 @app.route('/api/chat', methods=['POST'])
 @token_required
 def chat_auth(current_user):
@@ -927,13 +836,15 @@ def status():
             today = date.today()
             log = LearningLog.query.filter_by(date=today).first()
             stats = cic_ia.get_learning_stats()
-            return jsonify({'stage': 'v7.1', 'total_memories': stats['total_memories'], 'total_conversations': Conversation.query.count(), 'today_learned': log.count if log else 0, 'neural_network': stats.get('neural_network', {}), 'modules': stats.get('modules_available', [])})
+            return jsonify({'stage': 'v7.2', 'total_memories': stats['total_memories'], 'total_conversations': Conversation.query.count(), 'today_learned': log.count if log else 0, 'neural_network': stats.get('neural_network', {}), 'modules': stats.get('modules_available', [])})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/modules/list', methods=['GET'])
 def list_modules():
     return jsonify({'modules': [{'id': 'data_analysis', 'name': 'Análisis de Datos', 'icon': '📊'}, {'id': 'image_generator', 'name': 'Generador de Imágenes', 'icon': '🎨'}, {'id': 'code_assistant', 'name': 'Asistente de Código', 'icon': '💻'}, {'id': 'chat_history', 'name': 'Historial', 'icon': '📜'}, {'id': 'file_manager', 'name': 'Archivos', 'icon': '📁'}]})
+
+# ========== RUTAS DESARROLLADOR ==========
 
 @app.route('/api/dev/stats/detailed')
 @dev_required
@@ -981,7 +892,7 @@ def dev_train_neural():
 
         success = neural_net.train(texts, labels, module_labels)
         if success:
-            return jsonify({'success': True, 'message': '🧠 Red neuronal entrenada', 'samples': len(texts), 'stats': neural_net.get_stats()})
+            return jsonify({'success': True, 'message': 'Red neuronal entrenada', 'samples': len(texts), 'stats': neural_net.get_stats()})
         return jsonify({'success': False, 'error': 'Error durante entrenamiento'}), 500
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -995,7 +906,7 @@ def evolution_learn_now():
         if topic:
             cic_ia.set_custom_topic(topic)
         threading.Thread(target=cic_ia._perform_auto_learning, args=(topic,), daemon=True).start()
-        return jsonify({'success': True, 'message': '🤖 Aprendizaje iniciado' + (f' sobre "{topic}"' if topic else ''), 'started_at': datetime.utcnow().isoformat()})
+        return jsonify({'success': True, 'message': 'Aprendizaje iniciado' + (f' sobre "{topic}"' if topic else ''), 'started_at': datetime.utcnow().isoformat()})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -1011,7 +922,6 @@ def dev_clear_db():
         Conversation.query.delete()
         LearningLog.query.delete()
         WebSearchCache.query.delete()
-        KnowledgeEvolution.query.delete()
         ManualLearningQueue.query.delete()
         db.session.commit()
 
@@ -1019,6 +929,8 @@ def dev_clear_db():
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
+
+# ========== MANEJO DE ERRORES ==========
 
 @app.errorhandler(404)
 def not_found(error):
@@ -1030,6 +942,8 @@ def not_found(error):
 def internal_error(error):
     db.session.rollback()
     return jsonify({'error': 'Error interno del servidor'}), 500
+
+# ========== INICIO ==========
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
