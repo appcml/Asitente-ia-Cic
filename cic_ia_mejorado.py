@@ -36,13 +36,21 @@ if not _secret:
     logger.warning("SECRET_KEY no configurada como variable de entorno. Generando aleatoria (sesiones no persistirán entre reinicios).")
 app.config['SECRET_KEY'] = _secret
 
-# Base de datos
+# Base de datos — con soporte SSL para Render/PostgreSQL
 database_url = os.environ.get('DATABASE_URL', '')
 if database_url.startswith('postgres://'):
     database_url = database_url.replace('postgres://', 'postgresql://', 1)
+# Render requiere SSL
+_is_postgres = database_url and 'postgresql' in database_url
+if _is_postgres and 'sslmode' not in database_url:
+    sep = '&' if '?' in database_url else '?'
+    database_url = database_url + sep + 'sslmode=require'
 app.config['SQLALCHEMY_DATABASE_URI'] = database_url or 'sqlite:///cic_ia.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {'pool_pre_ping': True, 'pool_recycle': 300}
+_engine_opts = {'pool_pre_ping': True, 'pool_recycle': 300}
+if _is_postgres:
+    _engine_opts['connect_args'] = {'sslmode': 'require'}
+app.config['SQLALCHEMY_ENGINE_OPTIONS'] = _engine_opts
 
 # API Keys (desde entorno)
 ANTHROPIC_API_KEY = os.environ.get('ANTHROPIC_API_KEY', '')
