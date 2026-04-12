@@ -161,38 +161,69 @@ class SystemConfig(db.Model):
 # ========== MIGRACIÓN ==========
 
 def run_migration():
+    """
+    Migración segura: agrega columnas/tablas nuevas sin destruir datos existentes.
+    Compatible con bases de datos de versiones anteriores (v7.x → v8.0).
+    """
     try:
         with app.app_context():
+            # Crear tablas nuevas que no existan (no toca las existentes)
             db.create_all()
+
             inspector = inspect(db.engine)
-            tables = inspector.get_table_names()
+            tables    = inspector.get_table_names()
 
-            # Agregar columnas faltantes en conversation si existe de versión anterior
+            def add_column_if_missing(table, column, definition):
+                """Agrega una columna solo si no existe — safe para cualquier BD."""
+                try:
+                    cols = {col['name'] for col in inspector.get_columns(table)}
+                    if column not in cols:
+                        with db.engine.connect() as conn:
+                            conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {definition}"))
+                            conn.commit()
+                        logger.info(f"Migración: columna {table}.{column} agregada")
+                except Exception as e:
+                    logger.warning(f"No se pudo agregar {table}.{column}: {e}")
+
+            # ── Tabla: memory ──────────────────────────────────────────────
+            if 'memory' in tables:
+                add_column_if_missing('memory', 'tags', "JSON DEFAULT '[]'")
+
+            # ── Tabla: conversation ────────────────────────────────────────
             if 'conversation' in tables:
-                columns = {col['name'] for col in inspector.get_columns('conversation')}
-                with db.engine.connect() as conn:
-                    if 'tokens_used' not in columns:
-                        conn.execute(text("ALTER TABLE conversation ADD COLUMN tokens_used INTEGER DEFAULT 0"))
-                        conn.commit()
+                add_column_if_missing('conversation', 'tokens_used', 'INTEGER DEFAULT 0')
+                add_column_if_missing('conversation', 'user_id',   'INTEGER')
+                add_column_if_missing('conversation', 'mode_used', "VARCHAR(50) DEFAULT 'chat'")
 
-            # Config por defecto
+            # ── Tabla: manual_knowledge ────────────────────────────────────
+            # db.create_all() ya la creó si no existía
+
+            # ── Tabla: system_config ───────────────────────────────────────
+            # db.create_all() ya la creó si no existía
+
+            # Config por defecto (solo inserta si no existe la clave)
             defaults = [
-                ('ai_provider', 'anthropic', 'string'),
-                ('ai_model', 'claude-haiku-4-5-20251001', 'string'),
-                ('system_prompt', 'Eres Cic_IA, un asistente inteligente en español. Responde de forma clara, útil y amigable.', 'string'),
-                ('max_tokens', '1000', 'int'),
-                ('auto_learning_enabled', 'true', 'bool'),
-                ('auto_learning_interval_hours', '2', 'int'),
-                ('max_memory_results', '5', 'int'),
-                ('web_search_enabled', 'true', 'bool'),
+                ('ai_provider',                   'anthropic',                                                                                              'string'),
+                ('ai_model',                      'claude-haiku-4-5-20251001',                                                                              'string'),
+                ('system_prompt',                 'Eres Cic_IA, un asistente inteligente en español. Responde de forma clara, útil y amigable.',             'string'),
+                ('max_tokens',                    '1000',                                                                                                    'int'),
+                ('auto_learning_enabled',         'true',                                                                                                    'bool'),
+                ('auto_learning_interval_hours',  '2',                                                                                                       'int'),
+                ('max_memory_results',            '5',                                                                                                       'int'),
+                ('web_search_enabled',            'true',                                                                                                    'bool'),
             ]
             for key, val, typ in defaults:
-                if not SystemConfig.query.filter_by(key=key).first():
-                    db.session.add(SystemConfig(key=key, value=val, type=typ))
+                try:
+                    if not SystemConfig.query.filter_by(key=key).first():
+                        db.session.add(SystemConfig(key=key, value=val, type=typ))
+                except Exception:
+                    pass
             db.session.commit()
             logger.info("✅ Migración completada")
     except Exception as e:
         logger.error(f"Error migración: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
 
 run_migration()
 
