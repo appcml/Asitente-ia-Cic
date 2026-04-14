@@ -681,6 +681,32 @@ class CicIA:
             target=self._auto_learning_loop, daemon=True
         )
         self._learning_thread.start()
+        # Iniciar keepalive para evitar que Render se duerma
+        threading.Thread(target=self._keepalive_loop, daemon=True).start()
+
+    def _keepalive_loop(self):
+        """
+        Ping cada 10 minutos al propio servidor para evitar el sleep de Render.
+        Render duerme servicios gratuitos tras 15 min de inactividad.
+        """
+        import urllib.request
+        time.sleep(30)  # Espera inicial
+        app_url = os.environ.get('RENDER_EXTERNAL_URL', '')
+        if not app_url:
+            logger.info("ℹ️ RENDER_EXTERNAL_URL no configurada — keepalive desactivado")
+            return
+        logger.info(f"💓 Keepalive activo → {app_url}/health cada 10 min")
+        while True:
+            try:
+                req = urllib.request.Request(
+                    f"{app_url}/health",
+                    headers={'User-Agent': 'CicIA-Keepalive/1.0'}
+                )
+                urllib.request.urlopen(req, timeout=10)
+                logger.info("💓 Keepalive OK")
+            except Exception as e:
+                logger.warning(f"💓 Keepalive error: {e}")
+            time.sleep(600)  # cada 10 minutos
 
     def _auto_learning_loop(self):
         time.sleep(60)  # Espera inicial
