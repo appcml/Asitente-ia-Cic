@@ -357,125 +357,227 @@ class WebSearchEngine:
 # ========== MOTOR LLM REAL ==========
 
 class LLMEngine:
-    """Motor de IA real — soporta Anthropic Claude y OpenAI"""
+    """
+    Motor de IA multi-proveedor con fallback automático.
+    Orden de prioridad:
+      1. Groq  (Llama 3 / Mixtral — gratis, rápido, 24/7)
+      2. Ollama (modelo local en servidor propio / Colab)
+      3. Anthropic Claude (si hay API key)
+      4. OpenAI GPT (si hay API key)
+      5. Respuesta básica (sin IA externa)
+    """
 
     def __init__(self):
         self.anthropic_key = ANTHROPIC_API_KEY
         self.openai_key    = OPENAI_API_KEY
+        self.groq_key      = os.environ.get('GROQ_API_KEY', '')
+        self.ollama_url    = os.environ.get('OLLAMA_URL', '')   # ej: https://xxxx.ngrok.io
+        self.groq_model    = os.environ.get('GROQ_MODEL',   'llama-3.1-8b-instant')
+        self.ollama_model  = os.environ.get('OLLAMA_MODEL', 'llama3.2')
 
     def _build_context(self, user_message: str, memories: list, manual_knowledge: list) -> str:
-        """Construye contexto enriquecido con memorias y conocimiento manual"""
         parts = []
-
         if manual_knowledge:
-            parts.append("=== CONOCIMIENTO BASE DEL DESARROLLADOR ===")
-            for mk in manual_knowledge[:5]:  # top 5 por prioridad
+            parts.append("=== CONOCIMIENTO BASE ===")
+            for mk in manual_knowledge[:5]:
                 parts.append(f"[{mk.category or 'General'}] {mk.title}:\n{mk.content[:500]}")
             parts.append("")
-
         if memories:
             parts.append("=== CONOCIMIENTO APRENDIDO ===")
             for mem in memories[:3]:
                 parts.append(f"Tema: {mem.topic or 'general'}\n{mem.content[:300]}")
             parts.append("")
-
         return "\n".join(parts)
 
     def chat(self, user_message: str, system_prompt: str, context: str = "",
              conversation_history: list = None, max_tokens: int = 1000) -> dict:
-        """Envía mensaje al LLM configurado y retorna respuesta"""
-
-        provider = get_config('ai_provider', 'anthropic')
+        """Intenta cada proveedor en orden hasta obtener respuesta exitosa."""
 
         full_system = system_prompt
         if context:
             full_system += f"\n\n{context}"
 
-        if provider == 'anthropic' and self.anthropic_key:
-            return self._call_anthropic(user_message, full_system, conversation_history, max_tokens)
-        elif provider == 'openai' and self.openai_key:
-            return self._call_openai(user_message, full_system, conversation_history, max_tokens)
+        # Orden de prioridad configurable
+        provider = get_config('ai_provider', 'auto')
+
+        if provider == 'auto':
+            # Intentar en orden: Groq → Ollama → Anthropic → OpenAI → fallback
+            providers = ['groq', 'ollama', 'anthropic', 'openai']
         else:
-            return self._fallback_response(user_message)
+            providers = [provider]
 
-    def _call_anthropic(self, user_message: str, system: str,
-                        history: list = None, max_tokens: int = 1000) -> dict:
-        model = get_config('ai_model', 'claude-haiku-4-5-20251001')
-        messages = []
+        for p in providers:
+            result = self._try_provider(p, user_message, full_system, conversation_history, max_tokens)
+            if result.get('success'):
+                logger.info(f"✅ Respuesta exitosa via {p}")
+                return result
+            else:
+                logger.warning(f"⚠️ Proveedor {p} falló: {result.get('error', 'desconocido')}")
 
-        if history:
-            for h in history[-10:]:  # últimas 10 para no exceder contexto
-                messages.append({'role': h['role'], 'content': h['content']})
+        # Si todo falla, respuesta básica
+        return self._fallback_response(user_message)
 
-        messages.append({'role': 'user', 'content': user_message})
-
+    def _try_provider(self, provider: str, user_message: str, system: str,
+                      history: list, max_tokens: int) -> dict:
         try:
-            resp = requests.post(
-                'https://api.anthropic.com/v1/messages',
-                headers={
-                    'x-api-key':         self.anthropic_key,
-                    'anthropic-version': '2023-06-01',
-                    'content-type':      'application/json'
-                },
-                json={
-                    'model':      model,
-                    'max_tokens': max_tokens,
-                    'system':     system,
-                    'messages':   messages
-                },
-                timeout=30
-            )
-            resp.raise_for_status()
-            data = resp.json()
-            text = data['content'][0]['text']
-            tokens = data.get('usage', {}).get('output_tokens', 0)
-            return {'success': True, 'response': text, 'tokens': tokens, 'provider': 'anthropic', 'model': model}
-        except requests.exceptions.Timeout:
-            return {'success': False, 'response': 'La IA tardó demasiado en responder. Intenta de nuevo.', 'provider': 'anthropic'}
+            if provider == 'groq':
+                return self._call_groq(user_message, system, history, max_tokens)
+            elif provider == 'ollama':
+                return self._call_ollama(user_message, system, history, max_tokens)
+            elif provider == 'anthropic':
+                return self._call_anthropic(user_message, system, history, max_tokens)
+            elif provider == 'openai':
+                return self._call_openai(user_message, system, history, max_tokens)
+            return {'success': False, 'error': f'Proveedor {provider} desconocido'}
         except Exception as e:
-            logger.error(f"Error Anthropic: {e}")
-            return {'success': False, 'response': f'Error conectando con la IA: {str(e)}', 'provider': 'anthropic'}
+            return {'success': False, 'error': str(e)}
 
-    def _call_openai(self, user_message: str, system: str,
-                     history: list = None, max_tokens: int = 1000) -> dict:
-        model = get_config('ai_model', 'gpt-3.5-turbo')
+    # ── GROQ (Llama 3 gratis — prioridad 1) ────────────────────────────────
+    def _call_groq(self, user_message: str, system: str,
+                   history: list = None, max_tokens: int = 1000) -> dict:
+        if not self.groq_key:
+            return {'success': False, 'error': 'Sin GROQ_API_KEY'}
+
         messages = [{'role': 'system', 'content': system}]
         if history:
             for h in history[-10:]:
                 messages.append({'role': h['role'], 'content': h['content']})
         messages.append({'role': 'user', 'content': user_message})
 
-        try:
-            resp = requests.post(
-                'https://api.openai.com/v1/chat/completions',
-                headers={'Authorization': f'Bearer {self.openai_key}', 'Content-Type': 'application/json'},
-                json={'model': model, 'messages': messages, 'max_tokens': max_tokens},
-                timeout=30
-            )
-            resp.raise_for_status()
-            data = resp.json()
-            text = data['choices'][0]['message']['content']
-            tokens = data.get('usage', {}).get('completion_tokens', 0)
-            return {'success': True, 'response': text, 'tokens': tokens, 'provider': 'openai', 'model': model}
-        except Exception as e:
-            logger.error(f"Error OpenAI: {e}")
-            return {'success': False, 'response': f'Error OpenAI: {str(e)}', 'provider': 'openai'}
+        resp = requests.post(
+            'https://api.groq.com/openai/v1/chat/completions',
+            headers={
+                'Authorization': f'Bearer {self.groq_key}',
+                'Content-Type':  'application/json'
+            },
+            json={
+                'model':       self.groq_model,
+                'messages':    messages,
+                'max_tokens':  max_tokens,
+                'temperature': 0.7
+            },
+            timeout=30
+        )
+        resp.raise_for_status()
+        data   = resp.json()
+        text   = data['choices'][0]['message']['content']
+        tokens = data.get('usage', {}).get('completion_tokens', 0)
+        return {
+            'success':  True,
+            'response': text,
+            'tokens':   tokens,
+            'provider': 'groq',
+            'model':    self.groq_model
+        }
 
+    # ── OLLAMA (modelo local / Colab — prioridad 2) ─────────────────────────
+    def _call_ollama(self, user_message: str, system: str,
+                     history: list = None, max_tokens: int = 1000) -> dict:
+        if not self.ollama_url:
+            return {'success': False, 'error': 'Sin OLLAMA_URL'}
+
+        # Construir prompt con historial
+        messages = [{'role': 'system', 'content': system}]
+        if history:
+            for h in history[-10:]:
+                messages.append({'role': h['role'], 'content': h['content']})
+        messages.append({'role': 'user', 'content': user_message})
+
+        base_url = self.ollama_url.rstrip('/')
+        resp = requests.post(
+            f'{base_url}/api/chat',
+            json={
+                'model':    self.ollama_model,
+                'messages': messages,
+                'stream':   False,
+                'options':  {'num_predict': max_tokens, 'temperature': 0.7}
+            },
+            timeout=120  # Ollama puede ser lento en Colab
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        text = data.get('message', {}).get('content', '')
+        if not text:
+            return {'success': False, 'error': 'Ollama retornó respuesta vacía'}
+        return {
+            'success':  True,
+            'response': text,
+            'tokens':   data.get('eval_count', 0),
+            'provider': 'ollama',
+            'model':    self.ollama_model
+        }
+
+    # ── ANTHROPIC Claude ────────────────────────────────────────────────────
+    def _call_anthropic(self, user_message: str, system: str,
+                        history: list = None, max_tokens: int = 1000) -> dict:
+        if not self.anthropic_key:
+            return {'success': False, 'error': 'Sin ANTHROPIC_API_KEY'}
+
+        model    = get_config('ai_model', 'claude-haiku-4-5-20251001')
+        messages = []
+        if history:
+            for h in history[-10:]:
+                messages.append({'role': h['role'], 'content': h['content']})
+        messages.append({'role': 'user', 'content': user_message})
+
+        resp = requests.post(
+            'https://api.anthropic.com/v1/messages',
+            headers={
+                'x-api-key':         self.anthropic_key,
+                'anthropic-version': '2023-06-01',
+                'content-type':      'application/json'
+            },
+            json={'model': model, 'max_tokens': max_tokens, 'system': system, 'messages': messages},
+            timeout=30
+        )
+        resp.raise_for_status()
+        data   = resp.json()
+        text   = data['content'][0]['text']
+        tokens = data.get('usage', {}).get('output_tokens', 0)
+        return {'success': True, 'response': text, 'tokens': tokens, 'provider': 'anthropic', 'model': model}
+
+    # ── OPENAI GPT ──────────────────────────────────────────────────────────
+    def _call_openai(self, user_message: str, system: str,
+                     history: list = None, max_tokens: int = 1000) -> dict:
+        if not self.openai_key:
+            return {'success': False, 'error': 'Sin OPENAI_API_KEY'}
+
+        model    = get_config('ai_model', 'gpt-3.5-turbo')
+        messages = [{'role': 'system', 'content': system}]
+        if history:
+            for h in history[-10:]:
+                messages.append({'role': h['role'], 'content': h['content']})
+        messages.append({'role': 'user', 'content': user_message})
+
+        resp = requests.post(
+            'https://api.openai.com/v1/chat/completions',
+            headers={'Authorization': f'Bearer {self.openai_key}', 'Content-Type': 'application/json'},
+            json={'model': model, 'messages': messages, 'max_tokens': max_tokens},
+            timeout=30
+        )
+        resp.raise_for_status()
+        data   = resp.json()
+        text   = data['choices'][0]['message']['content']
+        tokens = data.get('usage', {}).get('completion_tokens', 0)
+        return {'success': True, 'response': text, 'tokens': tokens, 'provider': 'openai', 'model': model}
+
+    # ── FALLBACK (sin motor de IA) ──────────────────────────────────────────
     def _fallback_response(self, user_message: str) -> dict:
-        """Respuesta cuando no hay API key configurada"""
         msg_lower = user_message.lower()
-        if any(w in msg_lower for w in ['hola', 'buenas', 'hey']):
-            r = "¡Hola! Soy Cic_IA. Para funcionar con IA real, el desarrollador debe configurar ANTHROPIC_API_KEY o OPENAI_API_KEY en las variables de entorno."
-        elif any(w in msg_lower for w in ['qué hora', 'qué día', 'fecha']):
-            now = datetime.now()
-            dias = ['lunes','martes','miércoles','jueves','viernes','sábado','domingo']
-            meses = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre']
+        if any(w in msg_lower for w in ['hola', 'buenas', 'hey', 'saludos']):
+            r = ("¡Hola! Soy Cic_IA. Actualmente no tengo ningún motor de IA conectado. "
+                 "El desarrollador debe configurar GROQ_API_KEY (gratis) u OLLAMA_URL.")
+        elif any(w in msg_lower for w in ['qué hora', 'qué día', 'fecha', 'hoy']):
+            now   = datetime.now()
+            dias  = ['lunes','martes','miércoles','jueves','viernes','sábado','domingo']
+            meses = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto',
+                     'septiembre','octubre','noviembre','diciembre']
             r = f"Hoy es {dias[now.weekday()]}, {now.day} de {meses[now.month-1]} de {now.year} — {now.strftime('%H:%M')}"
         else:
-            r = (f"Recibí tu mensaje: '{user_message[:80]}'. "
-                 "⚠️ No hay API key de IA configurada. "
-                 "El desarrollador debe agregar ANTHROPIC_API_KEY o OPENAI_API_KEY como variable de entorno.")
+            r = (f"Recibí: '{user_message[:80]}'. "
+                 "⚠️ Sin motor de IA activo. Configura GROQ_API_KEY o OLLAMA_URL en las variables de entorno.")
         return {'success': False, 'response': r, 'provider': 'fallback', 'tokens': 0}
+
 
 # ========== MOTOR DE BÚSQUEDA DE MEMORIAS (optimizado) ==========
 
