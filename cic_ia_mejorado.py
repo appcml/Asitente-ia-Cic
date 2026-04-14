@@ -203,7 +203,7 @@ def run_migration():
 
             # Config por defecto (solo inserta si no existe la clave)
             defaults = [
-                ('ai_provider',                   'anthropic',                                                                                              'string'),
+                ('ai_provider',                   'groq',                                                                                                   'string'),
                 ('ai_model',                      'claude-haiku-4-5-20251001',                                                                              'string'),
                 ('system_prompt',                 'Eres Cic_IA, un asistente inteligente en español. Responde de forma clara, útil y amigable.',             'string'),
                 ('max_tokens',                    '1000',                                                                                                    'int'),
@@ -219,6 +219,15 @@ def run_migration():
                 except Exception:
                     pass
             db.session.commit()
+            # Forzar proveedor a groq si está en anthropic (migración de versiones anteriores)
+            try:
+                cfg = SystemConfig.query.filter_by(key='ai_provider').first()
+                if cfg and cfg.value == 'anthropic':
+                    cfg.value = 'groq'
+                    db.session.commit()
+                    logger.info("Migración: ai_provider actualizado a groq")
+            except Exception:
+                pass
             logger.info("✅ Migración completada")
     except Exception as e:
         logger.error(f"Error migración: {e}")
@@ -671,7 +680,7 @@ class CicIA:
             logger.info(f"   Memorias: {Memory.query.count()}")
             logger.info(f"   Conversaciones: {Conversation.query.count()}")
             logger.info(f"   Conocimiento manual: {ManualKnowledge.query.count()}")
-            provider = get_config('ai_provider', 'anthropic')
+            provider = get_config('ai_provider', 'groq')
             has_key  = bool(ANTHROPIC_API_KEY or OPENAI_API_KEY)
             logger.info(f"   Proveedor IA: {provider} ({'✅ API Key OK' if has_key else '⚠️ Sin API Key'})")
             logger.info("=" * 55)
