@@ -781,49 +781,137 @@ class CicIA:
                 'total': len(learned_items)
             }
 
+    def _get_user_conversation_history(self, user_id: int, limit: int = 10) -> list:
+        """
+        Recupera el historial real de conversaciones del usuario desde la BD.
+        Esto permite que la IA recuerde conversaciones ANTERIORES, no solo la actual.
+        """
+        if not user_id:
+            return []
+        try:
+            recent = Conversation.query.filter_by(user_id=user_id).order_by(
+                Conversation.timestamp.desc()
+            ).limit(limit).all()
+            history = []
+            for conv in reversed(recent):
+                history.append({'role': 'user',      'content': conv.user_message[:500]})
+                history.append({'role': 'assistant',  'content': conv.bot_response[:500]})
+            return history
+        except Exception as e:
+            logger.error(f"Error recuperando historial: {e}")
+            return []
+
+    def _build_reasoning_prompt(self, user_message: str, memories: list,
+                                 manual_knowledge: list, user_history: list) -> str:
+        """
+        Construye un system prompt enriquecido con:
+        - Instrucciones de razonamiento paso a paso (Chain of Thought)
+        - Conocimiento manual del desarrollador
+        - Memorias aprendidas relevantes
+        - Resumen del perfil del usuario basado en su historial
+        """
+        base_prompt = get_config(
+            'system_prompt',
+            'Eres Cic_IA, un asistente inteligente en español. Responde de forma clara, útil y amigable.'
+        )
+
+        parts = [base_prompt, ""]
+
+        # ── Chain of Thought: razonamiento paso a paso ──────────────────
+        parts.append("""=== INSTRUCCIONES DE RAZONAMIENTO ===
+Antes de responder, analiza internamente:
+1. ¿Qué está pidiendo exactamente el usuario?
+2. ¿Tengo información relevante en mi conocimiento?
+3. ¿El historial de conversación da contexto adicional?
+4. ¿Cuál es la respuesta más útil y precisa?
+Luego responde directamente sin mostrar este proceso al usuario.""")
+        parts.append("")
+
+        # ── Conocimiento manual (mayor prioridad) ───────────────────────
+        if manual_knowledge:
+            parts.append("=== CONOCIMIENTO BASE (usa esto como fuente prioritaria) ===")
+            for mk in manual_knowledge[:5]:
+                parts.append(f"[{mk.category or 'General'}] {mk.title}:\n{mk.content[:600]}")
+            parts.append("")
+
+        # ── Memorias aprendidas ─────────────────────────────────────────
+        if memories:
+            parts.append("=== CONOCIMIENTO APRENDIDO ===")
+            for mem in memories[:4]:
+                parts.append(f"Tema: {mem.topic or 'general'}\n{mem.content[:400]}")
+            parts.append("")
+
+        # ── Perfil del usuario basado en historial ──────────────────────
+        if user_history and len(user_history) >= 4:
+            parts.append("=== CONTEXTO DEL USUARIO ===")
+            parts.append("Has conversado antes con este usuario. Aquí hay contexto de conversaciones anteriores:")
+            # Resumir últimas 3 interacciones
+            for i in range(0, min(6, len(user_history)), 2):
+                if i+1 < len(user_history):
+                    u = user_history[i]['content'][:100]
+                    a = user_history[i+1]['content'][:100]
+                    parts.append(f"- Usuario preguntó: '{u}...' → Respondiste: '{a}...'")
+            parts.append("Usa este contexto para dar respuestas más personalizadas y coherentes.")
+            parts.append("")
+
+        return "\n".join(parts)
+
     def chat(self, user_message: str, user_id: int = None,
              conversation_history: list = None, mode: str = 'balanced') -> dict:
-        """Procesamiento principal del chat con LLM real"""
+        """
+        Procesamiento principal del chat con razonamiento mejorado.
+        
+        Capas de razonamiento:
+        1. Memoria persistente: historial real de la BD
+        2. Chain of Thought: razona antes de responder  
+        3. Contexto conversacional: historial de la sesión actual
+        """
 
         # Validar longitud
         if len(user_message) > 4000:
             user_message = user_message[:4000]
 
-        # Buscar memorias relevantes
-        memories        = self.memory_engine.search(user_message, limit=get_config('max_memory_results', 5))
+        # ── Capa 1: Recuperar historial persistente de la BD ────────────
+        db_history = self._get_user_conversation_history(user_id, limit=8)
+
+        # ── Combinar historial de BD con historial de sesión actual ─────
+        # La sesión actual tiene prioridad (más reciente)
+        combined_history = db_history
+        if conversation_history:
+            # Solo agregar mensajes de sesión que no dupliquen los de BD
+            combined_history = db_history + conversation_history[-6:]
+
+        # ── Buscar memorias y conocimiento relevante ────────────────────
+        memories         = self.memory_engine.search(user_message, limit=get_config('max_memory_results', 5))
         manual_knowledge = self.memory_engine.search_manual_knowledge(user_message, limit=5)
 
-        # Construir contexto
-        context = self.llm._build_context(user_message, memories, manual_knowledge)
-
-        # System prompt desde config
-        system_prompt = get_config(
-            'system_prompt',
-            'Eres Cic_IA, un asistente inteligente en español. Responde de forma clara, útil y amigable.'
+        # ── Capa 2: Construir prompt con Chain of Thought ───────────────
+        reasoning_prompt = self._build_reasoning_prompt(
+            user_message, memories, manual_knowledge, db_history
         )
 
-        # Tokens según modo
-        tokens_map = {'fast': 500, 'balanced': 1000, 'complete': 2000}
-        max_tokens = tokens_map.get(mode, 1000)
+        # ── Tokens según modo ───────────────────────────────────────────
+        tokens_map = {'fast': 600, 'balanced': 1200, 'complete': 2500}
+        max_tokens = tokens_map.get(mode, 1200)
 
-        # Llamar al LLM
+        # ── Capa 3: Llamar al LLM con contexto completo ─────────────────
         llm_result = self.llm.chat(
             user_message=user_message,
-            system_prompt=system_prompt,
-            context=context,
-            conversation_history=conversation_history,
+            system_prompt=reasoning_prompt,
+            context="",  # ya está en el reasoning_prompt
+            conversation_history=combined_history,
             max_tokens=max_tokens
         )
 
         response_text = llm_result['response']
 
-        # Si el LLM no tiene key y no hay memorias, buscar en web
+        # ── Búsqueda web si el LLM falla ────────────────────────────────
         if not llm_result.get('success') and get_config('web_search_enabled', True):
             web_data = self._search_and_cache(user_message)
             if web_data:
                 response_text += f"\n\n📖 Información encontrada en la web:\n{web_data}"
 
-        # Guardar conversación
+        # ── Guardar en BD para memoria futura ───────────────────────────
         self._save_conversation(
             user_msg=user_message,
             bot_resp=response_text,
@@ -833,13 +921,14 @@ class CicIA:
         )
 
         return {
-            'response':       response_text,
-            'provider':       llm_result.get('provider', 'unknown'),
-            'model':          llm_result.get('model', 'unknown'),
-            'tokens_used':    llm_result.get('tokens', 0),
-            'memories_used':  len(memories),
-            'manual_kb_used': len(manual_knowledge),
-            'success':        llm_result.get('success', False)
+            'response':        response_text,
+            'provider':        llm_result.get('provider', 'unknown'),
+            'model':           llm_result.get('model', 'unknown'),
+            'tokens_used':     llm_result.get('tokens', 0),
+            'memories_used':   len(memories),
+            'manual_kb_used':  len(manual_knowledge),
+            'history_used':    len(combined_history),
+            'success':         llm_result.get('success', False)
         }
 
     def _search_and_cache(self, query: str) -> str:
