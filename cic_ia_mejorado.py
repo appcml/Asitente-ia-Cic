@@ -160,6 +160,13 @@ class SystemConfig(db.Model):
 
 # ========== MIGRACIÓN ==========
 
+def _safe_count(model):
+    """Cuenta registros de forma segura — retorna 0 si la tabla no existe"""
+    try:
+        return model.query.count()
+    except Exception:
+        return 0
+
 def run_migration():
     """
     Migración segura: agrega columnas/tablas nuevas sin destruir datos existentes.
@@ -1262,7 +1269,7 @@ def dev_stats():
                 'total_users':         User.query.count(),
                 'active_sessions':     UserSession.query.count(),
                 'manual_knowledge':    ManualKnowledge.query.filter_by(active=True).count(),
-                'cached_searches':     WebSearchCache.query.count(),
+                'cached_searches':     _safe_count(WebSearchCache),
             },
             'today': {
                 'conversations': log.count if log else 0,
@@ -1281,10 +1288,11 @@ def dev_stats():
                 'tokens':   c.tokens_used,
             } for c in last_convs],
             'ai_config': {
-                'provider':        get_config('ai_provider'),
+                'provider':        get_config('ai_provider', 'groq'),
                 'model':           get_config('ai_model'),
                 'has_anthropic':   bool(ANTHROPIC_API_KEY),
                 'has_openai':      bool(OPENAI_API_KEY),
+                'has_groq':        bool(os.environ.get('GROQ_API_KEY', '')),
                 'system_prompt':   get_config('system_prompt'),
                 'max_tokens':      get_config('max_tokens'),
                 'auto_learning':   get_config('auto_learning_enabled'),
@@ -1526,9 +1534,16 @@ def dev_get_memories():
     if source: query = query.filter_by(source=source)
     if topic:  query = query.filter(Memory.topic.ilike(f'%{topic}%'))
 
-    pagination = query.order_by(
-        Memory.relevance_score.desc(), Memory.created_at.desc()
-    ).paginate(page=page, per_page=per_page, error_out=False)
+    # Ordenar por fecha más reciente primero (por defecto)
+    sort_by = request.args.get('sort', 'recent')
+    if sort_by == 'score':
+        query = query.order_by(Memory.relevance_score.desc(), Memory.created_at.desc())
+    elif sort_by == 'accesses':
+        query = query.order_by(Memory.access_count.desc(), Memory.created_at.desc())
+    else:  # recent (default)
+        query = query.order_by(Memory.created_at.desc())
+
+    pagination = query.paginate(page=page, per_page=per_page, error_out=False)
 
     return jsonify({
         'memories': [{
