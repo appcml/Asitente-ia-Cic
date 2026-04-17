@@ -54,7 +54,7 @@ tr:hover td{background:rgba(108,99,255,.04);}
 .badge-red{background:rgba(255,107,107,.15);color:var(--red);}
 .badge-blue{background:rgba(72,219,251,.15);color:var(--accent2);}
 .badge-purple{background:rgba(108,99,255,.15);color:var(--accent);}
-.chat-box{background:var(--bg2);border-radius:var(--radius);padding:18px;min-height:260px;max-height:440px;overflow-y:auto;margin-bottom:12px;border:1px solid #2d3561;}
+.chat-box{background:var(--bg2);border-radius:var(--radius);padding:18px;min-height:260px;max-height:520px;overflow-y:auto;margin-bottom:12px;border:1px solid #2d3561;}
 .msg{margin-bottom:14px;}.msg.user{text-align:right;}
 .msg.user .bubble{background:var(--accent);color:#fff;border-radius:12px 12px 4px 12px;padding:9px 14px;display:inline-block;max-width:78%;text-align:left;}
 .msg.bot .bubble{background:var(--bg3);color:var(--text);border-radius:12px 12px 12px 4px;padding:9px 14px;display:inline-block;max-width:78%;white-space:pre-wrap;line-height:1.55;}
@@ -72,6 +72,8 @@ pre{background:#0d0f1a;border:1px solid #2d3561;border-radius:8px;padding:14px;o
 .filters input,.filters select{width:auto;flex:1;min-width:130px;}
 @media(max-width:768px){.sidebar{width:52px;}.logo h1,.logo span,.nav-item span{display:none;}.nav-item{justify-content:center;padding:13px;}.main{padding:14px;}.grid2{grid-template-columns:1fr;}}
 </style>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
 </head>
 <body>
 
@@ -256,20 +258,32 @@ pre{background:#0d0f1a;border:1px solid #2d3561;border-radius:8px;padding:14px;o
     </section>
 
     <section id="sec-chat" class="section">
-      <h2>💬 Test de Chat</h2><p class="subtitle">Prueba la IA directamente desde el panel</p>
+      <h2>💬 Test de Chat</h2><p class="subtitle">Prueba la IA — con renderizado de código, descarga y previsualización</p>
       <div class="panel">
         <div style="display:flex;gap:12px;margin-bottom:14px;align-items:center;flex-wrap:wrap">
-          <label style="color:var(--text2);font-size:.83rem;white-space:nowrap">System prompt:</label>
-          <input type="text" id="test-prompt" placeholder="Opcional" style="flex:1;min-width:180px"/>
-          <select id="test-mode" style="width:130px"><option value="balanced">Balanceado</option><option value="fast">Rápido</option><option value="complete">Completo</option></select>
+          <label style="color:var(--text2);font-size:.83rem;white-space:nowrap">Prompt:</label>
+          <input type="text" id="test-prompt" placeholder="Opcional — usa el configurado por defecto" style="flex:1;min-width:180px"/>
+          <select id="test-mode" style="width:130px">
+            <option value="balanced">Balanceado</option>
+            <option value="fast">Rápido</option>
+            <option value="complete">Completo</option>
+          </select>
+          <button class="btn btn-outline btn-sm" onclick="clearChat()" title="Limpiar historial">🗑️ Limpiar</button>
         </div>
         <div class="chat-box" id="testChat"><div style="text-align:center;color:var(--text2);font-size:.85rem;padding:40px 0">Escribe un mensaje para probar la IA</div></div>
         <div style="display:flex;gap:10px">
           <input type="text" id="testMsg" placeholder="Escribe un mensaje..." onkeydown="if(event.key==='Enter')sendTestMsg()" style="flex:1"/>
           <button class="btn btn-primary" onclick="sendTestMsg()">Enviar</button>
-          <button class="btn btn-outline" onclick="clearChat()">Limpiar</button>
         </div>
         <div id="testInfo" style="margin-top:8px;font-size:.78rem;color:var(--text2)"></div>
+      </div>
+      <!-- Preview iframe -->
+      <div class="panel" id="previewPanel" style="display:none">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+          <h3 style="font-size:.95rem">🖼️ Previsualización</h3>
+          <button class="btn btn-outline btn-sm" onclick="closePreview()">✕ Cerrar</button>
+        </div>
+        <iframe id="previewFrame" style="width:100%;height:500px;border:1px solid #2d3561;border-radius:8px;background:#fff"></iframe>
       </div>
       <div class="panel"><h3 style="margin-bottom:10px;font-size:.95rem">📡 API Reference</h3><pre id="apiRef">Cargando...</pre></div>
     </section>
@@ -537,40 +551,106 @@ async function sendTestMsg(){
   const customPrompt=document.getElementById('test-prompt').value.trim();
   const box=document.getElementById('testChat');
   if(box.querySelector('[style*="padding:40px"]'))box.innerHTML='';
+
+  // Mostrar mensaje usuario
   box.innerHTML+=`<div class="msg user"><div class="bubble">${esc(msg)}</div></div>`;
   const tid='t'+Date.now();
-  box.innerHTML+=`<div class="msg bot" id="${tid}"><div class="bubble" style="color:var(--text2)">⏳ Pensando...</div></div>`;
+  box.innerHTML+=`<div class="msg bot" id="${tid}"><div class="bubble" style="color:var(--text2)">\u23f3 Pensando...</div></div>`;
   box.scrollTop=box.scrollHeight;
+
   try{
     let r;
+    // Limitar historial a los últimos 6 intercambios para no superar límite de tokens de Groq
+    const limitedHistory=chatHistory.slice(-12);
     if(customPrompt){r=await api('/api/dev/test-ai','POST',{message:msg,system_prompt:customPrompt});}
-    else{r=await api('/api/chat','POST',{message:msg,mode,history:chatHistory});}
+    else{r=await api('/api/chat','POST',{message:msg,mode,history:limitedHistory});}
+
     chatHistory.push({role:'user',content:msg});
     chatHistory.push({role:'assistant',content:r.response});
-    if(chatHistory.length>30)chatHistory.splice(0,2);
+    if(chatHistory.length>20)chatHistory.splice(0,2);
+
     const el=document.getElementById(tid);
-    if(el)el.innerHTML=`<div class="bubble">${esc(r.response).replace(/\n/g,'<br>')}</div><div class="msg-meta">Provider: ${r.provider||'—'} | Model: ${r.model||'—'} | Tokens: ${r.tokens_used??r.tokens??0}</div>`;
-    document.getElementById('testInfo').textContent=`Historial en sesión: ${chatHistory.length/2} intercambios`;
+    if(el){
+      const rendered=renderMessage(r.response);
+      el.innerHTML=`<div class="bubble">${rendered}</div>
+        <div class="msg-meta">Provider: ${r.provider||'—'} | Model: ${r.model||'—'} | Tokens: ${r.tokens_used??r.tokens??0} | Historial: ${chatHistory.length/2} msgs</div>`;
+    }
+    // Highlight all code blocks
+    el?.querySelectorAll('pre code').forEach(b=>hljs?.highlightElement(b));
+    document.getElementById('testInfo').textContent=`Intercambios en sesión: ${chatHistory.length/2}`;
   }catch(e){
     const el=document.getElementById(tid);
     if(el)el.innerHTML=`<div class="bubble" style="color:var(--red)">Error: ${esc(e.message)}</div>`;
   }
   box.scrollTop=box.scrollHeight;
 }
+
+function renderMessage(text){
+  // Detectar bloques de código ```lang ... ```
+  const parts=[];
+  const codeRegex=/```(\w+)?\n?([\s\S]*?)```/g;
+  let last=0;let m;
+  while((m=codeRegex.exec(text))!==null){
+    if(m.index>last) parts.push({type:'text',content:text.slice(last,m.index)});
+    parts.push({type:'code',lang:m[1]||'plaintext',content:m[2].trim()});
+    last=m.index+m[0].length;
+  }
+  if(last<text.length)parts.push({type:'text',content:text.slice(last)});
+
+  return parts.map(p=>{
+    if(p.type==='text') return `<span style="white-space:pre-wrap">${esc(p.content)}</span>`;
+    const id='code_'+Math.random().toString(36).slice(2);
+    const isHTML=p.lang==='html'||p.lang==='HTML';
+    const previewBtn=isHTML?`<button class="btn btn-sm" style="background:#1dd1a1;color:#0f1117;margin-left:6px" onclick="previewHTML(\`${p.content.replace(/`/g,'\\`')}\`)">👁️ Preview</button>`:'';
+    return `<div style="margin:10px 0;border-radius:8px;overflow:hidden;border:1px solid #2d3561">
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 12px;background:#0d0f1a">
+        <span style="font-size:.78rem;color:var(--accent2)">${p.lang}</span>
+        <div style="display:flex;gap:6px">
+          ${previewBtn}
+          <button class="btn btn-sm btn-outline" onclick="copyCode('${id}')">📋 Copiar</button>
+          <button class="btn btn-sm" style="background:#6c63ff;color:#fff" onclick="downloadCode('${id}','${p.lang}')">⬇️ Descargar</button>
+        </div>
+      </div>
+      <pre id="${id}" style="margin:0;border-radius:0;border:none;padding:14px;overflow-x:auto"><code class="language-${p.lang}">${esc(p.content)}</code></pre>
+    </div>`;
+  }).join('');
+}
+
+function copyCode(id){
+  const el=document.getElementById(id);
+  if(!el)return;
+  navigator.clipboard.writeText(el.textContent).then(()=>{
+    const btn=el.previousElementSibling?.querySelector('button');
+    if(btn){const orig=btn.textContent;btn.textContent='✅ Copiado';setTimeout(()=>btn.textContent=orig,1500);}
+  });
+}
+
+function downloadCode(id,lang){
+  const el=document.getElementById(id);if(!el)return;
+  const ext={html:'html',python:'py',py:'py',javascript:'js',js:'js',css:'css',json:'json',bash:'sh',sql:'sql'}[lang.toLowerCase()]||'txt';
+  const blob=new Blob([el.textContent],{type:'text/plain'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);
+  a.download=`codigo.${ext}`;a.click();URL.revokeObjectURL(a.href);
+}
+
+function previewHTML(code){
+  const panel=document.getElementById('previewPanel');
+  const frame=document.getElementById('previewFrame');
+  panel.style.display='block';
+  frame.srcdoc=code;
+  panel.scrollIntoView({behavior:'smooth'});
+}
+
+function closePreview(){
+  document.getElementById('previewPanel').style.display='none';
+  document.getElementById('previewFrame').srcdoc='';
+}
+
 function clearChat(){
   chatHistory.length=0;
-  document.getElementById('testChat').innerHTML='<div style="text-align:center;color:var(--text2);font-size:.85rem;padding:40px 0">Chat limpiado</div>';
+  document.getElementById('testChat').innerHTML='<div style="text-align:center;color:var(--text2);font-size:.85rem;padding:40px 0">Chat limpiado \u2014 historial borrado</div>';
   document.getElementById('testInfo').textContent='';
-}
-function loadAPIRef(){
-  document.getElementById('apiRef').textContent=`POST /api/chat           — Chat con la IA
-GET  /api/chat/history    — Historial del usuario
-GET  /api/dev/stats       — Stats del sistema
-POST /api/dev/knowledge   — Agregar conocimiento
-POST /api/dev/learn       — Forzar aprendizaje
-PUT  /api/dev/config      — Actualizar configuración
-GET  /api/dev/memories    — Ver memorias
-POST /api/dev/test-ai     — Test sin guardar`;
+  closePreview();
 }
 async function loadUsers(){
   try{
