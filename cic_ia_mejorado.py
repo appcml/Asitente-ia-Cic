@@ -917,11 +917,14 @@ Luego responde directamente sin mostrar este proceso al usuario.""")
         db_history = self._get_user_conversation_history(user_id, limit=8)
 
         # ── Combinar historial de BD con historial de sesión actual ─────
-        # La sesión actual tiene prioridad (más reciente)
-        combined_history = db_history
+        # Limitamos el historial para no superar el límite de tokens de Groq
+        # Groq llama-3.1-8b-instant: ~8k tokens de contexto
         if conversation_history:
-            # Solo agregar mensajes de sesión que no dupliquen los de BD
-            combined_history = db_history + conversation_history[-6:]
+            # Sesión actual tiene prioridad — últimos 6 intercambios (12 mensajes)
+            combined_history = conversation_history[-12:]
+        else:
+            # Sin sesión activa, usar BD pero limitado
+            combined_history = db_history[-6:]
 
         # ── Buscar memorias y conocimiento relevante ────────────────────
         memories         = self.memory_engine.search(user_message, limit=get_config('max_memory_results', 5))
