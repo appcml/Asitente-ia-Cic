@@ -198,8 +198,13 @@ pre{background:#0d0f1a;border:1px solid #2d3561;border-radius:8px;padding:14px;o
       <div class="filters">
         <input type="text" id="mem-search" placeholder="Buscar por tema..."/>
         <select id="mem-source"><option value="">Todas las fuentes</option><option value="auto_learning">Auto-aprendizaje</option><option value="web_search">Búsqueda web</option><option value="manual_dev">Manual (dev)</option></select>
-        <input type="date" id="mem-date-from" title="Desde" style="max-width:160px"/>
-        <input type="date" id="mem-date-to" title="Hasta" style="max-width:160px"/>
+        <select id="mem-sort" style="max-width:160px" onchange="loadMemories(1)">
+          <option value="recent">Más recientes primero</option>
+          <option value="score">Mayor relevancia</option>
+          <option value="accesses">Más accedidas</option>
+        </select>
+        <input type="date" id="mem-date-from" title="Desde" style="max-width:150px"/>
+        <input type="date" id="mem-date-to" title="Hasta" style="max-width:150px"/>
         <button class="btn btn-outline btn-sm" onclick="loadMemories(1)">🔍 Filtrar</button>
         <button class="btn btn-red btn-sm" onclick="clearMemoriesPrompt()" style="margin-left:auto">🗑️ Limpiar</button>
       </div>
@@ -365,7 +370,7 @@ async function loadDashboard(){
     document.getElementById('d-kb').textContent=(d.system?.manual_knowledge||0).toLocaleString();
     document.getElementById('d-today').textContent=d.today?.conversations||0;
     const prov=d.ai_config?.provider||'—';
-    const ok=prov==='groq'||d.ai_config?.has_anthropic||d.ai_config?.has_openai;
+    const ok=d.ai_config?.has_groq||prov==='groq'||d.ai_config?.has_anthropic||d.ai_config?.has_openai;
     document.getElementById('d-ai').innerHTML=`<span class="dot ${ok?'dot-green':'dot-red'}"></span>${prov}`;
     if(!ok)showAlert('dashAlert','⚠️ No hay API Key de IA configurada.','warn');
     const rc=document.getElementById('recentConvs');
@@ -461,7 +466,8 @@ async function loadMemories(page=1){
   const source=document.getElementById('mem-source').value;
   const df=document.getElementById('mem-date-from').value;
   const dt=document.getElementById('mem-date-to').value;
-  let url=`/api/dev/memories?page=${page}&per_page=25`;
+  const sort=document.getElementById('mem-sort')?.value||'recent';
+  let url=`/api/dev/memories?page=${page}&per_page=25&sort=${sort}`;
   if(topic)url+=`&topic=${encodeURIComponent(topic)}`;
   if(source)url+=`&source=${source}`;
   try{
@@ -491,7 +497,11 @@ async function loadConfig(){
   try{
     const d=await api('/api/dev/config');
     const c=d.config;const v=k=>c[k]?.value||'';
-    document.getElementById('cfg-provider').value=v('ai_provider')||'groq';
+    const provVal=v('ai_provider')||'groq';
+    // Ensure groq is selected if that's what's saved
+    const provSel=document.getElementById('cfg-provider');
+    if([...provSel.options].some(o=>o.value===provVal)) provSel.value=provVal;
+    else provSel.value='groq';
     document.getElementById('cfg-model').value=v('ai_model')||'llama-3.1-8b-instant';
     document.getElementById('cfg-tokens').value=v('max_tokens')||'1000';
     document.getElementById('cfg-autolearn').value=v('auto_learning_enabled')||'true';
