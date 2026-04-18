@@ -2,110 +2,296 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Cic_IA — Panel Desarrollador</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Cic_IA — Panel Dev</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
 <style>
-:root{--bg:#0f1117;--bg2:#1a1d2e;--bg3:#242840;--accent:#6c63ff;--accent2:#48dbfb;--green:#1dd1a1;--red:#ff6b6b;--yellow:#ffd93d;--text:#e2e8f0;--text2:#94a3b8;--radius:10px;}
+:root{
+  --bg:#0f1117;--bg2:#1a1d2e;--bg3:#242840;
+  --accent:#6c63ff;--accent2:#48dbfb;
+  --green:#1dd1a1;--red:#ff6b6b;--yellow:#ffd93d;
+  --text:#e2e8f0;--text2:#94a3b8;--radius:10px;
+  --sidebar-w:200px;--code-panel-w:420px;
+}
 *{box-sizing:border-box;margin:0;padding:0;}
-body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;}
-.layout{display:flex;min-height:100vh;}
-.sidebar{width:200px;background:var(--bg2);padding:20px 0;display:flex;flex-direction:column;border-right:1px solid #2d3561;flex-shrink:0;}
-.main{flex:1;padding:28px;overflow-y:auto;}
-.logo{padding:0 20px 20px;border-bottom:1px solid #2d3561;}
-.logo h1{font-size:1.2rem;color:var(--accent);}
-.logo span{font-size:.72rem;color:var(--text2);}
-.nav{padding:12px 0;flex:1;}
-.nav-item{display:flex;align-items:center;gap:10px;padding:11px 20px;cursor:pointer;color:var(--text2);font-size:.88rem;transition:all .2s;border-left:3px solid transparent;}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);height:100vh;overflow:hidden;}
+
+/* ── LAYOUT ── */
+.app{display:flex;height:100vh;overflow:hidden;}
+
+/* ── SIDEBAR ── */
+.sidebar{
+  width:var(--sidebar-w);background:var(--bg2);
+  display:flex;flex-direction:column;
+  border-right:1px solid #2d3561;flex-shrink:0;
+  transition:transform .3s;z-index:50;
+}
+.logo{padding:16px 20px;border-bottom:1px solid #2d3561;display:flex;align-items:center;gap:10px;}
+.logo h1{font-size:1.1rem;color:var(--accent);}
+.logo span{font-size:.7rem;color:var(--text2);}
+.nav{flex:1;overflow-y:auto;padding:8px 0;}
+.nav-item{
+  display:flex;align-items:center;gap:10px;
+  padding:11px 20px;cursor:pointer;color:var(--text2);
+  font-size:.85rem;transition:all .2s;
+  border-left:3px solid transparent;white-space:nowrap;
+}
 .nav-item:hover,.nav-item.active{color:var(--text);background:rgba(108,99,255,.1);border-left-color:var(--accent);}
-.nav-item .icon{font-size:1rem;width:18px;text-align:center;}
-.sidebar-foot{padding:14px 20px;border-top:1px solid #2d3561;}
+.nav-item .icon{font-size:1rem;width:20px;text-align:center;flex-shrink:0;}
+.sidebar-foot{padding:12px 16px;border-top:1px solid #2d3561;}
+
+/* ── MAIN CONTENT ── */
+.main-wrap{flex:1;display:flex;overflow:hidden;}
+.main{flex:1;overflow-y:auto;padding:24px;}
+
+/* ── MOBILE OVERLAY ── */
+.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:40;}
+.overlay.show{display:block;}
+
+/* ── HAMBURGER ── */
+.hamburger{
+  display:none;position:fixed;top:12px;left:12px;z-index:60;
+  background:var(--bg2);border:1px solid #2d3561;border-radius:8px;
+  padding:8px 10px;cursor:pointer;font-size:1.1rem;color:var(--text);
+}
+
+/* ── CODE PANEL (lateral) ── */
+.code-panel{
+  width:0;background:var(--bg2);border-left:1px solid #2d3561;
+  overflow:hidden;transition:width .3s;display:flex;flex-direction:column;flex-shrink:0;
+}
+.code-panel.open{width:var(--code-panel-w);}
+.code-panel-head{
+  padding:12px 16px;border-bottom:1px solid #2d3561;
+  display:flex;align-items:center;justify-content:space-between;flex-shrink:0;
+}
+.code-panel-head h3{font-size:.9rem;color:var(--text2);}
+.code-panel-actions{display:flex;gap:6px;}
+.code-panel-body{flex:1;overflow:auto;}
+.code-panel-body pre{margin:0;border-radius:0;border:none;height:100%;}
+.code-panel-preview{width:100%;flex:1;border:none;background:#fff;}
+
+/* ── SECTIONS ── */
 .section{display:none;}.section.active{display:block;}
-h2{font-size:1.4rem;margin-bottom:6px;}
-.subtitle{color:var(--text2);margin-bottom:22px;font-size:.88rem;}
-.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;margin-bottom:22px;}
-.card{background:var(--bg2);border-radius:var(--radius);padding:18px;border:1px solid #2d3561;}
-.card .value{font-size:1.8rem;font-weight:700;color:var(--accent);}
-.card .label{font-size:.78rem;color:var(--text2);margin-top:4px;}
+h2{font-size:1.3rem;margin-bottom:6px;}
+.subtitle{color:var(--text2);margin-bottom:20px;font-size:.85rem;}
+
+/* ── CARDS ── */
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:20px;}
+.card{background:var(--bg2);border-radius:var(--radius);padding:16px;border:1px solid #2d3561;}
+.card .value{font-size:1.6rem;font-weight:700;color:var(--accent);}
+.card .label{font-size:.75rem;color:var(--text2);margin-top:4px;}
 .card.green .value{color:var(--green);}.card.yellow .value{color:var(--yellow);}.card.red .value{color:var(--red);}
-.alert{padding:10px 14px;border-radius:var(--radius);margin-bottom:14px;font-size:.88rem;}
+
+/* ── ALERTS ── */
+.alert{padding:10px 14px;border-radius:var(--radius);margin-bottom:12px;font-size:.85rem;}
 .alert-warn{background:rgba(255,211,61,.1);border:1px solid var(--yellow);color:var(--yellow);}
 .alert-ok{background:rgba(29,209,161,.1);border:1px solid var(--green);color:var(--green);}
 .alert-err{background:rgba(255,107,107,.1);border:1px solid var(--red);color:var(--red);}
 .alert-info{background:rgba(108,99,255,.1);border:1px solid var(--accent);color:var(--accent2);}
-.form-group{margin-bottom:14px;}
-label{display:block;font-size:.83rem;color:var(--text2);margin-bottom:5px;}
-input,textarea,select{width:100%;padding:9px 12px;background:var(--bg3);border:1px solid #2d3561;border-radius:8px;color:var(--text);font-size:.88rem;font-family:inherit;transition:border .2s;}
+
+/* ── FORMS ── */
+.form-group{margin-bottom:12px;}
+label{display:block;font-size:.8rem;color:var(--text2);margin-bottom:4px;}
+input,textarea,select{
+  width:100%;padding:9px 12px;background:var(--bg3);
+  border:1px solid #2d3561;border-radius:8px;color:var(--text);
+  font-size:.85rem;font-family:inherit;transition:border .2s;
+}
 input:focus,textarea:focus,select:focus{outline:none;border-color:var(--accent);}
-textarea{resize:vertical;min-height:90px;}
-.btn{padding:9px 18px;border-radius:8px;border:none;cursor:pointer;font-size:.88rem;font-weight:600;transition:all .2s;}
+textarea{resize:vertical;min-height:80px;}
+
+/* ── BUTTONS ── */
+.btn{padding:8px 16px;border-radius:8px;border:none;cursor:pointer;font-size:.85rem;font-weight:600;transition:all .2s;}
 .btn-primary{background:var(--accent);color:#fff;}.btn-primary:hover{background:#5a52e0;}
-.btn-green{background:var(--green);color:#0f1117;}.btn-green:hover{background:#15b88b;}
+.btn-green{background:var(--green);color:#0f1117;}
 .btn-red{background:var(--red);color:#fff;}
-.btn-outline{background:transparent;border:1px solid var(--accent);color:var(--accent);}.btn-outline:hover{background:rgba(108,99,255,.1);}
-.btn-sm{padding:5px 11px;font-size:.78rem;}.btn:disabled{opacity:.5;cursor:not-allowed;}
+.btn-outline{background:transparent;border:1px solid var(--accent);color:var(--accent);}
+.btn-outline:hover{background:rgba(108,99,255,.1);}
+.btn-sm{padding:5px 10px;font-size:.78rem;}
+.btn-icon{padding:6px 10px;font-size:.85rem;}
+
+/* ── TABLE ── */
 .table-wrap{overflow-x:auto;}
-table{width:100%;border-collapse:collapse;font-size:.86rem;}
-th{padding:10px 14px;text-align:left;color:var(--text2);border-bottom:1px solid #2d3561;font-weight:600;}
-td{padding:10px 14px;border-bottom:1px solid #1e2340;}
+table{width:100%;border-collapse:collapse;font-size:.84rem;}
+th{padding:9px 12px;text-align:left;color:var(--text2);border-bottom:1px solid #2d3561;font-weight:600;}
+td{padding:9px 12px;border-bottom:1px solid #1e2340;}
 tr:hover td{background:rgba(108,99,255,.04);}
-.badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:.74rem;font-weight:600;}
+
+/* ── BADGES ── */
+.badge{display:inline-block;padding:2px 7px;border-radius:20px;font-size:.72rem;font-weight:600;}
 .badge-green{background:rgba(29,209,161,.15);color:var(--green);}
 .badge-yellow{background:rgba(255,211,61,.15);color:var(--yellow);}
 .badge-red{background:rgba(255,107,107,.15);color:var(--red);}
 .badge-blue{background:rgba(72,219,251,.15);color:var(--accent2);}
 .badge-purple{background:rgba(108,99,255,.15);color:var(--accent);}
-.chat-box{background:var(--bg2);border-radius:var(--radius);padding:18px;min-height:260px;max-height:520px;overflow-y:auto;margin-bottom:12px;border:1px solid #2d3561;}
-.msg{margin-bottom:14px;}.msg.user{text-align:right;}
-.msg.user .bubble{background:var(--accent);color:#fff;border-radius:12px 12px 4px 12px;padding:9px 14px;display:inline-block;max-width:78%;text-align:left;}
-.msg.bot .bubble{background:var(--bg3);color:var(--text);border-radius:12px 12px 12px 4px;padding:9px 14px;display:inline-block;max-width:78%;white-space:pre-wrap;line-height:1.55;}
-.msg-meta{font-size:.73rem;color:var(--text2);margin-top:3px;}
-pre{background:#0d0f1a;border:1px solid #2d3561;border-radius:8px;padding:14px;overflow-x:auto;font-size:.83rem;color:var(--accent2);}
-.dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:6px;}
-.dot-green{background:var(--green);box-shadow:0 0 6px var(--green);}.dot-red{background:var(--red);}.dot-yellow{background:var(--yellow);}
-.grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px;}
-.panel{background:var(--bg2);border-radius:var(--radius);padding:22px;border:1px solid #2d3561;margin-bottom:18px;}
-.login-screen{display:flex;align-items:center;justify-content:center;min-height:100vh;}
-.login-box{background:var(--bg2);padding:38px;border-radius:16px;width:100%;max-width:380px;border:1px solid #2d3561;}
-.login-box h1{text-align:center;margin-bottom:6px;}.login-box p{text-align:center;color:var(--text2);margin-bottom:26px;font-size:.88rem;}
-.pagination{display:flex;gap:6px;justify-content:center;margin-top:14px;flex-wrap:wrap;}
-.filters{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;align-items:center;}
-.filters input,.filters select{width:auto;flex:1;min-width:130px;}
-@media(max-width:768px){.sidebar{width:52px;}.logo h1,.logo span,.nav-item span{display:none;}.nav-item{justify-content:center;padding:13px;}.main{padding:14px;}.grid2{grid-template-columns:1fr;}}
+
+/* ── CHAT ── */
+.chat-layout{display:flex;flex-direction:column;height:calc(100vh - 48px);}
+.chat-top{padding:12px;border-bottom:1px solid #2d3561;display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:var(--bg2);border-radius:var(--radius) var(--radius) 0 0;}
+.chat-top select,.chat-top input{flex:1;min-width:120px;}
+.chat-messages{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:12px;background:var(--bg2);}
+.chat-empty{text-align:center;color:var(--text2);font-size:.85rem;padding:40px 0;flex:1;display:flex;align-items:center;justify-content:center;}
+.msg-wrap{display:flex;flex-direction:column;gap:4px;}
+.msg-wrap.user{align-items:flex-end;}
+.msg-wrap.bot{align-items:flex-start;}
+.bubble{padding:10px 14px;border-radius:12px;max-width:85%;font-size:.88rem;line-height:1.55;}
+.msg-wrap.user .bubble{background:var(--accent);color:#fff;border-radius:12px 12px 4px 12px;}
+.msg-wrap.bot .bubble{background:var(--bg3);color:var(--text);border-radius:12px 12px 12px 4px;}
+.msg-meta{font-size:.72rem;color:var(--text2);}
+.chat-input-wrap{padding:12px;border-top:1px solid #2d3561;display:flex;gap:8px;background:var(--bg2);border-radius:0 0 var(--radius) var(--radius);}
+.chat-input-wrap input{flex:1;}
+
+/* ── HISTORIAL DRAWER ── */
+.history-panel{
+  position:fixed;top:0;right:0;width:320px;height:100vh;
+  background:var(--bg2);border-left:1px solid #2d3561;
+  z-index:70;transform:translateX(100%);transition:transform .3s;
+  display:flex;flex-direction:column;
+}
+.history-panel.open{transform:translateX(0);}
+.history-head{padding:16px;border-bottom:1px solid #2d3561;display:flex;align-items:center;justify-content:space-between;}
+.history-search{padding:12px;border-bottom:1px solid #2d3561;}
+.history-list{flex:1;overflow-y:auto;}
+.history-item{
+  padding:12px 16px;border-bottom:1px solid #1e2340;cursor:pointer;transition:background .15s;
+}
+.history-item:hover{background:rgba(108,99,255,.08);}
+.history-item .hi-msg{font-size:.83rem;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.history-item .hi-meta{font-size:.72rem;color:var(--text2);margin-top:3px;}
+
+/* ── CODE BLOCKS IN CHAT ── */
+.code-block{margin:8px 0;border-radius:8px;overflow:hidden;border:1px solid #2d3561;}
+.code-block-head{display:flex;justify-content:space-between;align-items:center;padding:6px 12px;background:#0d0f1a;}
+.code-block-head .lang{font-size:.75rem;color:var(--accent2);}
+.code-block-head .actions{display:flex;gap:4px;}
+.code-block pre{margin:0;border-radius:0;border:none;max-height:320px;overflow:auto;}
+.code-block code{font-size:.82rem !important;}
+
+/* ── PANEL ── */
+.panel{background:var(--bg2);border-radius:var(--radius);padding:20px;border:1px solid #2d3561;margin-bottom:16px;}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+.filters{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;align-items:center;}
+.filters input,.filters select{width:auto;flex:1;min-width:120px;}
+.pagination{display:flex;gap:6px;justify-content:center;margin-top:12px;flex-wrap:wrap;}
+
+/* ── DOT ── */
+.dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:5px;}
+.dot-green{background:var(--green);box-shadow:0 0 6px var(--green);}
+.dot-red{background:var(--red);}
+
+/* ── LOGIN ── */
+.login-screen{display:flex;align-items:center;justify-content:center;min-height:100vh;background:var(--bg);}
+.login-box{background:var(--bg2);padding:36px;border-radius:16px;width:100%;max-width:360px;border:1px solid #2d3561;}
+.login-box h1{text-align:center;margin-bottom:6px;}
+.login-box p{text-align:center;color:var(--text2);margin-bottom:24px;font-size:.85rem;}
+
+/* ── RESPONSIVE MOBILE ── */
+@media(max-width:768px){
+  :root{--sidebar-w:100%;--code-panel-w:100%;}
+  body{overflow:auto;}
+  .app{flex-direction:column;height:auto;overflow:auto;}
+  .hamburger{display:flex;}
+  .sidebar{
+    position:fixed;top:0;left:0;height:100vh;width:260px;
+    transform:translateX(-100%);z-index:50;
+  }
+  .sidebar.mobile-open{transform:translateX(0);}
+  .main-wrap{flex-direction:column;}
+  .main{padding:14px;padding-top:52px;}
+  .code-panel.open{
+    position:fixed;inset:0;width:100%;z-index:80;
+  }
+  .chat-layout{height:calc(100vh - 52px);}
+  .grid2{grid-template-columns:1fr;}
+  .history-panel{width:100%;}
+  .chat-top{flex-wrap:wrap;}
+  .chat-top input{min-width:0;width:100%;}
+  table{font-size:.78rem;}
+  th,td{padding:7px 8px;}
+}
 </style>
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
 </head>
 <body>
 
+<!-- LOGIN -->
 <div id="loginScreen" class="login-screen">
   <div class="login-box">
     <h1>🤖 Cic_IA</h1>
     <p>Panel de Desarrollador v8.0</p>
     <div id="loginAlert"></div>
-    <div class="form-group"><label>Usuario</label><input type="text" id="loginUser" placeholder="tu_usuario"/></div>
-    <div class="form-group"><label>Contraseña</label><input type="password" id="loginPass" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()"/></div>
-    <button class="btn btn-primary" style="width:100%" onclick="doLogin()">Iniciar Sesión</button>
-    <div style="text-align:center;margin-top:14px;font-size:.8rem;color:var(--text2)">¿Primer uso? <a href="#" onclick="showSetup()" style="color:var(--accent)">Configurar acceso inicial</a></div>
+    <div class="form-group"><label>Usuario</label><input type="text" id="loginUser" placeholder="tu_usuario" autocomplete="username"/></div>
+    <div class="form-group"><label>Contraseña</label><input type="password" id="loginPass" placeholder="••••••••" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()"/></div>
+    <button class="btn btn-primary" style="width:100%;margin-top:4px" onclick="doLogin()">Iniciar Sesión</button>
+    <div style="text-align:center;margin-top:14px;font-size:.78rem;color:var(--text2)">¿Primer uso? <a href="#" onclick="showSetup()" style="color:var(--accent)">Configurar acceso</a></div>
   </div>
 </div>
 
-<div id="setupModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:100;align-items:center;justify-content:center">
-  <div class="login-box" style="max-width:420px">
-    <h1 style="font-size:1.1rem;margin-bottom:14px">⚙️ Configuración Inicial</h1>
+<!-- SETUP MODAL -->
+<div id="setupModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:200;align-items:center;justify-content:center;padding:16px">
+  <div class="login-box" style="max-width:400px">
+    <h1 style="font-size:1rem;margin-bottom:12px">⚙️ Configuración Inicial</h1>
     <div id="setupAlert"></div>
     <div class="form-group"><label>Usuario dev</label><input type="text" id="setupUser"/></div>
     <div class="form-group"><label>Contraseña (mín 8 chars)</label><input type="password" id="setupPass"/></div>
     <div class="form-group"><label>Setup Key (puede estar vacía)</label><input type="text" id="setupKey"/></div>
-    <div style="display:flex;gap:10px">
+    <div style="display:flex;gap:8px">
       <button class="btn btn-primary" style="flex:1" onclick="doSetup()">Crear cuenta dev</button>
       <button class="btn btn-outline" onclick="hideSetup()">Cancelar</button>
     </div>
   </div>
 </div>
 
-<div id="panel" class="layout" style="display:none">
-  <aside class="sidebar">
-    <div class="logo"><h1>🤖 Cic_IA</h1><span>Panel Dev v8.0</span></div>
+<!-- HAMBURGER -->
+<button class="hamburger" id="hamburger" onclick="toggleSidebar()">☰</button>
+
+<!-- OVERLAY -->
+<div class="overlay" id="overlay" onclick="closeSidebar()"></div>
+
+<!-- HISTORY PANEL -->
+<div class="history-panel" id="historyPanel">
+  <div class="history-head">
+    <h3 style="font-size:.95rem">📜 Historial de Chats</h3>
+    <button class="btn btn-sm btn-outline" onclick="closeHistory()">✕</button>
+  </div>
+  <div class="history-search">
+    <input type="text" id="historySearch" placeholder="Buscar en historial..." oninput="filterHistory(this.value)"/>
+  </div>
+  <div class="history-list" id="historyList">
+    <div style="padding:20px;text-align:center;color:var(--text2);font-size:.83rem">Cargando...</div>
+  </div>
+</div>
+
+<!-- CODE PANEL -->
+<div class="code-panel" id="codePanel">
+  <div class="code-panel-head">
+    <div>
+      <h3 id="codePanelTitle">Código</h3>
+      <span id="codePanelLang" style="font-size:.72rem;color:var(--accent2)"></span>
+    </div>
+    <div class="code-panel-actions">
+      <button class="btn btn-sm" id="codePanelCopy" onclick="copyPanelCode()" style="background:#2d3561;color:var(--text)">📋 Copiar</button>
+      <button class="btn btn-sm" id="codePanelDownload" onclick="downloadPanelCode()" style="background:#6c63ff;color:#fff">⬇️ Descargar</button>
+      <button class="btn btn-sm" id="codePanelPreview" onclick="togglePanelPreview()" style="background:#1dd1a1;color:#0f1117;display:none">👁️ Preview</button>
+      <button class="btn btn-sm btn-outline" onclick="closeCodePanel()">✕</button>
+    </div>
+  </div>
+  <div class="code-panel-body" id="codePanelBody">
+    <pre><code id="codePanelCode"></code></pre>
+  </div>
+  <iframe id="codePanelPreviewFrame" class="code-panel-preview" style="display:none"></iframe>
+</div>
+
+<!-- APP -->
+<div class="app" id="mainApp" style="display:none">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar" id="sidebar">
+    <div class="logo">
+      <span style="font-size:1.4rem">🤖</span>
+      <div><h1>Cic_IA</h1><span>Panel Dev v8.0</span></div>
+    </div>
     <nav class="nav">
       <div class="nav-item active" onclick="showSection('dashboard',this)"><span class="icon">📊</span><span>Dashboard</span></div>
       <div class="nav-item" onclick="showSection('knowledge',this)"><span class="icon">🧠</span><span>Conocimiento</span></div>
@@ -116,208 +302,223 @@ pre{background:#0d0f1a;border:1px solid #2d3561;border-radius:8px;padding:14px;o
       <div class="nav-item" onclick="showSection('users',this)"><span class="icon">👥</span><span>Usuarios</span></div>
     </nav>
     <div class="sidebar-foot">
-      <div style="font-size:.78rem;color:var(--text2);margin-bottom:8px" id="sidebarUser">—</div>
+      <div style="font-size:.75rem;color:var(--text2);margin-bottom:8px" id="sidebarUser">—</div>
       <button class="btn btn-outline btn-sm" style="width:100%" onclick="doLogout()">Salir</button>
     </div>
   </aside>
 
-  <main class="main">
-    <section id="sec-dashboard" class="section active">
-      <h2>Dashboard</h2><p class="subtitle">Resumen del sistema en tiempo real</p>
-      <div id="dashAlert"></div>
-      <div class="cards">
-        <div class="card"><div class="value" id="d-mem">—</div><div class="label">Memorias totales</div></div>
-        <div class="card green"><div class="value" id="d-conv">—</div><div class="label">Conversaciones</div></div>
-        <div class="card yellow"><div class="value" id="d-kb">—</div><div class="label">Conocimiento manual</div></div>
-        <div class="card"><div class="value" id="d-today">—</div><div class="label">Mensajes hoy</div></div>
-        <div class="card"><div class="value" id="d-ai">—</div><div class="label">Proveedor IA</div></div>
-      </div>
-      <div class="grid2">
-        <div class="panel"><h3 style="margin-bottom:12px;font-size:.95rem">Últimas conversaciones</h3><div id="recentConvs"><div style="color:var(--text2);font-size:.85rem">Cargando...</div></div></div>
-        <div class="panel"><h3 style="margin-bottom:12px;font-size:.95rem">Actividad (7 días)</h3><div id="weekActivity"><div style="color:var(--text2);font-size:.85rem">Cargando...</div></div></div>
-      </div>
-    </section>
+  <!-- MAIN WRAP -->
+  <div class="main-wrap">
+    <main class="main" id="mainContent">
 
-    <section id="sec-knowledge" class="section">
-      <h2>🧠 Conocimiento Manual</h2><p class="subtitle">Enseña directamente a la IA</p>
-      <div class="panel">
-        <h3 style="margin-bottom:14px;font-size:.95rem">➕ Agregar nuevo conocimiento</h3>
+      <!-- DASHBOARD -->
+      <section id="sec-dashboard" class="section active">
+        <h2>Dashboard</h2><p class="subtitle">Resumen del sistema en tiempo real</p>
+        <div id="dashAlert"></div>
+        <div class="cards">
+          <div class="card"><div class="value" id="d-mem">—</div><div class="label">Memorias</div></div>
+          <div class="card green"><div class="value" id="d-conv">—</div><div class="label">Conversaciones</div></div>
+          <div class="card yellow"><div class="value" id="d-kb">—</div><div class="label">Conocimiento</div></div>
+          <div class="card"><div class="value" id="d-today">—</div><div class="label">Mensajes hoy</div></div>
+          <div class="card"><div class="value" id="d-ai">—</div><div class="label">Proveedor IA</div></div>
+        </div>
         <div class="grid2">
-          <div class="form-group"><label>Título / Tema *</label><input type="text" id="kb-title" placeholder="Ej: Horarios de atención..."/></div>
-          <div class="form-group"><label>Categoría</label><input type="text" id="kb-category" placeholder="empresa, producto..."/></div>
+          <div class="panel"><h3 style="margin-bottom:10px;font-size:.9rem">Últimas conversaciones</h3><div id="recentConvs"><div style="color:var(--text2);font-size:.83rem">Cargando...</div></div></div>
+          <div class="panel"><h3 style="margin-bottom:10px;font-size:.9rem">Actividad (7 días)</h3><div id="weekActivity"><div style="color:var(--text2);font-size:.83rem">Cargando...</div></div></div>
         </div>
-        <div class="form-group"><label>Contenido *</label><textarea id="kb-content" rows="5" placeholder="Escribe aquí la información..."></textarea></div>
-        <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap">
-          <div class="form-group" style="flex:1;margin:0"><label>Tags (separados por coma)</label><input type="text" id="kb-tags" placeholder="tag1, tag2"/></div>
-          <select id="kb-priority" style="width:auto"><option value="1">Normal</option><option value="2">Alta</option><option value="3">Crítica</option></select>
-          <button class="btn btn-primary" onclick="addKnowledge()">Guardar</button>
-        </div>
-        <div id="kbAddAlert" style="margin-top:10px"></div>
-      </div>
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:10px">
-        <h3 style="font-size:.95rem">Base de conocimiento</h3>
-        <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <input type="text" id="kb-filter-text" placeholder="Buscar..." style="width:160px" oninput="loadKnowledge(1)"/>
-          <select id="kb-filter-cat" style="width:160px" onchange="loadKnowledge(1)"><option value="">Todas las categorías</option></select>
-          <button class="btn btn-outline btn-sm" onclick="loadKnowledge(1)">🔄</button>
-        </div>
-      </div>
-      <div class="table-wrap">
-        <table><thead><tr><th>Título</th><th>Categoría</th><th>Prioridad</th><th>Preview</th><th>Fecha</th><th></th></tr></thead>
-        <tbody id="kbTable"><tr><td colspan="6" style="text-align:center;color:var(--text2);padding:20px">Cargando...</td></tr></tbody></table>
-      </div>
-      <div id="kbPag" class="pagination"></div>
-    </section>
+      </section>
 
-    <section id="sec-learn" class="section">
-      <h2>📚 Aprendizaje Forzado</h2><p class="subtitle">Fuerza a la IA a aprender sobre temas específicos</p>
-      <div class="grid2">
+      <!-- CONOCIMIENTO -->
+      <section id="sec-knowledge" class="section">
+        <h2>🧠 Conocimiento Manual</h2><p class="subtitle">Enseña directamente a la IA</p>
         <div class="panel">
-          <h3 style="margin-bottom:14px;font-size:.95rem">🔍 Aprender desde la Web</h3>
-          <div class="form-group"><label>Tema a buscar *</label><input type="text" id="learn-topic" placeholder="Ej: Python avanzado..."/></div>
-          <div class="form-group"><label>Contenido adicional (opcional)</label><textarea id="learn-content" rows="4" placeholder="Texto específico..."></textarea></div>
-          <button class="btn btn-primary" style="width:100%" onclick="forceLearning()">🚀 Iniciar aprendizaje</button>
-          <div id="learnAlert" style="margin-top:10px"></div>
-        </div>
-        <div class="panel">
-          <h3 style="margin-bottom:14px;font-size:.95rem">📋 Aprendizaje Masivo</h3>
-          <div class="form-group"><label>Lista de temas (uno por línea)</label><textarea id="bulk-topics" rows="8" placeholder="Inteligencia artificial&#10;Python programación&#10;Historia de Chile"></textarea></div>
-          <button class="btn btn-green" style="width:100%" onclick="bulkLearning()">⚡ Aprender todos</button>
-          <div id="bulkAlert" style="margin-top:10px"></div>
-        </div>
-      </div>
-      <div class="panel">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-          <h3 style="font-size:.95rem">📅 Log de aprendizaje reciente</h3>
-          <button class="btn btn-outline btn-sm" onclick="loadLearningLog()">🔄 Actualizar</button>
-        </div>
-        <div id="learningLog"><div style="color:var(--text2);font-size:.85rem">Cargando...</div></div>
-      </div>
-    </section>
-
-    <section id="sec-memories" class="section">
-      <h2>💾 Memorias</h2><p class="subtitle">Todo lo que la IA ha aprendido y almacenado</p>
-      <div class="filters">
-        <input type="text" id="mem-search" placeholder="Buscar por tema..."/>
-        <select id="mem-source"><option value="">Todas las fuentes</option><option value="auto_learning">Auto-aprendizaje</option><option value="web_search">Búsqueda web</option><option value="manual_dev">Manual (dev)</option></select>
-        <select id="mem-sort" style="max-width:160px" onchange="loadMemories(1)">
-          <option value="recent">Más recientes primero</option>
-          <option value="score">Mayor relevancia</option>
-          <option value="accesses">Más accedidas</option>
-        </select>
-        <input type="date" id="mem-date-from" title="Desde" style="max-width:150px"/>
-        <input type="date" id="mem-date-to" title="Hasta" style="max-width:150px"/>
-        <button class="btn btn-outline btn-sm" onclick="loadMemories(1)">🔍 Filtrar</button>
-        <button class="btn btn-red btn-sm" onclick="clearMemoriesPrompt()" style="margin-left:auto">🗑️ Limpiar</button>
-      </div>
-      <div id="memCount" style="font-size:.83rem;color:var(--text2);margin-bottom:10px"></div>
-      <div class="table-wrap">
-        <table><thead><tr><th>Tema</th><th>Fuente</th><th>Score</th><th>Accesos</th><th>Fecha</th><th>Preview</th><th></th></tr></thead>
-        <tbody id="memTable"><tr><td colspan="7" style="text-align:center;color:var(--text2);padding:20px">Cargando...</td></tr></tbody></table>
-      </div>
-      <div id="memPag" class="pagination"></div>
-    </section>
-
-    <section id="sec-config" class="section">
-      <h2>⚙️ Configuración</h2><p class="subtitle">Ajusta el comportamiento de la IA en tiempo real</p>
-      <div class="grid2">
-        <div class="panel">
-          <h3 style="margin-bottom:14px;font-size:.95rem">🤖 Proveedor de IA</h3>
-          <div class="form-group"><label>Proveedor activo</label>
-            <select id="cfg-provider">
-              <option value="groq">Groq (Llama 3 — recomendado, gratis)</option>
-              <option value="auto">Auto (Groq → Ollama → Anthropic)</option>
-              <option value="ollama">Ollama (modelo local)</option>
-              <option value="anthropic">Anthropic (Claude)</option>
-              <option value="openai">OpenAI (GPT)</option>
-            </select>
+          <h3 style="margin-bottom:12px;font-size:.9rem">➕ Agregar conocimiento</h3>
+          <div class="grid2">
+            <div class="form-group"><label>Título *</label><input type="text" id="kb-title" placeholder="Ej: Horarios de atención..."/></div>
+            <div class="form-group"><label>Categoría</label><input type="text" id="kb-category" placeholder="empresa, producto..."/></div>
           </div>
-          <div class="form-group"><label>Modelo</label><input type="text" id="cfg-model" placeholder="llama-3.1-8b-instant"/></div>
-          <div class="form-group"><label>Máximo de tokens</label><input type="number" id="cfg-tokens" min="100" max="4000" value="1000"/></div>
-          <button class="btn btn-primary" onclick="saveAIConfig()">Guardar</button>
-          <div id="cfgAIAlert" style="margin-top:10px"></div>
+          <div class="form-group"><label>Contenido *</label><textarea id="kb-content" rows="4" placeholder="Información que quieres que la IA sepa..."></textarea></div>
+          <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
+            <div class="form-group" style="flex:1;margin:0"><label>Tags (coma)</label><input type="text" id="kb-tags" placeholder="tag1, tag2"/></div>
+            <select id="kb-priority" style="width:auto"><option value="1">Normal</option><option value="2">Alta</option><option value="3">Crítica</option></select>
+            <button class="btn btn-primary" onclick="addKnowledge()">Guardar</button>
+          </div>
+          <div id="kbAddAlert" style="margin-top:10px"></div>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px">
+          <h3 style="font-size:.9rem">Base de conocimiento</h3>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <input type="text" id="kb-filter-text" placeholder="Buscar..." style="width:150px" oninput="loadKnowledge(1)"/>
+            <select id="kb-filter-cat" style="width:150px" onchange="loadKnowledge(1)"><option value="">Todas las categorías</option></select>
+            <button class="btn btn-outline btn-sm" onclick="loadKnowledge(1)">🔄</button>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table><thead><tr><th>Título</th><th>Cat.</th><th>Prior.</th><th>Preview</th><th>Fecha</th><th></th></tr></thead>
+          <tbody id="kbTable"><tr><td colspan="6" style="text-align:center;color:var(--text2);padding:16px">Cargando...</td></tr></tbody></table>
+        </div>
+        <div id="kbPag" class="pagination"></div>
+      </section>
+
+      <!-- APRENDIZAJE -->
+      <section id="sec-learn" class="section">
+        <h2>📚 Aprendizaje Forzado</h2><p class="subtitle">Fuerza a la IA a aprender sobre temas específicos</p>
+        <div class="grid2">
+          <div class="panel">
+            <h3 style="margin-bottom:12px;font-size:.9rem">🔍 Desde la Web</h3>
+            <div class="form-group"><label>Tema *</label><input type="text" id="learn-topic" placeholder="Ej: Python avanzado..."/></div>
+            <div class="form-group"><label>Contenido adicional (opcional)</label><textarea id="learn-content" rows="3" placeholder="Texto específico..."></textarea></div>
+            <button class="btn btn-primary" style="width:100%" onclick="forceLearning()">🚀 Iniciar</button>
+            <div id="learnAlert" style="margin-top:10px"></div>
+          </div>
+          <div class="panel">
+            <h3 style="margin-bottom:12px;font-size:.9rem">📋 Masivo</h3>
+            <div class="form-group"><label>Lista de temas (uno por línea)</label><textarea id="bulk-topics" rows="7" placeholder="Inteligencia artificial&#10;Python&#10;Historia de Chile"></textarea></div>
+            <button class="btn btn-green" style="width:100%" onclick="bulkLearning()">⚡ Aprender todos</button>
+            <div id="bulkAlert" style="margin-top:10px"></div>
+          </div>
         </div>
         <div class="panel">
-          <h3 style="margin-bottom:14px;font-size:.95rem">🔄 Auto-aprendizaje</h3>
-          <div class="form-group"><label>Estado</label><select id="cfg-autolearn"><option value="true">✅ Activado</option><option value="false">❌ Desactivado</option></select></div>
-          <div class="form-group"><label>Intervalo (horas)</label><input type="number" id="cfg-interval" min="1" max="24" value="1"/></div>
-          <div class="form-group"><label>Búsqueda web en respuestas</label><select id="cfg-websearch"><option value="true">✅ Activada</option><option value="false">❌ Desactivada</option></select></div>
-          <button class="btn btn-primary" onclick="saveLearningConfig()">Guardar</button>
-          <div id="cfgLearnAlert" style="margin-top:10px"></div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+            <h3 style="font-size:.9rem">📅 Log reciente</h3>
+            <button class="btn btn-outline btn-sm" onclick="loadLearningLog()">🔄</button>
+          </div>
+          <div id="learningLog"><div style="color:var(--text2);font-size:.83rem">Cargando...</div></div>
         </div>
-      </div>
-      <div class="panel">
-        <h3 style="margin-bottom:14px;font-size:.95rem">💬 System Prompt (Personalidad de la IA)</h3>
-        <div class="form-group"><textarea id="cfg-prompt" rows="5" placeholder="Eres Cic_IA..."></textarea></div>
-        <div style="display:flex;gap:10px">
-          <button class="btn btn-primary" onclick="savePrompt()">Guardar Prompt</button>
-          <button class="btn btn-outline" onclick="resetPrompt()">Restablecer</button>
-        </div>
-        <div id="cfgPromptAlert" style="margin-top:10px"></div>
-      </div>
-    </section>
+      </section>
 
-    <section id="sec-chat" class="section">
-      <h2>💬 Test de Chat</h2><p class="subtitle">Prueba la IA — con renderizado de código, descarga y previsualización</p>
-      <div class="panel">
-        <div style="display:flex;gap:12px;margin-bottom:14px;align-items:center;flex-wrap:wrap">
-          <label style="color:var(--text2);font-size:.83rem;white-space:nowrap">Prompt:</label>
-          <input type="text" id="test-prompt" placeholder="Opcional — usa el configurado por defecto" style="flex:1;min-width:180px"/>
-          <select id="test-mode" style="width:130px">
-            <option value="balanced">Balanceado</option>
-            <option value="fast">Rápido</option>
-            <option value="complete">Completo</option>
-          </select>
-          <button class="btn btn-outline btn-sm" onclick="clearChat()" title="Limpiar historial">🗑️ Limpiar</button>
+      <!-- MEMORIAS -->
+      <section id="sec-memories" class="section">
+        <h2>💾 Memorias</h2><p class="subtitle">Todo lo que la IA ha aprendido</p>
+        <div class="filters">
+          <input type="text" id="mem-search" placeholder="Buscar por tema..."/>
+          <select id="mem-source"><option value="">Todas las fuentes</option><option value="auto_learning">Auto-aprendizaje</option><option value="web_search">Búsqueda web</option><option value="manual_dev">Manual</option></select>
+          <select id="mem-sort"><option value="recent">Más recientes</option><option value="score">Mayor relevancia</option><option value="accesses">Más accedidas</option></select>
+          <input type="date" id="mem-date-from" style="max-width:145px"/>
+          <input type="date" id="mem-date-to" style="max-width:145px"/>
+          <button class="btn btn-outline btn-sm" onclick="loadMemories(1)">🔍 Filtrar</button>
+          <button class="btn btn-red btn-sm" onclick="clearMemoriesPrompt()">🗑️ Limpiar</button>
         </div>
-        <div class="chat-box" id="testChat"><div style="text-align:center;color:var(--text2);font-size:.85rem;padding:40px 0">Escribe un mensaje para probar la IA</div></div>
-        <div style="display:flex;gap:10px">
-          <input type="text" id="testMsg" placeholder="Escribe un mensaje..." onkeydown="if(event.key==='Enter')sendTestMsg()" style="flex:1"/>
-          <button class="btn btn-primary" onclick="sendTestMsg()">Enviar</button>
+        <div id="memCount" style="font-size:.8rem;color:var(--text2);margin-bottom:8px"></div>
+        <div class="table-wrap">
+          <table><thead><tr><th>Tema</th><th>Fuente</th><th>Score</th><th>Accesos</th><th>Fecha</th><th>Preview</th><th></th></tr></thead>
+          <tbody id="memTable"><tr><td colspan="7" style="text-align:center;color:var(--text2);padding:16px">Cargando...</td></tr></tbody></table>
         </div>
-        <div id="testInfo" style="margin-top:8px;font-size:.78rem;color:var(--text2)"></div>
-      </div>
-      <!-- Preview iframe -->
-      <div class="panel" id="previewPanel" style="display:none">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-          <h3 style="font-size:.95rem">🖼️ Previsualización</h3>
-          <button class="btn btn-outline btn-sm" onclick="closePreview()">✕ Cerrar</button>
-        </div>
-        <iframe id="previewFrame" style="width:100%;height:500px;border:1px solid #2d3561;border-radius:8px;background:#fff"></iframe>
-      </div>
-      <div class="panel"><h3 style="margin-bottom:10px;font-size:.95rem">📡 API Reference</h3><pre id="apiRef">Cargando...</pre></div>
-    </section>
+        <div id="memPag" class="pagination"></div>
+      </section>
 
-    <section id="sec-users" class="section">
-      <h2>👥 Usuarios</h2><p class="subtitle">Gestión de usuarios del sistema</p>
-      <div class="table-wrap">
-        <table><thead><tr><th>ID</th><th>Usuario</th><th>Email</th><th>Rol</th><th>Estado</th><th>Mensajes</th><th>Registro</th><th>Acciones</th></tr></thead>
-        <tbody id="usersTable"><tr><td colspan="8" style="text-align:center;color:var(--text2);padding:20px">Cargando...</td></tr></tbody></table>
-      </div>
-    </section>
-  </main>
-</div>
+      <!-- CONFIG -->
+      <section id="sec-config" class="section">
+        <h2>⚙️ Configuración</h2><p class="subtitle">Ajusta el comportamiento de la IA en tiempo real</p>
+        <div class="grid2">
+          <div class="panel">
+            <h3 style="margin-bottom:12px;font-size:.9rem">🤖 Proveedor de IA</h3>
+            <div class="form-group"><label>Proveedor activo</label>
+              <select id="cfg-provider">
+                <option value="groq">Groq — Llama 3 (gratis, recomendado)</option>
+                <option value="auto">Auto (Groq → Ollama → Anthropic)</option>
+                <option value="ollama">Ollama (modelo local)</option>
+                <option value="anthropic">Anthropic (Claude)</option>
+                <option value="openai">OpenAI (GPT)</option>
+              </select>
+            </div>
+            <div class="form-group"><label>Modelo</label><input type="text" id="cfg-model" placeholder="llama-3.1-8b-instant"/></div>
+            <div class="form-group"><label>Máximo de tokens</label><input type="number" id="cfg-tokens" min="100" max="4000"/></div>
+            <button class="btn btn-primary" onclick="saveAIConfig()">Guardar</button>
+            <div id="cfgAIAlert" style="margin-top:8px"></div>
+          </div>
+          <div class="panel">
+            <h3 style="margin-bottom:12px;font-size:.9rem">🔄 Auto-aprendizaje</h3>
+            <div class="form-group"><label>Estado</label><select id="cfg-autolearn"><option value="true">✅ Activado</option><option value="false">❌ Desactivado</option></select></div>
+            <div class="form-group"><label>Intervalo (horas)</label><input type="number" id="cfg-interval" min="1" max="24"/></div>
+            <div class="form-group"><label>Búsqueda web</label><select id="cfg-websearch"><option value="true">✅ Activada</option><option value="false">❌ Desactivada</option></select></div>
+            <button class="btn btn-primary" onclick="saveLearningConfig()">Guardar</button>
+            <div id="cfgLearnAlert" style="margin-top:8px"></div>
+          </div>
+        </div>
+        <div class="panel">
+          <h3 style="margin-bottom:12px;font-size:.9rem">💬 Personalidad de la IA (System Prompt)</h3>
+          <div class="form-group"><textarea id="cfg-prompt" rows="5"></textarea></div>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-primary" onclick="savePrompt()">Guardar</button>
+            <button class="btn btn-outline" onclick="resetPrompt()">Restablecer</button>
+          </div>
+          <div id="cfgPromptAlert" style="margin-top:8px"></div>
+        </div>
+      </section>
+
+      <!-- TEST CHAT -->
+      <section id="sec-chat" class="section" style="padding:0;margin:-24px">
+        <div class="chat-layout">
+          <!-- Top bar -->
+          <div class="chat-top">
+            <input type="text" id="test-prompt" placeholder="System prompt opcional..." style="flex:2;min-width:0"/>
+            <select id="test-mode" style="width:120px">
+              <option value="balanced">Balanceado</option>
+              <option value="fast">Rápido</option>
+              <option value="complete">Completo</option>
+            </select>
+            <button class="btn btn-outline btn-sm" onclick="openHistory()" title="Historial">📜 Historial</button>
+            <button class="btn btn-sm" style="background:#2d3561;color:var(--text)" onclick="clearChat()">🗑️</button>
+          </div>
+          <!-- Messages -->
+          <div class="chat-messages" id="chatMessages">
+            <div class="chat-empty">Escribe un mensaje para probar la IA</div>
+          </div>
+          <!-- Input -->
+          <div class="chat-input-wrap">
+            <input type="text" id="testMsg" placeholder="Escribe un mensaje..." autocomplete="off"
+              onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendTestMsg();}"/>
+            <button class="btn btn-primary" onclick="sendTestMsg()">Enviar</button>
+          </div>
+          <div id="testInfo" style="padding:4px 12px 8px;font-size:.73rem;color:var(--text2);background:var(--bg2)"></div>
+        </div>
+      </section>
+
+      <!-- USUARIOS -->
+      <section id="sec-users" class="section">
+        <h2>👥 Usuarios</h2><p class="subtitle">Gestión de usuarios del sistema</p>
+        <div class="table-wrap">
+          <table><thead><tr><th>ID</th><th>Usuario</th><th>Rol</th><th>Estado</th><th>Msgs</th><th>Registro</th><th></th></tr></thead>
+          <tbody id="usersTable"><tr><td colspan="7" style="text-align:center;color:var(--text2);padding:16px">Cargando...</td></tr></tbody></table>
+        </div>
+      </section>
+
+    </main>
+  </div><!-- /main-wrap -->
+</div><!-- /app -->
 
 <script>
 const API='';
 let TOKEN=localStorage.getItem('dev_token')||'';
 let currentUser=null;
 const chatHistory=[];
+let allHistory=[];
+let currentPanelCode='';
+let currentPanelLang='';
 
+/* ══ AUTH ══ */
 async function doLogin(){
   const user=document.getElementById('loginUser').value.trim();
   const pass=document.getElementById('loginPass').value;
   showAlert('loginAlert','','');
   if(!user||!pass)return showAlert('loginAlert','Completa todos los campos','err');
   try{
-    const r=await api('/api/auth/login','POST',{username:user,password:pass},false);
+    const r=await req('/api/auth/login','POST',{username:user,password:pass},false);
     if(r.success){
       if(!r.user.is_developer)return showAlert('loginAlert','Sin privilegios de desarrollador','err');
-      TOKEN=r.token;currentUser=r.user;localStorage.setItem('dev_token',TOKEN);showPanel();
-    }else showAlert('loginAlert',r.error||'Error','err');
+      TOKEN=r.token;currentUser=r.user;localStorage.setItem('dev_token',TOKEN);
+      document.getElementById('loginScreen').style.display='none';
+      document.getElementById('mainApp').style.display='flex';
+      document.getElementById('sidebarUser').textContent=r.user.username;
+      loadDashboard();
+    }else showAlert('loginAlert',r.error||'Credenciales inválidas','err');
   }catch(e){showAlert('loginAlert','Error: '+e.message,'err');}
 }
-async function doLogout(){try{await api('/api/auth/logout','POST');}catch{}TOKEN='';localStorage.removeItem('dev_token');location.reload();}
+async function doLogout(){
+  try{await req('/api/auth/logout','POST');}catch{}
+  TOKEN='';localStorage.removeItem('dev_token');location.reload();
+}
 function showSetup(){document.getElementById('setupModal').style.display='flex';}
 function hideSetup(){document.getElementById('setupModal').style.display='none';}
 async function doSetup(){
@@ -325,44 +526,51 @@ async function doSetup(){
   const pass=document.getElementById('setupPass').value;
   const key=document.getElementById('setupKey').value.trim();
   try{
-    const r=await api('/api/dev/setup','POST',{username:user,password:pass,setup_key:key},false);
+    const r=await req('/api/dev/setup','POST',{username:user,password:pass,setup_key:key},false);
     if(r.success){showAlert('setupAlert','✅ '+r.message,'ok');setTimeout(hideSetup,2000);}
     else showAlert('setupAlert',r.error||'Error','err');
   }catch(e){showAlert('setupAlert',e.message,'err');}
 }
 
-function showPanel(){
-  document.getElementById('loginScreen').style.display='none';
-  document.getElementById('panel').style.display='flex';
-  document.getElementById('sidebarUser').textContent=currentUser?.username||'—';
-  loadDashboard();
-}
-
+/* ══ NAVIGATION ══ */
 function showSection(name,el){
   document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
   document.getElementById('sec-'+name).classList.add('active');
   if(el)el.classList.add('active');
+  closeSidebar();
+  if(name==='dashboard')loadDashboard();
   if(name==='knowledge')loadKnowledge(1);
   if(name==='memories')loadMemories(1);
   if(name==='config')loadConfig();
   if(name==='users')loadUsers();
   if(name==='learn')loadLearningLog();
-  if(name==='chat')loadAPIRef();
 }
 
-async function api(path,method='GET',body=null,auth=true){
+/* ══ SIDEBAR MOBILE ══ */
+function toggleSidebar(){
+  const sb=document.getElementById('sidebar');
+  const ov=document.getElementById('overlay');
+  sb.classList.toggle('mobile-open');
+  ov.classList.toggle('show');
+}
+function closeSidebar(){
+  document.getElementById('sidebar').classList.remove('mobile-open');
+  document.getElementById('overlay').classList.remove('show');
+}
+
+/* ══ API ══ */
+async function req(path,method='GET',body=null,auth=true){
   const headers={'Content-Type':'application/json'};
   if(auth&&TOKEN)headers['Authorization']='Bearer '+TOKEN;
   const opts={method,headers};
   if(body)opts.body=JSON.stringify(body);
   const r=await fetch(API+path,opts);
   if(r.status===204)return{};
-  const data=await r.json();
-  if(!r.ok&&data.error)throw new Error(data.error);
-  return data;
+  const d=await r.json();
+  if(!r.ok&&d.error)throw new Error(d.error);
+  return d;
 }
-
 function showAlert(id,msg,type){
   const el=document.getElementById(id);if(!el)return;
   if(!msg){el.innerHTML='';return;}
@@ -376,47 +584,259 @@ function renderPag(id,total,cur,fn){
   el.innerHTML=h;
 }
 
+/* ══ CODE PANEL ══ */
+function openCodePanel(code,lang,title){
+  currentPanelCode=code;currentPanelLang=lang;
+  document.getElementById('codePanelTitle').textContent=title||'Código';
+  document.getElementById('codePanelLang').textContent=lang;
+  const codeEl=document.getElementById('codePanelCode');
+  codeEl.className='language-'+lang;
+  codeEl.textContent=code;
+  hljs.highlightElement(codeEl);
+  const isHTML=lang==='html'||lang==='HTML';
+  document.getElementById('codePanelPreview').style.display=isHTML?'':'none';
+  document.getElementById('codePanelPreviewFrame').style.display='none';
+  document.getElementById('codePanel').classList.add('open');
+}
+function closeCodePanel(){
+  document.getElementById('codePanel').classList.remove('open');
+  document.getElementById('codePanelPreviewFrame').style.display='none';
+}
+function copyPanelCode(){
+  navigator.clipboard.writeText(currentPanelCode).then(()=>{
+    const btn=document.getElementById('codePanelCopy');
+    btn.textContent='✅ Copiado';setTimeout(()=>btn.textContent='📋 Copiar',1500);
+  });
+}
+function downloadPanelCode(){
+  const ext={html:'html',python:'py',py:'py',javascript:'js',js:'js',css:'css',json:'json',bash:'sh',sql:'sql'}[currentPanelLang.toLowerCase()]||'txt';
+  const blob=new Blob([currentPanelCode],{type:'text/plain'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);
+  a.download=`codigo.${ext}`;a.click();URL.revokeObjectURL(a.href);
+}
+function togglePanelPreview(){
+  const frame=document.getElementById('codePanelPreviewFrame');
+  const body=document.getElementById('codePanelBody');
+  if(frame.style.display==='none'){
+    frame.srcdoc=currentPanelCode;frame.style.display='block';body.style.display='none';
+    document.getElementById('codePanelPreview').textContent='📝 Código';
+  }else{
+    frame.style.display='none';body.style.display='block';
+    document.getElementById('codePanelPreview').textContent='👁️ Preview';
+  }
+}
+
+/* ══ CHAT ══ */
+function renderMessage(text){
+  const parts=[];
+  const re=/```(\w+)?\n?([\s\S]*?)```/g;
+  let last=0;let m;
+  while((m=re.exec(text))!==null){
+    if(m.index>last)parts.push({type:'text',content:text.slice(last,m.index)});
+    parts.push({type:'code',lang:m[1]||'plaintext',content:m[2].trim()});
+    last=m.index+m[0].length;
+  }
+  if(last<text.length)parts.push({type:'text',content:text.slice(last)});
+
+  return parts.map(p=>{
+    if(p.type==='text')return`<span style="white-space:pre-wrap">${esc(p.content)}</span>`;
+    const cid='cb_'+Math.random().toString(36).slice(2);
+    const code=p.content;const lang=p.lang;
+    const isHTML=lang==='html'||lang==='HTML';
+    return`<div class="code-block">
+      <div class="code-block-head">
+        <span class="lang">${lang}</span>
+        <div class="actions">
+          <button class="btn btn-icon btn-outline btn-sm" onclick="copyInlineCode('${cid}')">📋</button>
+          <button class="btn btn-icon btn-sm" style="background:#6c63ff;color:#fff" onclick="openCodePanel(document.getElementById('${cid}').textContent,'${lang}')">⬡ Panel</button>
+          ${isHTML?`<button class="btn btn-icon btn-sm" style="background:#1dd1a1;color:#0f1117" onclick="openCodePanel(document.getElementById('${cid}').textContent,'html');togglePanelPreview()">👁️</button>`:''}
+        </div>
+      </div>
+      <pre><code id="${cid}" class="language-${lang}">${esc(code)}</code></pre>
+    </div>`;
+  }).join('');
+}
+
+function copyInlineCode(id){
+  const el=document.getElementById(id);if(!el)return;
+  navigator.clipboard.writeText(el.textContent);
+}
+
+async function sendTestMsg(){
+  const msg=document.getElementById('testMsg').value.trim();if(!msg)return;
+  document.getElementById('testMsg').value='';
+  const mode=document.getElementById('test-mode').value;
+  const customPrompt=document.getElementById('test-prompt').value.trim();
+  const box=document.getElementById('chatMessages');
+
+  // Quitar empty state
+  const empty=box.querySelector('.chat-empty');if(empty)empty.remove();
+
+  // Mensaje usuario
+  const userDiv=document.createElement('div');
+  userDiv.className='msg-wrap user';
+  userDiv.innerHTML=`<div class="bubble">${esc(msg)}</div>`;
+  box.appendChild(userDiv);
+
+  // Pensando...
+  const botDiv=document.createElement('div');
+  botDiv.className='msg-wrap bot';
+  const thinkId='think_'+Date.now();
+  botDiv.innerHTML=`<div class="bubble" id="${thinkId}" style="color:var(--text2)">⏳ Pensando...</div>`;
+  box.appendChild(botDiv);
+  box.scrollTop=box.scrollHeight;
+
+  try{
+    let r;
+    const limitedHistory=chatHistory.slice(-10);
+    if(customPrompt)r=await req('/api/dev/test-ai','POST',{message:msg,system_prompt:customPrompt});
+    else r=await req('/api/chat','POST',{message:msg,mode,history:limitedHistory});
+
+    chatHistory.push({role:'user',content:msg});
+    chatHistory.push({role:'assistant',content:r.response});
+    if(chatHistory.length>20)chatHistory.splice(0,2);
+
+    const thinkEl=document.getElementById(thinkId);
+    if(thinkEl){
+      const rendered=renderMessage(r.response);
+      thinkEl.id='';
+      thinkEl.style.color='';
+      thinkEl.innerHTML=rendered;
+      // Highlight code
+      thinkEl.querySelectorAll('pre code').forEach(b=>hljs.highlightElement(b));
+    }
+    const metaDiv=document.createElement('div');
+    metaDiv.className='msg-meta';
+    metaDiv.textContent=`${r.provider||'—'} · ${r.model||'—'} · ${r.tokens_used??r.tokens??0} tokens`;
+    botDiv.appendChild(metaDiv);
+    document.getElementById('testInfo').textContent=`Intercambios: ${chatHistory.length/2} | Historial limitado a ${limitedHistory.length/2} para evitar límite de tokens`;
+  }catch(e){
+    const thinkEl=document.getElementById(thinkId);
+    if(thinkEl){thinkEl.style.color='var(--red)';thinkEl.textContent='Error: '+e.message;}
+  }
+  box.scrollTop=box.scrollHeight;
+}
+
+function clearChat(){
+  chatHistory.length=0;
+  const box=document.getElementById('chatMessages');
+  box.innerHTML='<div class="chat-empty">Chat limpiado — historial borrado</div>';
+  document.getElementById('testInfo').textContent='';
+  closeCodePanel();
+}
+
+/* ══ HISTORIAL ══ */
+async function openHistory(){
+  document.getElementById('historyPanel').classList.add('open');
+  await loadHistoryList();
+}
+function closeHistory(){document.getElementById('historyPanel').classList.remove('open');}
+
+async function loadHistoryList(){
+  const el=document.getElementById('historyList');
+  try{
+    const d=await req('/api/chat/history?per_page=50');
+    allHistory=d.conversations||[];
+    renderHistoryList(allHistory);
+  }catch(e){el.innerHTML=`<div style="padding:16px;color:var(--red);font-size:.83rem">Error: ${e.message}</div>`;}
+}
+
+function renderHistoryList(items){
+  const el=document.getElementById('historyList');
+  if(!items.length){el.innerHTML='<div style="padding:20px;text-align:center;color:var(--text2);font-size:.83rem">Sin conversaciones previas</div>';return;}
+  el.innerHTML=items.map(c=>`
+    <div class="history-item" onclick="loadConversationInChat(${JSON.stringify(c.user_message).replace(/"/g,'&quot;')},${JSON.stringify(c.bot_response).replace(/"/g,'&quot;')})">
+      <div class="hi-msg">👤 ${esc(c.user_message.substring(0,60))}</div>
+      <div class="hi-msg" style="color:var(--text2);margin-top:2px">🤖 ${esc(c.bot_response.substring(0,60))}</div>
+      <div class="hi-meta">${new Date(c.timestamp).toLocaleString()}</div>
+    </div>`).join('');
+}
+
+function filterHistory(q){
+  const filtered=q?allHistory.filter(c=>c.user_message.toLowerCase().includes(q.toLowerCase())||c.bot_response.toLowerCase().includes(q.toLowerCase())):allHistory;
+  renderHistoryList(filtered);
+}
+
+function loadConversationInChat(userMsg,botResp){
+  closeHistory();
+  const box=document.getElementById('chatMessages');
+  const empty=box.querySelector('.chat-empty');if(empty)empty.remove();
+
+  const userDiv=document.createElement('div');
+  userDiv.className='msg-wrap user';
+  userDiv.innerHTML=`<div class="bubble">${esc(userMsg)}</div>`;
+  box.appendChild(userDiv);
+
+  const botDiv=document.createElement('div');
+  botDiv.className='msg-wrap bot';
+  const rendered=renderMessage(botResp);
+  botDiv.innerHTML=`<div class="bubble">${rendered}</div><div class="msg-meta">📜 Del historial</div>`;
+  box.appendChild(botDiv);
+  botDiv.querySelectorAll('pre code').forEach(b=>hljs.highlightElement(b));
+
+  // Agregar al historial activo para continuar conversación
+  chatHistory.push({role:'user',content:userMsg});
+  chatHistory.push({role:'assistant',content:botResp});
+  if(chatHistory.length>20)chatHistory.splice(0,2);
+
+  box.scrollTop=box.scrollHeight;
+  document.getElementById('testInfo').textContent=`Conversación del historial cargada. Puedes continuar escribiendo.`;
+}
+
+/* ══ DASHBOARD ══ */
 async function loadDashboard(){
   try{
-    const d=await api('/api/dev/stats');
+    const d=await req('/api/dev/stats');
     document.getElementById('d-mem').textContent=(d.system?.total_memories||0).toLocaleString();
     document.getElementById('d-conv').textContent=(d.system?.total_conversations||0).toLocaleString();
     document.getElementById('d-kb').textContent=(d.system?.manual_knowledge||0).toLocaleString();
     document.getElementById('d-today').textContent=d.today?.conversations||0;
     const prov=d.ai_config?.provider||'—';
     const ok=d.ai_config?.has_groq||prov==='groq'||d.ai_config?.has_anthropic||d.ai_config?.has_openai;
-    document.getElementById('d-ai').innerHTML=`<span class="dot ${ok?'dot-green':'dot-red'}"></span>${prov}`;
+    document.getElementById('d-ai').innerHTML=`<span class="dot ${ok?'dot-green':'dot-red'}"></span><span style="font-size:1rem">${prov}</span>`;
     if(!ok)showAlert('dashAlert','⚠️ No hay API Key de IA configurada.','warn');
+
     const rc=document.getElementById('recentConvs');
     if(d.recent_conversations?.length){
-      rc.innerHTML=d.recent_conversations.map(c=>`<div style="padding:10px 0;border-bottom:1px solid #1e2340"><div style="font-size:.83rem;color:var(--text2)">👤 ${esc(c.user.substring(0,70))}</div><div style="font-size:.83rem;margin-top:3px">🤖 ${esc(c.bot.substring(0,70))}</div><div style="font-size:.73rem;color:var(--text2);margin-top:3px">${new Date(c.time).toLocaleString()} · ${c.tokens} tokens</div></div>`).join('');
-    }else rc.innerHTML='<div style="color:var(--text2);font-size:.85rem">Sin conversaciones aún</div>';
+      rc.innerHTML=d.recent_conversations.map(c=>`<div style="padding:8px 0;border-bottom:1px solid #1e2340">
+        <div style="font-size:.8rem;color:var(--text2)">👤 ${esc(c.user.substring(0,60))}</div>
+        <div style="font-size:.8rem;margin-top:2px">🤖 ${esc(c.bot.substring(0,60))}</div>
+        <div style="font-size:.7rem;color:var(--text2);margin-top:2px">${new Date(c.time).toLocaleString()}</div>
+      </div>`).join('');
+    }else rc.innerHTML='<div style="color:var(--text2);font-size:.83rem">Sin conversaciones aún</div>';
+
     const wa=document.getElementById('weekActivity');
     if(d.week_activity?.length){
-      wa.innerHTML='<table style="width:100%"><thead><tr><th>Fecha</th><th>Mensajes</th><th>Aprendido</th></tr></thead><tbody>'+d.week_activity.map(w=>`<tr><td>${w.date}</td><td>${w.conversations}</td><td>${w.auto_learned}</td></tr>`).join('')+'</tbody></table>';
-    }else wa.innerHTML='<div style="color:var(--text2);font-size:.85rem">Sin actividad</div>';
+      wa.innerHTML='<table style="width:100%"><thead><tr><th>Fecha</th><th>Msgs</th><th>Aprendido</th></tr></thead><tbody>'+
+        d.week_activity.map(w=>`<tr><td style="font-size:.8rem">${w.date}</td><td>${w.conversations}</td><td>${w.auto_learned}</td></tr>`).join('')+
+        '</tbody></table>';
+    }else wa.innerHTML='<div style="color:var(--text2);font-size:.83rem">Sin actividad</div>';
   }catch(e){showAlert('dashAlert','Error: '+e.message,'err');}
 }
 
-let kbPage=1;
-const kbCats=new Set();
+/* ══ KNOWLEDGE ══ */
+let kbPage=1;const kbCats=new Set();
 async function loadKnowledge(page=1){
   kbPage=page;
   const text=document.getElementById('kb-filter-text')?.value.trim()||'';
   const cat=document.getElementById('kb-filter-cat')?.value||'';
-  let url=`/api/dev/knowledge?page=${page}`;
-  if(cat)url+=`&category=${encodeURIComponent(cat)}`;
+  let url=`/api/dev/knowledge?page=${page}`;if(cat)url+=`&category=${encodeURIComponent(cat)}`;
   try{
-    const d=await api(url);
+    const d=await req(url);
     let items=d.knowledge||[];
     if(text)items=items.filter(k=>k.title.toLowerCase().includes(text.toLowerCase())||k.content.toLowerCase().includes(text.toLowerCase()));
     const pl={1:'<span class="badge badge-blue">Normal</span>',2:'<span class="badge badge-yellow">Alta</span>',3:'<span class="badge badge-red">Crítica</span>'};
-    document.getElementById('kbTable').innerHTML=items.length?items.map(k=>`<tr><td><strong>${esc(k.title)}</strong></td><td><span class="badge badge-purple">${esc(k.category||'—')}</span></td><td>${pl[k.priority]||k.priority}</td><td style="color:var(--text2);font-size:.81rem;max-width:260px">${esc(k.content)}</td><td style="font-size:.78rem;color:var(--text2)">${new Date(k.created).toLocaleDateString()}</td><td><button class="btn btn-red btn-sm" onclick="deleteKnowledge(${k.id})">🗑️</button></td></tr>`).join('')
-      :'<tr><td colspan="6" style="text-align:center;color:var(--text2);padding:20px">Sin resultados</td></tr>';
+    document.getElementById('kbTable').innerHTML=items.length?items.map(k=>`<tr>
+      <td><strong style="font-size:.83rem">${esc(k.title)}</strong></td>
+      <td><span class="badge badge-purple">${esc(k.category||'—')}</span></td>
+      <td>${pl[k.priority]||k.priority}</td>
+      <td style="color:var(--text2);font-size:.78rem;max-width:200px">${esc(k.content)}</td>
+      <td style="font-size:.75rem;color:var(--text2)">${new Date(k.created).toLocaleDateString()}</td>
+      <td><button class="btn btn-red btn-sm" onclick="deleteKnowledge(${k.id})">🗑️</button></td>
+    </tr>`).join(''):'<tr><td colspan="6" style="text-align:center;color:var(--text2);padding:16px">Sin resultados</td></tr>';
     renderPag('kbPag',d.pages,kbPage,loadKnowledge);
     items.forEach(k=>{if(k.category)kbCats.add(k.category);});
-    const cs=document.getElementById('kb-filter-cat');
-    const cc=cs.value;
+    const cs=document.getElementById('kb-filter-cat');const cc=cs.value;
     cs.innerHTML='<option value="">Todas las categorías</option>'+[...kbCats].map(c=>`<option value="${esc(c)}" ${c===cc?'selected':''}>${esc(c)}</option>`).join('');
   }catch(e){document.getElementById('kbTable').innerHTML=`<tr><td colspan="6" style="color:var(--red)">${e.message}</td></tr>`;}
 }
@@ -429,26 +849,26 @@ async function addKnowledge(){
   if(!title||!content)return showAlert('kbAddAlert','Título y contenido requeridos','err');
   try{
     showAlert('kbAddAlert','Guardando...','info');
-    const r=await api('/api/dev/knowledge','POST',{title,content,category,tags,priority});
+    const r=await req('/api/dev/knowledge','POST',{title,content,category,tags,priority});
     showAlert('kbAddAlert','✅ '+r.message,'ok');
     ['kb-title','kb-content','kb-category','kb-tags'].forEach(id=>document.getElementById(id).value='');
-    if(category)kbCats.add(category);
-    loadKnowledge(kbPage);
+    if(category)kbCats.add(category);loadKnowledge(kbPage);
   }catch(e){showAlert('kbAddAlert','❌ '+e.message,'err');}
 }
 async function deleteKnowledge(id){
-  if(!confirm('¿Desactivar este conocimiento?'))return;
-  try{await api(`/api/dev/knowledge/${id}`,'DELETE');loadKnowledge(kbPage);}catch(e){alert(e.message);}
+  if(!confirm('¿Desactivar?'))return;
+  try{await req(`/api/dev/knowledge/${id}`,'DELETE');loadKnowledge(kbPage);}catch(e){alert(e.message);}
 }
 
+/* ══ LEARNING ══ */
 async function forceLearning(){
   const topic=document.getElementById('learn-topic').value.trim();
   const content=document.getElementById('learn-content').value.trim();
   if(!topic)return showAlert('learnAlert','El tema es requerido','err');
   try{
-    showAlert('learnAlert','⏳ Aprendiendo... (puede tardar 10-30 seg)','info');
-    const r=await api('/api/dev/learn','POST',{topic,content:content||undefined});
-    showAlert('learnAlert',`✅ Completado — ${r.web_learned} memorias web${r.manual_saved?' + conocimiento manual guardado':''}`,'ok');
+    showAlert('learnAlert','⏳ Aprendiendo...','info');
+    const r=await req('/api/dev/learn','POST',{topic,content:content||undefined});
+    showAlert('learnAlert',`✅ ${r.web_learned} memorias aprendidas${r.manual_saved?' + guardado':''}`, 'ok');
     loadLearningLog();
   }catch(e){showAlert('learnAlert','❌ '+e.message,'err');}
 }
@@ -458,64 +878,73 @@ async function bulkLearning(){
   if(!topics.length)return showAlert('bulkAlert','Agrega al menos un tema','err');
   try{
     showAlert('bulkAlert',`⏳ Procesando ${topics.length} temas...`,'info');
-    const r=await api('/api/dev/learn/bulk','POST',{items:topics.map(t=>({topic:t}))});
-    showAlert('bulkAlert',`✅ ${r.processed} temas — ${r.total_learned} memorias aprendidas`,'ok');
+    const r=await req('/api/dev/learn/bulk','POST',{items:topics.map(t=>({topic:t}))});
+    showAlert('bulkAlert',`✅ ${r.processed} temas · ${r.total_learned} memorias`,'ok');
     loadLearningLog();
   }catch(e){showAlert('bulkAlert','❌ '+e.message,'err');}
 }
 async function loadLearningLog(){
   const el=document.getElementById('learningLog');if(!el)return;
   try{
-    const d=await api('/api/dev/stats');
+    const d=await req('/api/dev/stats');
     if(d.week_activity?.length){
-      el.innerHTML=d.week_activity.map(w=>`<div style="display:flex;gap:20px;padding:8px 0;border-bottom:1px solid #1e2340;font-size:.85rem"><span style="width:110px;color:var(--text2)">${w.date}</span><span><strong>${w.conversations}</strong> mensajes</span><span><strong style="color:var(--green)">${w.auto_learned}</strong> aprendidos</span></div>`).join('');
-    }else el.innerHTML='<div style="color:var(--text2);font-size:.85rem">Sin actividad reciente</div>';
-  }catch(e){el.innerHTML=`<div style="color:var(--red);font-size:.85rem">Error: ${e.message}</div>`;}
+      el.innerHTML=d.week_activity.map(w=>`<div style="display:flex;gap:16px;padding:7px 0;border-bottom:1px solid #1e2340;font-size:.83rem">
+        <span style="width:100px;color:var(--text2)">${w.date}</span>
+        <span><strong>${w.conversations}</strong> msgs</span>
+        <span><strong style="color:var(--green)">${w.auto_learned}</strong> aprendidos</span>
+      </div>`).join('');
+    }else el.innerHTML='<div style="color:var(--text2);font-size:.83rem">Sin actividad</div>';
+  }catch(e){el.innerHTML=`<div style="color:var(--red);font-size:.83rem">Error: ${e.message}</div>`;}
 }
 
+/* ══ MEMORIES ══ */
 let memPage=1;
 async function loadMemories(page=1){
   memPage=page;
   const topic=document.getElementById('mem-search').value.trim();
   const source=document.getElementById('mem-source').value;
+  const sort=document.getElementById('mem-sort')?.value||'recent';
   const df=document.getElementById('mem-date-from').value;
   const dt=document.getElementById('mem-date-to').value;
-  const sort=document.getElementById('mem-sort')?.value||'recent';
-  let url=`/api/dev/memories?page=${page}&per_page=25&sort=${sort}`;
-  if(topic)url+=`&topic=${encodeURIComponent(topic)}`;
-  if(source)url+=`&source=${source}`;
+  let url=`/api/dev/memories?page=${page}&per_page=20&sort=${sort}`;
+  if(topic)url+=`&topic=${encodeURIComponent(topic)}`;if(source)url+=`&source=${source}`;
   try{
-    const d=await api(url);
+    const d=await req(url);
     let items=d.memories||[];
     if(df)items=items.filter(m=>new Date(m.created)>=new Date(df));
     if(dt)items=items.filter(m=>new Date(m.created)<=new Date(dt+'T23:59:59'));
     document.getElementById('memCount').textContent=`${d.total} memorias totales`;
-    document.getElementById('memTable').innerHTML=items.length?items.map(m=>`<tr><td style="max-width:150px">${esc((m.topic||'—').substring(0,50))}</td><td><span class="badge ${m.source==='manual_dev'?'badge-blue':m.source==='auto_learning'?'badge-green':'badge-yellow'}">${m.source}</span></td><td>${(m.score||0).toFixed(2)}</td><td>${m.accesses}</td><td style="font-size:.78rem;color:var(--text2)">${new Date(m.created).toLocaleDateString()}</td><td style="color:var(--text2);font-size:.81rem;max-width:200px">${esc(m.content)}</td><td><button class="btn btn-red btn-sm" onclick="deleteMemory(${m.id})">🗑️</button></td></tr>`).join('')
-      :'<tr><td colspan="7" style="text-align:center;color:var(--text2);padding:20px">Sin memorias encontradas</td></tr>';
+    document.getElementById('memTable').innerHTML=items.length?items.map(m=>`<tr>
+      <td style="max-width:140px;font-size:.8rem">${esc((m.topic||'—').substring(0,45))}</td>
+      <td><span class="badge ${m.source==='manual_dev'?'badge-blue':m.source==='auto_learning'?'badge-green':'badge-yellow'}">${m.source}</span></td>
+      <td>${(m.score||0).toFixed(2)}</td><td>${m.accesses}</td>
+      <td style="font-size:.75rem;color:var(--text2)">${new Date(m.created).toLocaleDateString()}</td>
+      <td style="color:var(--text2);font-size:.78rem;max-width:180px">${esc(m.content)}</td>
+      <td><button class="btn btn-red btn-sm" onclick="deleteMemory(${m.id})">🗑️</button></td>
+    </tr>`).join(''):'<tr><td colspan="7" style="text-align:center;color:var(--text2);padding:16px">Sin memorias</td></tr>';
     renderPag('memPag',d.pages,memPage,loadMemories);
   }catch(e){document.getElementById('memTable').innerHTML=`<tr><td colspan="7" style="color:var(--red)">${e.message}</td></tr>`;}
 }
 async function deleteMemory(id){
-  if(!confirm('¿Eliminar esta memoria?'))return;
-  try{await api(`/api/dev/memories/${id}`,'DELETE');loadMemories(memPage);}catch(e){alert(e.message);}
+  if(!confirm('¿Eliminar?'))return;
+  try{await req(`/api/dev/memories/${id}`,'DELETE');loadMemories(memPage);}catch(e){alert(e.message);}
 }
 function clearMemoriesPrompt(){
   const source=document.getElementById('mem-source').value;
   if(!confirm(source?`¿Limpiar memorias de "${source}"?`:'¿Limpiar TODAS las memorias?'))return;
-  api('/api/dev/memories/clear','POST',{source:source||undefined,confirm:'CONFIRMAR'})
-    .then(r=>{alert(`✅ Eliminadas ${r.deleted} memorias`);loadMemories(1);})
+  req('/api/dev/memories/clear','POST',{source:source||undefined,confirm:'CONFIRMAR'})
+    .then(r=>{alert(`✅ ${r.deleted} memorias eliminadas`);loadMemories(1);})
     .catch(e=>alert(e.message));
 }
 
+/* ══ CONFIG ══ */
 async function loadConfig(){
   try{
-    const d=await api('/api/dev/config');
+    const d=await req('/api/dev/config');
     const c=d.config;const v=k=>c[k]?.value||'';
-    const provVal=v('ai_provider')||'groq';
-    // Ensure groq is selected if that's what's saved
-    const provSel=document.getElementById('cfg-provider');
-    if([...provSel.options].some(o=>o.value===provVal)) provSel.value=provVal;
-    else provSel.value='groq';
+    const prov=v('ai_provider')||'groq';
+    const sel=document.getElementById('cfg-provider');
+    if([...sel.options].some(o=>o.value===prov))sel.value=prov;else sel.value='groq';
     document.getElementById('cfg-model').value=v('ai_model')||'llama-3.1-8b-instant';
     document.getElementById('cfg-tokens').value=v('max_tokens')||'1000';
     document.getElementById('cfg-autolearn').value=v('auto_learning_enabled')||'true';
@@ -526,143 +955,62 @@ async function loadConfig(){
 }
 async function saveAIConfig(){
   try{
-    await api('/api/dev/config','PUT',{updates:{ai_provider:document.getElementById('cfg-provider').value,ai_model:document.getElementById('cfg-model').value,max_tokens:document.getElementById('cfg-tokens').value}});
-    showAlert('cfgAIAlert','✅ Configuración de IA guardada','ok');
+    await req('/api/dev/config','PUT',{updates:{
+      ai_provider:document.getElementById('cfg-provider').value,
+      ai_model:document.getElementById('cfg-model').value,
+      max_tokens:document.getElementById('cfg-tokens').value
+    }});
+    showAlert('cfgAIAlert','✅ Configuración guardada','ok');
   }catch(e){showAlert('cfgAIAlert','❌ '+e.message,'err');}
 }
 async function saveLearningConfig(){
   try{
-    await api('/api/dev/config','PUT',{updates:{auto_learning_enabled:document.getElementById('cfg-autolearn').value,auto_learning_interval_hours:document.getElementById('cfg-interval').value,web_search_enabled:document.getElementById('cfg-websearch').value}});
+    await req('/api/dev/config','PUT',{updates:{
+      auto_learning_enabled:document.getElementById('cfg-autolearn').value,
+      auto_learning_interval_hours:document.getElementById('cfg-interval').value,
+      web_search_enabled:document.getElementById('cfg-websearch').value
+    }});
     showAlert('cfgLearnAlert','✅ Guardado','ok');
   }catch(e){showAlert('cfgLearnAlert','❌ '+e.message,'err');}
 }
 async function savePrompt(){
   const prompt=document.getElementById('cfg-prompt').value.trim();
-  if(!prompt)return showAlert('cfgPromptAlert','El prompt no puede estar vacío','err');
-  try{await api('/api/dev/config/prompt','PUT',{prompt});showAlert('cfgPromptAlert','✅ Prompt actualizado','ok');}
+  if(!prompt)return showAlert('cfgPromptAlert','No puede estar vacío','err');
+  try{await req('/api/dev/config/prompt','PUT',{prompt});showAlert('cfgPromptAlert','✅ Prompt actualizado','ok');}
   catch(e){showAlert('cfgPromptAlert','❌ '+e.message,'err');}
 }
 function resetPrompt(){document.getElementById('cfg-prompt').value='Eres Cic_IA, un asistente inteligente en español. Responde de forma clara, útil y amigable.';}
 
-async function sendTestMsg(){
-  const msg=document.getElementById('testMsg').value.trim();if(!msg)return;
-  document.getElementById('testMsg').value='';
-  const mode=document.getElementById('test-mode').value;
-  const customPrompt=document.getElementById('test-prompt').value.trim();
-  const box=document.getElementById('testChat');
-  if(box.querySelector('[style*="padding:40px"]'))box.innerHTML='';
-
-  // Mostrar mensaje usuario
-  box.innerHTML+=`<div class="msg user"><div class="bubble">${esc(msg)}</div></div>`;
-  const tid='t'+Date.now();
-  box.innerHTML+=`<div class="msg bot" id="${tid}"><div class="bubble" style="color:var(--text2)">\u23f3 Pensando...</div></div>`;
-  box.scrollTop=box.scrollHeight;
-
-  try{
-    let r;
-    // Limitar historial a los últimos 6 intercambios para no superar límite de tokens de Groq
-    const limitedHistory=chatHistory.slice(-12);
-    if(customPrompt){r=await api('/api/dev/test-ai','POST',{message:msg,system_prompt:customPrompt});}
-    else{r=await api('/api/chat','POST',{message:msg,mode,history:limitedHistory});}
-
-    chatHistory.push({role:'user',content:msg});
-    chatHistory.push({role:'assistant',content:r.response});
-    if(chatHistory.length>20)chatHistory.splice(0,2);
-
-    const el=document.getElementById(tid);
-    if(el){
-      const rendered=renderMessage(r.response);
-      el.innerHTML=`<div class="bubble">${rendered}</div>
-        <div class="msg-meta">Provider: ${r.provider||'—'} | Model: ${r.model||'—'} | Tokens: ${r.tokens_used??r.tokens??0} | Historial: ${chatHistory.length/2} msgs</div>`;
-    }
-    // Highlight all code blocks
-    el?.querySelectorAll('pre code').forEach(b=>hljs?.highlightElement(b));
-    document.getElementById('testInfo').textContent=`Intercambios en sesión: ${chatHistory.length/2}`;
-  }catch(e){
-    const el=document.getElementById(tid);
-    if(el)el.innerHTML=`<div class="bubble" style="color:var(--red)">Error: ${esc(e.message)}</div>`;
-  }
-  box.scrollTop=box.scrollHeight;
-}
-
-function renderMessage(text){
-  // Detectar bloques de código ```lang ... ```
-  const parts=[];
-  const codeRegex=/```(\w+)?\n?([\s\S]*?)```/g;
-  let last=0;let m;
-  while((m=codeRegex.exec(text))!==null){
-    if(m.index>last) parts.push({type:'text',content:text.slice(last,m.index)});
-    parts.push({type:'code',lang:m[1]||'plaintext',content:m[2].trim()});
-    last=m.index+m[0].length;
-  }
-  if(last<text.length)parts.push({type:'text',content:text.slice(last)});
-
-  return parts.map(p=>{
-    if(p.type==='text') return `<span style="white-space:pre-wrap">${esc(p.content)}</span>`;
-    const id='code_'+Math.random().toString(36).slice(2);
-    const isHTML=p.lang==='html'||p.lang==='HTML';
-    const previewBtn=isHTML?`<button class="btn btn-sm" style="background:#1dd1a1;color:#0f1117;margin-left:6px" onclick="previewHTML(\`${p.content.replace(/`/g,'\\`')}\`)">👁️ Preview</button>`:'';
-    return `<div style="margin:10px 0;border-radius:8px;overflow:hidden;border:1px solid #2d3561">
-      <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 12px;background:#0d0f1a">
-        <span style="font-size:.78rem;color:var(--accent2)">${p.lang}</span>
-        <div style="display:flex;gap:6px">
-          ${previewBtn}
-          <button class="btn btn-sm btn-outline" onclick="copyCode('${id}')">📋 Copiar</button>
-          <button class="btn btn-sm" style="background:#6c63ff;color:#fff" onclick="downloadCode('${id}','${p.lang}')">⬇️ Descargar</button>
-        </div>
-      </div>
-      <pre id="${id}" style="margin:0;border-radius:0;border:none;padding:14px;overflow-x:auto"><code class="language-${p.lang}">${esc(p.content)}</code></pre>
-    </div>`;
-  }).join('');
-}
-
-function copyCode(id){
-  const el=document.getElementById(id);
-  if(!el)return;
-  navigator.clipboard.writeText(el.textContent).then(()=>{
-    const btn=el.previousElementSibling?.querySelector('button');
-    if(btn){const orig=btn.textContent;btn.textContent='✅ Copiado';setTimeout(()=>btn.textContent=orig,1500);}
-  });
-}
-
-function downloadCode(id,lang){
-  const el=document.getElementById(id);if(!el)return;
-  const ext={html:'html',python:'py',py:'py',javascript:'js',js:'js',css:'css',json:'json',bash:'sh',sql:'sql'}[lang.toLowerCase()]||'txt';
-  const blob=new Blob([el.textContent],{type:'text/plain'});
-  const a=document.createElement('a');a.href=URL.createObjectURL(blob);
-  a.download=`codigo.${ext}`;a.click();URL.revokeObjectURL(a.href);
-}
-
-function previewHTML(code){
-  const panel=document.getElementById('previewPanel');
-  const frame=document.getElementById('previewFrame');
-  panel.style.display='block';
-  frame.srcdoc=code;
-  panel.scrollIntoView({behavior:'smooth'});
-}
-
-function closePreview(){
-  document.getElementById('previewPanel').style.display='none';
-  document.getElementById('previewFrame').srcdoc='';
-}
-
-function clearChat(){
-  chatHistory.length=0;
-  document.getElementById('testChat').innerHTML='<div style="text-align:center;color:var(--text2);font-size:.85rem;padding:40px 0">Chat limpiado \u2014 historial borrado</div>';
-  document.getElementById('testInfo').textContent='';
-  closePreview();
-}
+/* ══ USERS ══ */
 async function loadUsers(){
   try{
-    const d=await api('/api/dev/users');
-    document.getElementById('usersTable').innerHTML=d.users.map(u=>`<tr><td>${u.id}</td><td><strong>${esc(u.username)}</strong></td><td style="color:var(--text2);font-size:.83rem">${esc(u.email)}</td><td>${u.is_developer?'<span class="badge badge-red">Dev</span>':'<span class="badge badge-green">Usuario</span>'}</td><td>${u.is_active?'<span class="badge badge-green">Activo</span>':'<span class="badge badge-red">Inactivo</span>'}</td><td>${u.conversations}</td><td style="font-size:.78rem;color:var(--text2)">${new Date(u.created_at).toLocaleDateString()}</td><td><button class="btn btn-outline btn-sm" onclick="toggleDev(${u.id})">${u.is_developer?'Quitar dev':'Hacer dev'}</button></td></tr>`).join('');
-  }catch(e){document.getElementById('usersTable').innerHTML=`<tr><td colspan="8" style="color:var(--red)">Error: ${e.message}</td></tr>`;}
+    const d=await req('/api/dev/users');
+    document.getElementById('usersTable').innerHTML=d.users.map(u=>`<tr>
+      <td>${u.id}</td>
+      <td><strong style="font-size:.83rem">${esc(u.username)}</strong></td>
+      <td>${u.is_developer?'<span class="badge badge-red">Dev</span>':'<span class="badge badge-green">Usuario</span>'}</td>
+      <td>${u.is_active?'<span class="badge badge-green">Activo</span>':'<span class="badge badge-red">Inactivo</span>'}</td>
+      <td>${u.conversations}</td>
+      <td style="font-size:.75rem;color:var(--text2)">${new Date(u.created_at).toLocaleDateString()}</td>
+      <td><button class="btn btn-outline btn-sm" onclick="toggleDev(${u.id})">${u.is_developer?'Quitar dev':'Hacer dev'}</button></td>
+    </tr>`).join('');
+  }catch(e){document.getElementById('usersTable').innerHTML=`<tr><td colspan="7" style="color:var(--red)">Error: ${e.message}</td></tr>`;}
 }
-async function toggleDev(id){try{await api(`/api/dev/users/${id}/toggle-dev`,'POST');loadUsers();}catch(e){alert(e.message);}}
+async function toggleDev(id){try{await req(`/api/dev/users/${id}/toggle-dev`,'POST');loadUsers();}catch(e){alert(e.message);}}
 
+/* ══ INIT ══ */
 window.addEventListener('load',async()=>{
   if(TOKEN){
-    try{const r=await api('/api/auth/verify','GET');if(r.success&&r.user.is_developer){currentUser=r.user;showPanel();return;}}catch{}
+    try{
+      const r=await req('/api/auth/verify','GET');
+      if(r.success&&r.user.is_developer){
+        currentUser=r.user;
+        document.getElementById('loginScreen').style.display='none';
+        document.getElementById('mainApp').style.display='flex';
+        document.getElementById('sidebarUser').textContent=r.user.username;
+        loadDashboard();return;
+      }
+    }catch{}
     TOKEN='';localStorage.removeItem('dev_token');
   }
 });
