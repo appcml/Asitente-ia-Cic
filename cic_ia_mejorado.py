@@ -1221,6 +1221,121 @@ def user_stats(current_user):
 def status():
     return jsonify(cic_ia.get_stats())
 
+# ========== LECTOR DE GITHUB Y ARCHIVOS ==========
+
+@app.route('/api/chat/read-github', methods=['POST'])
+@token_required
+def read_github(current_user):
+    """Lee código desde una URL de GitHub y lo agrega al contexto del chat"""
+    try:
+        data = request.json or {}
+        url  = data.get('url', '').strip()
+        if not url:
+            return jsonify({'error': 'URL requerida'}), 400
+
+        # Convertir URL de GitHub a raw
+        raw_url = url
+        if 'github.com' in url and '/blob/' in url:
+            raw_url = url.replace('github.com', 'raw.githubusercontent.com').replace('/blob/', '/')
+        elif 'github.com' in url and '/tree/' not in url and 'raw.githubusercontent.com' not in url:
+            # Intentar construir URL raw para archivos directos
+            raw_url = url.replace('github.com', 'raw.githubusercontent.com').replace('/blob/', '/')
+
+        import urllib.request
+        req_obj = urllib.request.Request(raw_url, headers={'User-Agent': 'CicIA/1.0'})
+        with urllib.request.urlopen(req_obj, timeout=15) as resp:
+            code_content = resp.read().decode('utf-8', errors='ignore')
+
+        # Limitar tamaño
+        if len(code_content) > 80000:
+            code_content = code_content[:80000] + "\n... [truncado por tamaño]"
+
+        # Detectar extensión/lenguaje
+        lang = 'plaintext'
+        if '.py' in url: lang = 'python'
+        elif '.js' in url: lang = 'javascript'
+        elif '.html' in url: lang = 'html'
+        elif '.css' in url: lang = 'css'
+        elif '.json' in url: lang = 'json'
+        elif '.ts' in url: lang = 'typescript'
+        elif '.md' in url: lang = 'markdown'
+
+        return jsonify({
+            'success':  True,
+            'content':  code_content,
+            'language': lang,
+            'url':      raw_url,
+            'lines':    code_content.count('\n') + 1,
+            'chars':    len(code_content)
+        })
+    except Exception as e:
+        return jsonify({'error': f'No se pudo leer el archivo: {str(e)}'}), 400
+
+@app.route('/api/chat/analyze-image', methods=['POST'])
+@token_required
+def analyze_image(current_user):
+    """Analiza una imagen usando Claude vision si está disponible"""
+    try:
+        import base64
+        data      = request.json or {}
+        image_b64 = data.get('image_b64', '')
+        message   = data.get('message', 'Describe esta imagen en detalle')
+        mime_type = data.get('mime_type', 'image/jpeg')
+
+        if not image_b64:
+            return jsonify({'error': 'imagen requerida'}), 400
+
+        # Solo Anthropic soporta visión actualmente
+        if not ANTHROPIC_API_KEY:
+            # Fallback: decirle al usuario que no hay soporte de visión
+            return jsonify({
+                'success':  False,
+                'response': '⚠️ El análisis de imágenes requiere ANTHROPIC_API_KEY configurada. '
+                            'Groq/Ollama no soportan análisis de imágenes actualmente.',
+                'provider': 'fallback'
+            })
+
+        system = get_config('system_prompt', 'Eres Cic_IA, un asistente inteligente.')
+
+        resp = requests.post(
+            'https://api.anthropic.com/v1/messages',
+            headers={
+                'x-api-key': ANTHROPIC_API_KEY,
+                'anthropic-version': '2023-06-01',
+                'content-type': 'application/json'
+            },
+            json={
+                'model': 'claude-opus-4-5',
+                'max_tokens': 1500,
+                'system': system,
+                'messages': [{
+                    'role': 'user',
+                    'content': [
+                        {'type': 'image', 'source': {'type': 'base64', 'media_type': mime_type, 'data': image_b64}},
+                        {'type': 'text',  'text': message}
+                    ]
+                }]
+            },
+            timeout=30
+        )
+        resp.raise_for_status()
+        result_text = resp.json()['content'][0]['text']
+        tokens      = resp.json().get('usage', {}).get('output_tokens', 0)
+
+        # Guardar en BD
+        cic_ia._save_conversation(
+            user_msg=f'[IMAGEN] {message}',
+            bot_resp=result_text,
+            user_id=current_user.id,
+            tokens=tokens,
+            sources=['anthropic_vision']
+        )
+
+        return jsonify({'success': True, 'response': result_text, 'provider': 'anthropic_vision', 'tokens': tokens})
+    except Exception as e:
+        logger.error(f"Error análisis imagen: {e}")
+        return jsonify({'error': str(e)}), 500
+
 # ========== MÓDULOS (compatibilidad) ==========
 
 @app.route('/api/modules/list', methods=['GET'])
