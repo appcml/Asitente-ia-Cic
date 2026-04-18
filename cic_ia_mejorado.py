@@ -910,8 +910,8 @@ Luego responde directamente sin mostrar este proceso al usuario.""")
         """
 
         # Validar longitud
-        if len(user_message) > 4000:
-            user_message = user_message[:4000]
+        if len(user_message) > 100000:
+            user_message = user_message[:100000]
 
         # ── Capa 1: Recuperar historial persistente de la BD ────────────
         db_history = self._get_user_conversation_history(user_id, limit=8)
@@ -1009,8 +1009,8 @@ Luego responde directamente sin mostrar este proceso al usuario.""")
         try:
             conv = Conversation(
                 user_id=user_id,
-                user_message=user_msg[:2000],
-                bot_response=bot_resp[:4000],
+                user_message=user_msg[:50000],
+                bot_response=bot_resp[:20000],
                 sources_used={'providers': sources or []},
                 tokens_used=tokens,
                 mode_used='chat'
@@ -1160,8 +1160,8 @@ def chat(current_user):
 
         if not message:
             return jsonify({'error': 'Mensaje vacío'}), 400
-        if len(message) > 4000:
-            return jsonify({'error': 'Mensaje demasiado largo (máx 4000 caracteres)'}), 400
+        if len(message) > 100000:
+            return jsonify({'error': 'Mensaje demasiado largo (máx 100,000 caracteres)'}), 400
 
         result = cic_ia.chat(
             user_message=message,
