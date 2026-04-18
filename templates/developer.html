@@ -458,34 +458,73 @@ tr:hover td{background:rgba(108,99,255,.04);}
               <option value="fast">Rápido</option>
               <option value="complete">Completo</option>
             </select>
-            <button class="btn btn-outline btn-sm" onclick="openHistory()" title="Historial">📜 Historial</button>
+            <button class="btn btn-outline btn-sm" onclick="newConversation()" title="Nueva conversación">✏️ Nueva</button>
             <button class="btn btn-sm" style="background:#2d3561;color:var(--text)" onclick="clearChat()">🗑️</button>
           </div>
           <!-- Messages -->
           <div class="chat-messages" id="chatMessages">
-            <div class="chat-empty">Escribe un mensaje para probar la IA</div>
+            <div class="chat-empty">Escribe un mensaje o carga una conversación del historial</div>
           </div>
-          <!-- Input -->
+          <!-- Input area -->
           <div class="chat-input-wrap" style="flex-direction:column;gap:6px">
+            <!-- GitHub + Image toolbar -->
+            <div style="display:flex;gap:6px;flex-wrap:wrap">
+              <input type="text" id="githubUrl" placeholder="🔗 URL de GitHub (pega y presiona Leer)" style="flex:1;min-width:0;font-size:.78rem"/>
+              <button class="btn btn-sm" style="background:#2d3561;color:var(--text);white-space:nowrap" onclick="readGitHub()">📂 Leer</button>
+              <label class="btn btn-sm" style="background:#2d3561;color:var(--text);cursor:pointer;white-space:nowrap" title="Pegar o subir imagen">
+                🖼️ Imagen
+                <input type="file" id="imageInput" accept="image/*" style="display:none" onchange="handleImageUpload(this)"/>
+              </label>
+              <button class="btn btn-sm" style="background:#2d3561;color:var(--text)" onclick="pasteImageFromClipboard()" title="Pegar imagen del portapapeles (Ctrl+V)">📋 Pegar img</button>
+            </div>
+            <!-- Image preview -->
+            <div id="imagePreviewWrap" style="display:none;position:relative;display:none">
+              <img id="imagePreview" style="max-height:80px;border-radius:6px;border:1px solid #2d3561"/>
+              <button onclick="clearImage()" style="position:absolute;top:2px;right:2px;background:var(--red);color:#fff;border:none;border-radius:50%;width:20px;height:20px;cursor:pointer;font-size:.7rem">✕</button>
+            </div>
+            <!-- Text input -->
             <textarea id="testMsg"
-              placeholder="Escribe un mensaje... (Shift+Enter = nueva línea, Enter = enviar)&#10;Puedes pegar código completo o mensajes largos aquí"
-              autocomplete="off"
-              rows="1"
+              placeholder="Escribe un mensaje... (Enter = enviar, Shift+Enter = nueva línea)&#10;Puedes pegar código completo, instrucciones largas o texto extenso"
+              autocomplete="off" rows="1"
               style="flex:1;min-height:42px;max-height:200px;resize:none;overflow-y:auto;line-height:1.5;font-family:inherit;"
               onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendTestMsg();}"
-              oninput="autoGrow(this)"></textarea>
+              oninput="autoGrow(this)"
+              onpaste="handlePaste(event)"></textarea>
             <div style="display:flex;justify-content:space-between;align-items:center">
-              <span id="charCount" style="font-size:.72rem;color:var(--text2)">0 / 100000</span>
+              <span id="charCount" style="font-size:.72rem;color:var(--text2)">0 / 100,000</span>
               <div style="display:flex;gap:6px">
-                <button class="btn btn-outline btn-sm" onclick="clearInput()" title="Limpiar input">✕</button>
+                <button class="btn btn-outline btn-sm" onclick="clearInput()">✕ Limpiar</button>
                 <button class="btn btn-primary" onclick="sendTestMsg()">Enviar ↩</button>
               </div>
             </div>
           </div>
-          <div id="testInfo" style="padding:4px 12px 8px;font-size:.73rem;color:var(--text2);background:var(--bg2)"></div>
+          <div id="testInfo" style="padding:4px 12px 6px;font-size:.73rem;color:var(--text2);background:var(--bg2)"></div>
+          <!-- Últimas conversaciones (siempre visible debajo) -->
+          <div style="border-top:1px solid #2d3561;background:var(--bg2)">
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 14px">
+              <span style="font-size:.78rem;color:var(--text2);font-weight:600">📜 Conversaciones recientes</span>
+              <button class="btn btn-sm btn-outline" onclick="openHistoryModal()" style="font-size:.72rem;padding:3px 8px">Ver todas</button>
+            </div>
+            <div id="recentChatList" style="display:flex;gap:8px;padding:0 10px 10px;overflow-x:auto;flex-wrap:nowrap">
+              <div style="color:var(--text2);font-size:.78rem;padding:8px">Cargando...</div>
+            </div>
+          </div>
         </div>
       </section>
 
+      <!-- MODAL HISTORIAL COMPLETO -->
+      <div id="historyModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:200;align-items:flex-start;justify-content:center;padding:40px 16px;overflow-y:auto">
+        <div style="background:var(--bg2);border-radius:16px;width:100%;max-width:700px;border:1px solid #2d3561">
+          <div style="padding:16px 20px;border-bottom:1px solid #2d3561;display:flex;justify-content:space-between;align-items:center">
+            <h3 style="font-size:1rem">📜 Historial de conversaciones</h3>
+            <button class="btn btn-outline btn-sm" onclick="closeHistoryModal()">✕ Cerrar</button>
+          </div>
+          <div style="padding:12px 16px;border-bottom:1px solid #2d3561">
+            <input type="text" id="histModalSearch" placeholder="Buscar en conversaciones..." oninput="filterHistoryModal(this.value)"/>
+          </div>
+          <div id="histModalList" style="max-height:60vh;overflow-y:auto"></div>
+        </div>
+      </div>
       <!-- USUARIOS -->
       <section id="sec-users" class="section">
         <h2>👥 Usuarios</h2><p class="subtitle">Gestión de usuarios del sistema</p>
@@ -556,6 +595,7 @@ function showSection(name,el){
   if(name==='config')loadConfig();
   if(name==='users')loadUsers();
   if(name==='learn')loadLearningLog();
+  if(name==='chat'){newConversation();loadRecentChats();}
 }
 
 /* ══ SIDEBAR MOBILE ══ */
@@ -638,107 +678,380 @@ function togglePanelPreview(){
 }
 
 /* ══ CHAT ══ */
-function renderMessage(text){
-  const parts=[];
-  const re=/```(\w+)?\n?([\s\S]*?)```/g;
-  let last=0;let m;
-  while((m=re.exec(text))!==null){
-    if(m.index>last)parts.push({type:'text',content:text.slice(last,m.index)});
-    parts.push({type:'code',lang:m[1]||'plaintext',content:m[2].trim()});
-    last=m.index+m[0].length;
-  }
-  if(last<text.length)parts.push({type:'text',content:text.slice(last)});
+let pendingImage = null; // {base64, mimeType, preview}
+let allHistoryData = [];
 
-  return parts.map(p=>{
-    if(p.type==='text')return`<span style="white-space:pre-wrap">${esc(p.content)}</span>`;
-    const cid='cb_'+Math.random().toString(36).slice(2);
-    const code=p.content;const lang=p.lang;
-    const isHTML=lang==='html'||lang==='HTML';
-    return`<div class="code-block">
+function newConversation(){
+  chatHistory.length = 0;
+  pendingImage = null;
+  clearImageUI();
+  const box = document.getElementById('chatMessages');
+  box.innerHTML = '<div class="chat-empty">Nueva conversación iniciada ✏️</div>';
+  document.getElementById('testInfo').textContent = '';
+  document.getElementById('testMsg').value = '';
+  document.getElementById('testMsg').style.height = '42px';
+  document.getElementById('charCount').textContent = '0 / 100,000';
+}
+
+function autoGrow(el){
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 200) + 'px';
+  const c = document.getElementById('charCount');
+  if(c){
+    const len = el.value.length;
+    c.textContent = `${len.toLocaleString()} / 100,000`;
+    c.style.color = len > 90000 ? 'var(--red)' : len > 60000 ? 'var(--yellow)' : 'var(--text2)';
+  }
+}
+
+function clearInput(){
+  const el = document.getElementById('testMsg');
+  el.value = ''; el.style.height = '42px';
+  const c = document.getElementById('charCount');
+  if(c) c.textContent = '0 / 100,000';
+  el.focus();
+}
+
+// ── GitHub reader ──
+async function readGitHub(){
+  const url = document.getElementById('githubUrl').value.trim();
+  if(!url) return;
+  try{
+    const statusEl = document.getElementById('testInfo');
+    statusEl.textContent = '⏳ Leyendo repositorio...';
+    const r = await req('/api/chat/read-github', 'POST', {url});
+    if(r.success){
+      const msg = document.getElementById('testMsg');
+      const prefix = `[CÓDIGO DE GITHUB: ${url}]
+\`\`\`${r.language}
+`;
+      const suffix = `
+\`\`\`
+(${r.lines} líneas, ${r.chars} caracteres)
+
+Instrucciones: `;
+      msg.value = prefix + r.content + suffix;
+      autoGrow(msg);
+      document.getElementById('githubUrl').value = '';
+      statusEl.textContent = `✅ Cargado: ${r.lines} líneas · ${r.chars} chars. Agrega tus instrucciones al final y envía.`;
+      msg.focus();
+      msg.setSelectionRange(msg.value.length, msg.value.length);
+    } else {
+      document.getElementById('testInfo').textContent = '❌ ' + r.error;
+    }
+  }catch(e){
+    document.getElementById('testInfo').textContent = '❌ Error: ' + e.message;
+  }
+}
+
+// ── Image handling ──
+function handleImageUpload(input){
+  const file = input.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const dataUrl = e.target.result;
+    const b64 = dataUrl.split(',')[1];
+    const mime = file.type;
+    setImage(b64, mime, dataUrl);
+  };
+  reader.readAsDataURL(file);
+}
+
+function handlePaste(e){
+  const items = e.clipboardData?.items;
+  if(!items) return;
+  for(const item of items){
+    if(item.type.startsWith('image/')){
+      e.preventDefault();
+      const blob = item.getAsFile();
+      const reader = new FileReader();
+      reader.onload = ev => {
+        const dataUrl = ev.target.result;
+        setImage(dataUrl.split(',')[1], item.type, dataUrl);
+      };
+      reader.readAsDataURL(blob);
+      return;
+    }
+  }
+}
+
+async function pasteImageFromClipboard(){
+  try{
+    const items = await navigator.clipboard.read();
+    for(const item of items){
+      for(const type of item.types){
+        if(type.startsWith('image/')){
+          const blob = await item.getType(type);
+          const reader = new FileReader();
+          reader.onload = e => {
+            const dataUrl = e.target.result;
+            setImage(dataUrl.split(',')[1], type, dataUrl);
+          };
+          reader.readAsDataURL(blob);
+          return;
+        }
+      }
+    }
+    alert('No hay imagen en el portapapeles');
+  }catch(e){
+    alert('No se pudo acceder al portapapeles: ' + e.message);
+  }
+}
+
+function setImage(b64, mime, preview){
+  pendingImage = {base64: b64, mimeType: mime};
+  const wrap = document.getElementById('imagePreviewWrap');
+  const img  = document.getElementById('imagePreview');
+  wrap.style.display = 'block';
+  img.src = preview || `data:${mime};base64,${b64}`;
+}
+
+function clearImage(){
+  pendingImage = null;
+  clearImageUI();
+}
+
+function clearImageUI(){
+  const wrap = document.getElementById('imagePreviewWrap');
+  if(wrap) wrap.style.display = 'none';
+  const input = document.getElementById('imageInput');
+  if(input) input.value = '';
+}
+
+// ── Send message ──
+function renderMessage(text){
+  const parts = [];
+  const re = /```(\w+)?\n?([\s\S]*?)```/g;
+  let last = 0; let m;
+  while((m = re.exec(text)) !== null){
+    if(m.index > last) parts.push({type:'text', content: text.slice(last, m.index)});
+    parts.push({type:'code', lang: m[1]||'plaintext', content: m[2].trim()});
+    last = m.index + m[0].length;
+  }
+  if(last < text.length) parts.push({type:'text', content: text.slice(last)});
+  return parts.map(p => {
+    if(p.type === 'text') return `<span style="white-space:pre-wrap">${esc(p.content)}</span>`;
+    const cid = 'cb_' + Math.random().toString(36).slice(2);
+    const isHTML = p.lang === 'html' || p.lang === 'HTML';
+    return `<div class="code-block">
       <div class="code-block-head">
-        <span class="lang">${lang}</span>
+        <span class="lang">${p.lang}</span>
         <div class="actions">
           <button class="btn btn-icon btn-outline btn-sm" onclick="copyInlineCode('${cid}')">📋</button>
-          <button class="btn btn-icon btn-sm" style="background:#6c63ff;color:#fff" onclick="openCodePanel(document.getElementById('${cid}').textContent,'${lang}')">⬡ Panel</button>
-          ${isHTML?`<button class="btn btn-icon btn-sm" style="background:#1dd1a1;color:#0f1117" onclick="openCodePanel(document.getElementById('${cid}').textContent,'html');togglePanelPreview()">👁️</button>`:''}
+          <button class="btn btn-icon btn-sm" style="background:#6c63ff;color:#fff" onclick='openCodePanel(document.getElementById("${cid}").textContent,"${p.lang}")'>⬡ Panel</button>
+          ${isHTML ? `<button class="btn btn-icon btn-sm" style="background:#1dd1a1;color:#0f1117" onclick='openCodePanel(document.getElementById("${cid}").textContent,"html");togglePanelPreview()'>👁️</button>` : ''}
         </div>
       </div>
-      <pre><code id="${cid}" class="language-${lang}">${esc(code)}</code></pre>
+      <pre><code id="${cid}" class="language-${p.lang}">${esc(p.content)}</code></pre>
     </div>`;
   }).join('');
 }
 
 function copyInlineCode(id){
-  const el=document.getElementById(id);if(!el)return;
+  const el = document.getElementById(id); if(!el) return;
   navigator.clipboard.writeText(el.textContent);
 }
 
 async function sendTestMsg(){
-  const el=document.getElementById('testMsg');
-  const msg=el.value.trim();if(!msg)return;
-  el.value='';el.style.height='42px';
-  const count=document.getElementById('charCount');if(count)count.textContent='0 / 100,000';
-  const mode=document.getElementById('test-mode').value;
-  const customPrompt=document.getElementById('test-prompt').value.trim();
-  const box=document.getElementById('chatMessages');
+  const el  = document.getElementById('testMsg');
+  const msg = el.value.trim(); if(!msg && !pendingImage) return;
+  el.value = ''; el.style.height = '42px';
+  const c = document.getElementById('charCount'); if(c) c.textContent = '0 / 100,000';
 
-  // Quitar empty state
-  const empty=box.querySelector('.chat-empty');if(empty)empty.remove();
+  const mode         = document.getElementById('test-mode').value;
+  const customPrompt = document.getElementById('test-prompt').value.trim();
+  const box          = document.getElementById('chatMessages');
+  const empty        = box.querySelector('.chat-empty'); if(empty) empty.remove();
 
-  // Mensaje usuario
-  const userDiv=document.createElement('div');
-  userDiv.className='msg-wrap user';
-  userDiv.innerHTML=`<div class="bubble">${esc(msg)}</div>`;
+  // If image pending → analyze it
+  if(pendingImage){
+    const imgB64  = pendingImage.base64;
+    const imgMime = pendingImage.mimeType;
+    const imgSrc  = document.getElementById('imagePreview').src;
+    clearImage();
+
+    // Show user msg with image
+    const userDiv = document.createElement('div');
+    userDiv.className = 'msg-wrap user';
+    userDiv.innerHTML = `<div class="bubble">
+      <img src="${imgSrc}" style="max-width:200px;max-height:150px;border-radius:8px;display:block;margin-bottom:6px"/>
+      ${msg ? esc(msg) : '¿Qué ves en esta imagen?'}
+    </div>`;
+    box.appendChild(userDiv);
+
+    const botDiv = document.createElement('div');
+    botDiv.className = 'msg-wrap bot';
+    const tid = 'think_' + Date.now();
+    botDiv.innerHTML = `<div class="bubble" id="${tid}" style="color:var(--text2)">⏳ Analizando imagen...</div>`;
+    box.appendChild(botDiv);
+    box.scrollTop = box.scrollHeight;
+
+    try{
+      const r = await req('/api/chat/analyze-image', 'POST', {
+        image_b64: imgB64,
+        mime_type: imgMime,
+        message:   msg || '¿Qué ves en esta imagen? Descríbela en detalle.'
+      });
+      const thinkEl = document.getElementById(tid);
+      if(thinkEl){
+        thinkEl.id = '';
+        thinkEl.style.color = '';
+        thinkEl.innerHTML = renderMessage(r.response);
+        thinkEl.querySelectorAll('pre code').forEach(b => hljs.highlightElement(b));
+      }
+      const meta = document.createElement('div');
+      meta.className = 'msg-meta';
+      meta.textContent = `${r.provider||'—'} · ${r.tokens||0} tokens`;
+      botDiv.appendChild(meta);
+    }catch(e){
+      const thinkEl = document.getElementById(tid);
+      if(thinkEl){thinkEl.style.color='var(--red)';thinkEl.textContent='Error: '+e.message;}
+    }
+    box.scrollTop = box.scrollHeight;
+    loadRecentChats();
+    return;
+  }
+
+  // Normal text message
+  const userDiv = document.createElement('div');
+  userDiv.className = 'msg-wrap user';
+  userDiv.innerHTML = `<div class="bubble">${esc(msg)}</div>`;
   box.appendChild(userDiv);
 
-  // Pensando...
-  const botDiv=document.createElement('div');
-  botDiv.className='msg-wrap bot';
-  const thinkId='think_'+Date.now();
-  botDiv.innerHTML=`<div class="bubble" id="${thinkId}" style="color:var(--text2)">⏳ Pensando...</div>`;
+  const botDiv = document.createElement('div');
+  botDiv.className = 'msg-wrap bot';
+  const tid = 'think_' + Date.now();
+  botDiv.innerHTML = `<div class="bubble" id="${tid}" style="color:var(--text2)">⏳ Pensando...</div>`;
   box.appendChild(botDiv);
-  box.scrollTop=box.scrollHeight;
+  box.scrollTop = box.scrollHeight;
 
   try{
     let r;
-    const limitedHistory=chatHistory.slice(-10);
-    if(customPrompt)r=await req('/api/dev/test-ai','POST',{message:msg,system_prompt:customPrompt});
-    else r=await req('/api/chat','POST',{message:msg,mode,history:limitedHistory});
+    const limitedHistory = chatHistory.slice(-10);
+    if(customPrompt) r = await req('/api/dev/test-ai', 'POST', {message: msg, system_prompt: customPrompt});
+    else             r = await req('/api/chat', 'POST', {message: msg, mode, history: limitedHistory});
 
-    chatHistory.push({role:'user',content:msg});
-    chatHistory.push({role:'assistant',content:r.response});
-    if(chatHistory.length>20)chatHistory.splice(0,2);
+    chatHistory.push({role:'user', content: msg});
+    chatHistory.push({role:'assistant', content: r.response});
+    if(chatHistory.length > 20) chatHistory.splice(0, 2);
 
-    const thinkEl=document.getElementById(thinkId);
+    const thinkEl = document.getElementById(tid);
     if(thinkEl){
-      const rendered=renderMessage(r.response);
-      thinkEl.id='';
-      thinkEl.style.color='';
-      thinkEl.innerHTML=rendered;
-      // Highlight code
-      thinkEl.querySelectorAll('pre code').forEach(b=>hljs.highlightElement(b));
+      thinkEl.id = '';
+      thinkEl.style.color = '';
+      thinkEl.innerHTML = renderMessage(r.response);
+      thinkEl.querySelectorAll('pre code').forEach(b => hljs.highlightElement(b));
     }
-    const metaDiv=document.createElement('div');
-    metaDiv.className='msg-meta';
-    metaDiv.textContent=`${r.provider||'—'} · ${r.model||'—'} · ${r.tokens_used??r.tokens??0} tokens`;
-    botDiv.appendChild(metaDiv);
-    document.getElementById('testInfo').textContent=`Intercambios: ${chatHistory.length/2} | Historial limitado a ${limitedHistory.length/2} para evitar límite de tokens`;
+    const meta = document.createElement('div');
+    meta.className = 'msg-meta';
+    meta.textContent = `${r.provider||'—'} · ${r.model||'—'} · ${r.tokens_used??r.tokens??0} tokens`;
+    botDiv.appendChild(meta);
+    document.getElementById('testInfo').textContent = `Intercambios: ${chatHistory.length/2}`;
   }catch(e){
-    const thinkEl=document.getElementById(thinkId);
+    const thinkEl = document.getElementById(tid);
     if(thinkEl){thinkEl.style.color='var(--red)';thinkEl.textContent='Error: '+e.message;}
   }
-  box.scrollTop=box.scrollHeight;
+  box.scrollTop = box.scrollHeight;
+  loadRecentChats();
 }
 
 function clearChat(){
-  chatHistory.length=0;
-  const box=document.getElementById('chatMessages');
-  box.innerHTML='<div class="chat-empty">Chat limpiado — historial borrado</div>';
-  document.getElementById('testInfo').textContent='';
+  chatHistory.length = 0;
+  pendingImage = null; clearImageUI();
+  const box = document.getElementById('chatMessages');
+  box.innerHTML = '<div class="chat-empty">Chat limpiado</div>';
+  document.getElementById('testInfo').textContent = '';
   closeCodePanel();
 }
 
-/* ══ HISTORIAL ══ */
+// ── Recent chats bar ──
+async function loadRecentChats(){
+  try{
+    const d = await req('/api/chat/history?per_page=8');
+    allHistoryData = d.conversations || [];
+    const el = document.getElementById('recentChatList');
+    if(!allHistoryData.length){
+      el.innerHTML = '<div style="color:var(--text2);font-size:.78rem;padding:8px">Sin conversaciones aún</div>';
+      return;
+    }
+    el.innerHTML = allHistoryData.map(c => `
+      <div onclick="loadConvInChat(${c.id})" style="
+        flex-shrink:0;width:160px;background:var(--bg3);border:1px solid #2d3561;
+        border-radius:8px;padding:8px 10px;cursor:pointer;transition:border .2s;
+      " onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='#2d3561'">
+        <div style="font-size:.75rem;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
+          👤 ${esc(c.user_message.substring(0,35))}
+        </div>
+        <div style="font-size:.72rem;color:var(--text2);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
+          🤖 ${esc(c.bot_response.substring(0,35))}
+        </div>
+        <div style="font-size:.68rem;color:var(--text2);margin-top:4px">${new Date(c.timestamp).toLocaleDateString()}</div>
+      </div>`).join('');
+  }catch(e){
+    document.getElementById('recentChatList').innerHTML =
+      `<div style="color:var(--text2);font-size:.78rem;padding:8px">Error: ${e.message}</div>`;
+  }
+}
+
+async function loadConvInChat(id){
+  const conv = allHistoryData.find(c => c.id === id);
+  if(!conv) return;
+  const box = document.getElementById('chatMessages');
+  const empty = box.querySelector('.chat-empty'); if(empty) empty.remove();
+
+  const userDiv = document.createElement('div');
+  userDiv.className = 'msg-wrap user';
+  userDiv.innerHTML = `<div class="bubble">${esc(conv.user_message)}</div>`;
+  box.appendChild(userDiv);
+
+  const botDiv = document.createElement('div');
+  botDiv.className = 'msg-wrap bot';
+  botDiv.innerHTML = `<div class="bubble">${renderMessage(conv.bot_response)}</div>
+    <div class="msg-meta">📜 Del historial · ${new Date(conv.timestamp).toLocaleString()}</div>`;
+  box.appendChild(botDiv);
+  botDiv.querySelectorAll('pre code').forEach(b => hljs.highlightElement(b));
+
+  chatHistory.push({role:'user', content: conv.user_message});
+  chatHistory.push({role:'assistant', content: conv.bot_response});
+  if(chatHistory.length > 20) chatHistory.splice(0, 2);
+
+  box.scrollTop = box.scrollHeight;
+  document.getElementById('testInfo').textContent = 'Conversación cargada — puedes continuar escribiendo';
+}
+
+// ── History Modal ──
+function openHistoryModal(){
+  document.getElementById('historyModal').style.display = 'flex';
+  renderHistoryModal(allHistoryData);
+}
+function closeHistoryModal(){
+  document.getElementById('historyModal').style.display = 'none';
+}
+function filterHistoryModal(q){
+  const filtered = q ? allHistoryData.filter(c =>
+    c.user_message.toLowerCase().includes(q.toLowerCase()) ||
+    c.bot_response.toLowerCase().includes(q.toLowerCase())
+  ) : allHistoryData;
+  renderHistoryModal(filtered);
+}
+function renderHistoryModal(items){
+  const el = document.getElementById('histModalList');
+  if(!items.length){
+    el.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text2)">Sin resultados</div>';
+    return;
+  }
+  el.innerHTML = items.map(c => `
+    <div onclick="loadConvInChat(${c.id});closeHistoryModal()" style="
+      padding:12px 20px;border-bottom:1px solid #1e2340;cursor:pointer;transition:background .15s;
+    " onmouseover="this.style.background='rgba(108,99,255,.08)'" onmouseout="this.style.background=''">
+      <div style="font-size:.85rem">👤 ${esc(c.user_message.substring(0,80))}</div>
+      <div style="font-size:.82rem;color:var(--text2);margin-top:3px">🤖 ${esc(c.bot_response.substring(0,80))}</div>
+      <div style="font-size:.72rem;color:var(--text2);margin-top:4px">${new Date(c.timestamp).toLocaleString()} · ${c.tokens_used} tokens</div>
+    </div>`).join('');
+}
+
+/* ══ HISTORIAL ══ *//* ══ HISTORIAL ══ */
 async function openHistory(){
   document.getElementById('historyPanel').classList.add('open');
   await loadHistoryList();
