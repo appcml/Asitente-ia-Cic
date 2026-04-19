@@ -1274,64 +1274,99 @@ def read_github(current_user):
 @app.route('/api/chat/analyze-image', methods=['POST'])
 @token_required
 def analyze_image(current_user):
-    """Analiza una imagen usando Claude vision si está disponible"""
+    """Analiza una imagen — usa Groq Vision (gratis) o Anthropic como fallback"""
     try:
-        import base64
         data      = request.json or {}
         image_b64 = data.get('image_b64', '')
-        message   = data.get('message', 'Describe esta imagen en detalle')
+        message   = data.get('message', 'Describe esta imagen en detalle en español')
         mime_type = data.get('mime_type', 'image/jpeg')
 
         if not image_b64:
             return jsonify({'error': 'imagen requerida'}), 400
 
-        # Solo Anthropic soporta visión actualmente
-        if not ANTHROPIC_API_KEY:
-            # Fallback: decirle al usuario que no hay soporte de visión
-            return jsonify({
-                'success':  False,
-                'response': '⚠️ El análisis de imágenes requiere ANTHROPIC_API_KEY configurada. '
-                            'Groq/Ollama no soportan análisis de imágenes actualmente.',
-                'provider': 'fallback'
-            })
+        groq_key = os.environ.get('GROQ_API_KEY', '')
+        system   = get_config('system_prompt', 'Eres Cic_IA, un asistente inteligente en español.')
 
-        system = get_config('system_prompt', 'Eres Cic_IA, un asistente inteligente.')
+        # ── Groq Vision (gratis, prioridad 1) ──────────────────────────
+        if groq_key:
+            try:
+                data_url = f"data:{mime_type};base64,{image_b64}"
+                resp = requests.post(
+                    'https://api.groq.com/openai/v1/chat/completions',
+                    headers={
+                        'Authorization': f'Bearer {groq_key}',
+                        'Content-Type':  'application/json'
+                    },
+                    json={
+                        'model':      'llama-3.2-11b-vision-preview',
+                        'max_tokens': 1500,
+                        'messages': [
+                            {'role': 'system', 'content': system},
+                            {'role': 'user', 'content': [
+                                {'type': 'image_url', 'image_url': {'url': data_url}},
+                                {'type': 'text', 'text': message}
+                            ]}
+                        ]
+                    },
+                    timeout=30
+                )
+                resp.raise_for_status()
+                result_text = resp.json()['choices'][0]['message']['content']
+                tokens      = resp.json().get('usage', {}).get('completion_tokens', 0)
 
-        resp = requests.post(
-            'https://api.anthropic.com/v1/messages',
-            headers={
-                'x-api-key': ANTHROPIC_API_KEY,
-                'anthropic-version': '2023-06-01',
-                'content-type': 'application/json'
-            },
-            json={
-                'model': 'claude-opus-4-5',
-                'max_tokens': 1500,
-                'system': system,
-                'messages': [{
-                    'role': 'user',
-                    'content': [
-                        {'type': 'image', 'source': {'type': 'base64', 'media_type': mime_type, 'data': image_b64}},
-                        {'type': 'text',  'text': message}
-                    ]
-                }]
-            },
-            timeout=30
-        )
-        resp.raise_for_status()
-        result_text = resp.json()['content'][0]['text']
-        tokens      = resp.json().get('usage', {}).get('output_tokens', 0)
+                cic_ia._save_conversation(
+                    user_msg=f'[IMAGEN] {message}',
+                    bot_resp=result_text,
+                    user_id=current_user.id,
+                    tokens=tokens,
+                    sources=['groq_vision']
+                )
+                return jsonify({'success': True, 'response': result_text, 'provider': 'groq_vision', 'model': 'llama-3.2-11b-vision-preview', 'tokens': tokens})
+            except Exception as e:
+                logger.warning(f"Groq Vision falló: {e} — intentando Anthropic")
 
-        # Guardar en BD
-        cic_ia._save_conversation(
-            user_msg=f'[IMAGEN] {message}',
-            bot_resp=result_text,
-            user_id=current_user.id,
-            tokens=tokens,
-            sources=['anthropic_vision']
-        )
+        # ── Anthropic Vision (fallback) ─────────────────────────────────
+        if ANTHROPIC_API_KEY:
+            try:
+                resp = requests.post(
+                    'https://api.anthropic.com/v1/messages',
+                    headers={
+                        'x-api-key': ANTHROPIC_API_KEY,
+                        'anthropic-version': '2023-06-01',
+                        'content-type': 'application/json'
+                    },
+                    json={
+                        'model': 'claude-haiku-4-5-20251001',
+                        'max_tokens': 1500,
+                        'system': system,
+                        'messages': [{'role': 'user', 'content': [
+                            {'type': 'image', 'source': {'type': 'base64', 'media_type': mime_type, 'data': image_b64}},
+                            {'type': 'text', 'text': message}
+                        ]}]
+                    },
+                    timeout=30
+                )
+                resp.raise_for_status()
+                result_text = resp.json()['content'][0]['text']
+                tokens      = resp.json().get('usage', {}).get('output_tokens', 0)
+                cic_ia._save_conversation(
+                    user_msg=f'[IMAGEN] {message}',
+                    bot_resp=result_text,
+                    user_id=current_user.id,
+                    tokens=tokens,
+                    sources=['anthropic_vision']
+                )
+                return jsonify({'success': True, 'response': result_text, 'provider': 'anthropic_vision', 'tokens': tokens})
+            except Exception as e:
+                logger.error(f"Anthropic Vision falló: {e}")
 
-        return jsonify({'success': True, 'response': result_text, 'provider': 'anthropic_vision', 'tokens': tokens})
+        # ── Sin soporte de visión ───────────────────────────────────────
+        return jsonify({
+            'success':  False,
+            'response': '⚠️ No hay proveedor de visión disponible. Configura GROQ_API_KEY en Render.',
+            'provider': 'fallback'
+        })
+
     except Exception as e:
         logger.error(f"Error análisis imagen: {e}")
         return jsonify({'error': str(e)}), 500
