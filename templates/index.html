@@ -828,23 +828,35 @@ function resetPrompt() {
 const chatHistory = [];
 
 async function sendTestMsg() {
-  const msg = document.getElementById('testMsg').value.trim();
+  const input = document.getElementById('testMsg');
+  const msg = input.value.trim();
   if (!msg) return;
-  document.getElementById('testMsg').value = '';
+  input.value = '';
+  input.focus();
 
   const box = document.getElementById('testChat');
-  box.innerHTML += `<div class="msg user"><div class="bubble">${esc(msg)}</div></div>`;
-  box.innerHTML += `<div class="msg bot" id="lastBot"><div class="bubble" style="color:var(--text2)">⏳ Pensando...</div></div>`;
+
+  // Limpiar placeholder inicial
+  if (box.querySelector('[data-placeholder]')) box.innerHTML = '';
+
+  // Agregar mensaje usuario
+  const userDiv = document.createElement('div');
+  userDiv.className = 'msg user';
+  userDiv.innerHTML = `<div class="bubble">${esc(msg)}</div>`;
+  box.appendChild(userDiv);
+
+  // Agregar burbuja de espera
+  const botDiv = document.createElement('div');
+  botDiv.className = 'msg bot';
+  botDiv.id = 'lastBot';
+  botDiv.innerHTML = `<div class="bubble" style="color:var(--text2)">⏳ Pensando...</div>`;
+  box.appendChild(botDiv);
   box.scrollTop = box.scrollHeight;
 
   const customPrompt = document.getElementById('test-prompt').value.trim();
   const mode = document.getElementById('test-mode').value;
 
   try {
-    let payload = { message: msg };
-    if (customPrompt) payload.system_prompt = customPrompt;
-
-    // Usar endpoint de test si hay prompt personalizado, sino chat normal
     let r;
     if (customPrompt) {
       r = await api('/api/dev/test-ai', 'POST', { message: msg, system_prompt: customPrompt });
@@ -854,15 +866,22 @@ async function sendTestMsg() {
 
     chatHistory.push({ role: 'user', content: msg });
     chatHistory.push({ role: 'assistant', content: r.response });
-    if (chatHistory.length > 20) chatHistory.splice(0, 2);
+    if (chatHistory.length > 40) chatHistory.splice(0, 2); // mantener 20 turnos
 
-    document.getElementById('lastBot').innerHTML =
-      `<div class="bubble">${esc(r.response).replace(/\n/g,'<br>')}</div>`;
+    // Actualizar burbuja del bot SIN tocar el resto del historial
+    const lastBot = document.getElementById('lastBot');
+    if (lastBot) {
+      lastBot.innerHTML = `<div class="bubble">${esc(r.response).replace(/\n/g,'<br>')}</div>`;
+      lastBot.removeAttribute('id');
+    }
     document.getElementById('testInfo').textContent =
-      `Provider: ${r.provider || '—'} | Model: ${r.model || '—'} | Tokens: ${r.tokens_used ?? r.tokens ?? 0}`;
+      `Provider: ${r.provider || '—'} | Model: ${r.model || '—'} | Tokens: ${r.tokens_used ?? r.tokens ?? 0} | Turno ${Math.ceil(chatHistory.length / 2)}`;
   } catch(e) {
-    document.getElementById('lastBot').innerHTML =
-      `<div class="bubble" style="color:var(--red)">Error: ${esc(e.message)}</div>`;
+    const lastBot = document.getElementById('lastBot');
+    if (lastBot) {
+      lastBot.innerHTML = `<div class="bubble" style="color:var(--red)">❌ Error: ${esc(e.message)}</div>`;
+      lastBot.removeAttribute('id');
+    }
   }
   box.scrollTop = box.scrollHeight;
 }
