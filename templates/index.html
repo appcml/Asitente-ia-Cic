@@ -584,9 +584,9 @@ async function loadDashboard() {
     document.getElementById('d-kb').textContent       = d.system.manual_knowledge.toLocaleString();
     document.getElementById('d-today').textContent    = d.today.conversations;
 
-    const hasKey = d.ai_config.has_anthropic || d.ai_config.has_openai;
+    const hasKey = d.ai_config.has_anthropic || d.ai_config.has_openai || d.ai_config.has_groq;
     document.getElementById('d-ai').innerHTML = `<span class="dot ${hasKey ? 'dot-green' : 'dot-red'}"></span>${d.ai_config.provider}`;
-    if (!hasKey) showAlert('dashAlert', '⚠️ No hay API Key configurada. La IA usará modo fallback. Configura ANTHROPIC_API_KEY o OPENAI_API_KEY como variable de entorno.', 'warn');
+    if (!hasKey) showAlert('dashAlert', '⚠️ No hay API Key configurada. Configura GROQ_API_KEY, ANTHROPIC_API_KEY o OPENAI_API_KEY como variable de entorno.', 'warn');
 
     // Recent conversations
     const rc = document.getElementById('recentConvs');
