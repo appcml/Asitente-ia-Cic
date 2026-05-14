@@ -688,7 +688,7 @@ class CicIA:
             logger.info(f"   Conversaciones: {Conversation.query.count()}")
             logger.info(f"   Conocimiento manual: {ManualKnowledge.query.count()}")
             provider = get_config('ai_provider', 'groq')
-            has_key  = bool(ANTHROPIC_API_KEY or OPENAI_API_KEY)
+            has_key  = bool(ANTHROPIC_API_KEY or OPENAI_API_KEY or os.environ.get('GROQ_API_KEY', ''))
             logger.info(f"   Proveedor IA: {provider} ({'✅ API Key OK' if has_key else '⚠️ Sin API Key'})")
             logger.info("=" * 55)
 
@@ -1041,7 +1041,7 @@ Luego responde directamente sin mostrar este proceso al usuario.""")
                 'today_auto_learned':  log.auto_learned if log else 0,
                 'ai_provider':       get_config('ai_provider', 'anthropic'),
                 'ai_model':          get_config('ai_model', 'claude-haiku-4-5-20251001'),
-                'has_api_key':       bool(ANTHROPIC_API_KEY or OPENAI_API_KEY),
+                'has_api_key':       bool(ANTHROPIC_API_KEY or OPENAI_API_KEY or os.environ.get('GROQ_API_KEY', '')),
                 'web_search_enabled': get_config('web_search_enabled', True),
             }
 
