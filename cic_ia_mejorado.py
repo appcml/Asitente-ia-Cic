@@ -1,1898 +1,983 @@
-"""
-Cic_IA - Asistente Inteligente EVOLUTIVO
-Archivo principal - Versión 8.0 PRODUCTION READY
-Mejoras: LLM real, seguridad, rendimiento, modo desarrollador completo
-"""
-
-from flask import Flask, render_template, request, jsonify, Response, stream_with_context
-from flask_sqlalchemy import SQLAlchemy
-from werkzeug.security import generate_password_hash, check_password_hash
-from datetime import datetime, date, timedelta
-import os
-import json
-import random
-import threading
-import time
-import re
-import hashlib
-import requests
-import secrets
-import logging
-import pickle
-import numpy as np
-from functools import wraps
-from sqlalchemy import text, inspect
-
-# ========== CONFIGURACIÓN ==========
-logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(name)s: %(message)s')
-logger = logging.getLogger('cic_ia')
-
-app = Flask(__name__)
-
-# SECRET_KEY siempre desde entorno — nunca hardcodeado
-_secret = os.environ.get('SECRET_KEY')
-if not _secret:
-    _secret = secrets.token_hex(32)
-    logger.warning("SECRET_KEY no configurada como variable de entorno. Generando aleatoria (sesiones no persistirán entre reinicios).")
-app.config['SECRET_KEY'] = _secret
-
-# Base de datos — con soporte SSL para Render/PostgreSQL
-database_url = os.environ.get('DATABASE_URL', '')
-if database_url.startswith('postgres://'):
-    database_url = database_url.replace('postgres://', 'postgresql://', 1)
-# Render requiere SSL
-_is_postgres = database_url and 'postgresql' in database_url
-if _is_postgres and 'sslmode' not in database_url:
-    sep = '&' if '?' in database_url else '?'
-    database_url = database_url + sep + 'sslmode=require'
-app.config['SQLALCHEMY_DATABASE_URI'] = database_url or 'sqlite:///cic_ia.db'
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-_engine_opts = {'pool_pre_ping': True, 'pool_recycle': 300}
-if _is_postgres:
-    _engine_opts['connect_args'] = {'sslmode': 'require'}
-app.config['SQLALCHEMY_ENGINE_OPTIONS'] = _engine_opts
-
-# API Keys (desde entorno)
-ANTHROPIC_API_KEY = os.environ.get('ANTHROPIC_API_KEY', '')
-OPENAI_API_KEY    = os.environ.get('OPENAI_API_KEY', '')
-
-# Archivos
-UPLOAD_FOLDER = 'uploads'
-ALLOWED_EXTENSIONS = {'txt','pdf','png','jpg','jpeg','gif','doc','docx','py','js','html','css','json','csv','xlsx','xls','db','sqlite','md'}
-app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-app.config['MAX_CONTENT_LENGTH'] = 32 * 1024 * 1024  # 32MB
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-os.makedirs('models', exist_ok=True)
-
-db = SQLAlchemy(app)
-
-# ========== MODELOS ==========
-
-class User(db.Model):
-    __tablename__ = 'user'
-    id            = db.Column(db.Integer, primary_key=True)
-    username      = db.Column(db.String(80), unique=True, nullable=False)
-    email         = db.Column(db.String(120), unique=True, nullable=False)
-    password_hash = db.Column(db.String(256), nullable=False)
-    created_at    = db.Column(db.DateTime, default=datetime.utcnow)
-    is_active     = db.Column(db.Boolean, default=True)
-    is_developer  = db.Column(db.Boolean, default=False)
-
-    def set_password(self, password):
-        self.password_hash = generate_password_hash(password)
-
-    def check_password(self, password):
-        return check_password_hash(self.password_hash, password)
-
-class UserSession(db.Model):
-    __tablename__ = 'user_session'
-    id          = db.Column(db.Integer, primary_key=True)
-    user_id     = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    token       = db.Column(db.String(256), unique=True, nullable=False)
-    created_at  = db.Column(db.DateTime, default=datetime.utcnow)
-    expires_at  = db.Column(db.DateTime)
-    last_access = db.Column(db.DateTime, default=datetime.utcnow)
-
-class Memory(db.Model):
-    __tablename__   = 'memory'
-    id              = db.Column(db.Integer, primary_key=True)
-    content         = db.Column(db.Text, nullable=False)
-    source          = db.Column(db.String(50), default='local')
-    topic           = db.Column(db.String(200), index=True)
-    file_path       = db.Column(db.String(500))
-    file_type       = db.Column(db.String(50))
-    created_at      = db.Column(db.DateTime, default=datetime.utcnow, index=True)
-    access_count    = db.Column(db.Integer, default=0)
-    relevance_score = db.Column(db.Float, default=0.5)
-    tags            = db.Column(db.JSON, default=list)
-
-class Conversation(db.Model):
-    __tablename__   = 'conversation'
-    id              = db.Column(db.Integer, primary_key=True)
-    user_id         = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True, index=True)
-    user_message    = db.Column(db.Text, nullable=False)
-    bot_response    = db.Column(db.Text, nullable=False)
-    has_attachment  = db.Column(db.Boolean, default=False)
-    attachment_path = db.Column(db.String(500))
-    sources_used    = db.Column(db.JSON)
-    timestamp       = db.Column(db.DateTime, default=datetime.utcnow, index=True)
-    mode_used       = db.Column(db.String(50), default='chat')
-    tokens_used     = db.Column(db.Integer, default=0)
-
-class LearningLog(db.Model):
-    __tablename__ = 'learning_log'
-    id           = db.Column(db.Integer, primary_key=True)
-    date         = db.Column(db.Date, default=date.today, unique=True)
-    count        = db.Column(db.Integer, default=0)
-    web_searches = db.Column(db.Integer, default=0)
-    auto_learned = db.Column(db.Integer, default=0)
-
-class ManualKnowledge(db.Model):
-    """Conocimiento ingresado directamente por el desarrollador"""
-    __tablename__ = 'manual_knowledge'
-    id          = db.Column(db.Integer, primary_key=True)
-    title       = db.Column(db.String(200), nullable=False)
-    content     = db.Column(db.Text, nullable=False)
-    category    = db.Column(db.String(100), index=True)
-    tags        = db.Column(db.JSON, default=list)
-    priority    = db.Column(db.Integer, default=1)  # 1=normal, 2=alta, 3=crítica
-    added_by    = db.Column(db.Integer, db.ForeignKey('user.id'))
-    created_at  = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at  = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    active      = db.Column(db.Boolean, default=True)
-
-class WebSearchCache(db.Model):
-    __tablename__ = 'web_search_cache'
-    id         = db.Column(db.Integer, primary_key=True)
-    query      = db.Column(db.String(500), unique=True, index=True)
-    results    = db.Column(db.JSON)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    expires_at = db.Column(db.DateTime)
-
-class SystemConfig(db.Model):
-    """Configuración dinámica del sistema editable por el dev"""
-    __tablename__ = 'system_config'
-    id         = db.Column(db.Integer, primary_key=True)
-    key        = db.Column(db.String(100), unique=True, nullable=False)
-    value      = db.Column(db.Text)
-    type       = db.Column(db.String(20), default='string')  # string, int, bool, json
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow)
-
-# ========== MIGRACIÓN ==========
-
-def _safe_count(model):
-    """Cuenta registros de forma segura — retorna 0 si la tabla no existe"""
-    try:
-        return model.query.count()
-    except Exception:
-        return 0
-
-def run_migration():
-    """
-    Migración segura: agrega columnas/tablas nuevas sin destruir datos existentes.
-    Compatible con bases de datos de versiones anteriores (v7.x → v8.0).
-    """
-    try:
-        with app.app_context():
-            # Crear tablas nuevas que no existan (no toca las existentes)
-            db.create_all()
-
-            inspector = inspect(db.engine)
-            tables    = inspector.get_table_names()
-
-            def add_column_if_missing(table, column, definition):
-                """Agrega una columna solo si no existe — safe para cualquier BD."""
-                try:
-                    cols = {col['name'] for col in inspector.get_columns(table)}
-                    if column not in cols:
-                        with db.engine.connect() as conn:
-                            conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {definition}"))
-                            conn.commit()
-                        logger.info(f"Migración: columna {table}.{column} agregada")
-                except Exception as e:
-                    logger.warning(f"No se pudo agregar {table}.{column}: {e}")
-
-            # ── Tabla: memory ──────────────────────────────────────────────
-            if 'memory' in tables:
-                add_column_if_missing('memory', 'tags', "JSON DEFAULT '[]'")
-
-            # ── Tabla: conversation ────────────────────────────────────────
-            if 'conversation' in tables:
-                add_column_if_missing('conversation', 'tokens_used', 'INTEGER DEFAULT 0')
-                add_column_if_missing('conversation', 'user_id',   'INTEGER')
-                add_column_if_missing('conversation', 'mode_used', "VARCHAR(50) DEFAULT 'chat'")
-
-            # ── Tabla: manual_knowledge ────────────────────────────────────
-            # db.create_all() ya la creó si no existía
-
-            # ── Tabla: system_config ───────────────────────────────────────
-            # db.create_all() ya la creó si no existía
-
-            # Config por defecto (solo inserta si no existe la clave)
-            defaults = [
-                ('ai_provider',                   'groq',                                                                                                   'string'),
-                ('ai_model',                      'claude-haiku-4-5-20251001',                                                                              'string'),
-                ('system_prompt',                 'Eres Cic_IA, un asistente inteligente en español. Responde de forma clara, útil y amigable.',             'string'),
-                ('max_tokens',                    '1000',                                                                                                    'int'),
-                ('auto_learning_enabled',         'true',                                                                                                    'bool'),
-                ('auto_learning_interval_hours',  '2',                                                                                                       'int'),
-                ('max_memory_results',            '5',                                                                                                       'int'),
-                ('web_search_enabled',            'true',                                                                                                    'bool'),
-            ]
-            for key, val, typ in defaults:
-                try:
-                    if not SystemConfig.query.filter_by(key=key).first():
-                        db.session.add(SystemConfig(key=key, value=val, type=typ))
-                except Exception:
-                    pass
-            db.session.commit()
-            # Forzar proveedor a groq si está en anthropic (migración de versiones anteriores)
-            try:
-                cfg = SystemConfig.query.filter_by(key='ai_provider').first()
-                if cfg and cfg.value == 'anthropic':
-                    cfg.value = 'groq'
-                    db.session.commit()
-                    logger.info("Migración: ai_provider actualizado a groq")
-            except Exception:
-                pass
-            logger.info("✅ Migración completada")
-    except Exception as e:
-        logger.error(f"Error migración: {e}")
-        import traceback
-        logger.error(traceback.format_exc())
-
-run_migration()
-
-# ========== HELPERS DE CONFIG ==========
-
-def get_config(key, default=None):
-    try:
-        cfg = SystemConfig.query.filter_by(key=key).first()
-        if not cfg:
-            return default
-        if cfg.type == 'int':
-            return int(cfg.value)
-        if cfg.type == 'bool':
-            return cfg.value.lower() == 'true'
-        if cfg.type == 'json':
-            return json.loads(cfg.value)
-        return cfg.value
-    except Exception:
-        return default
-
-def set_config(key, value):
-    cfg = SystemConfig.query.filter_by(key=key).first()
-    if cfg:
-        cfg.value = str(value)
-        cfg.updated_at = datetime.utcnow()
-    else:
-        cfg = SystemConfig(key=key, value=str(value))
-        db.session.add(cfg)
-    db.session.commit()
-
-# ========== DECORADORES AUTH ==========
-
-def _get_token_from_request():
-    auth = request.headers.get('Authorization', '')
-    if auth.startswith('Bearer '):
-        return auth[7:]
-    if auth:
-        parts = auth.split()
-        if len(parts) == 2:
-            return parts[1]
-    return request.args.get('token') or request.json.get('token') if request.is_json else None
-
-def token_required(f):
-    @wraps(f)
-    def decorated(*args, **kwargs):
-        token = _get_token_from_request()
-        if not token:
-            return jsonify({'error': 'Token requerido'}), 401
-        session = UserSession.query.filter_by(token=token).first()
-        if not session:
-            return jsonify({'error': 'Token inválido'}), 401
-        if session.expires_at and session.expires_at < datetime.utcnow():
-            db.session.delete(session)
-            db.session.commit()
-            return jsonify({'error': 'Token expirado, por favor inicia sesión de nuevo'}), 401
-        session.last_access = datetime.utcnow()
-        db.session.commit()
-        current_user = User.query.get(session.user_id)
-        if not current_user or not current_user.is_active:
-            return jsonify({'error': 'Usuario inactivo'}), 401
-        return f(current_user, *args, **kwargs)
-    return decorated
-
-def dev_required(f):
-    @wraps(f)
-    def decorated(*args, **kwargs):
-        token = _get_token_from_request()
-        if not token:
-            return jsonify({'error': 'No autorizado'}), 401
-        session = UserSession.query.filter_by(token=token).first()
-        if not session:
-            return jsonify({'error': 'Token inválido'}), 401
-        user = User.query.get(session.user_id)
-        if not user or not user.is_developer:
-            return jsonify({'error': 'Se requieren privilegios de desarrollador'}), 403
-        return f(*args, **kwargs)
-    return decorated
-
-# ========== MOTOR DE BÚSQUEDA WEB ==========
-
-class WebSearchEngine:
-    @staticmethod
-    def search(query: str, max_results: int = 5) -> list:
-        """Busca usando DuckDuckGo con fallback a búsqueda simple"""
-        try:
-            from duckduckgo_search import DDGS
-            with DDGS() as ddgs:
-                results = []
-                for r in ddgs.text(query, max_results=max_results):
-                    results.append({
-                        'title':   r.get('title', ''),
-                        'url':     r.get('href', ''),
-                        'snippet': r.get('body', ''),
-                        'source':  'duckduckgo'
-                    })
-                return results
-        except Exception as e:
-            logger.warning(f"DuckDuckGo falló: {e}. Intentando método alternativo.")
-            return WebSearchEngine._search_fallback(query, max_results)
-
-    @staticmethod
-    def _search_fallback(query: str, max_results: int = 3) -> list:
-        """Fallback usando urllib"""
-        try:
-            import urllib.request
-            import urllib.parse
-            encoded = urllib.parse.quote(query)
-            url = f"https://html.duckduckgo.com/html/?q={encoded}"
-            req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-            with urllib.request.urlopen(req, timeout=10) as resp:
-                html = resp.read().decode('utf-8', errors='ignore')
-            from bs4 import BeautifulSoup
-            soup = BeautifulSoup(html, 'html.parser')
-            results = []
-            for result in soup.select('.result')[:max_results]:
-                title_el   = result.select_one('.result__title')
-                snippet_el = result.select_one('.result__snippet')
-                link_el    = result.select_one('.result__url')
-                if title_el:
-                    results.append({
-                        'title':   title_el.get_text(strip=True),
-                        'url':     link_el.get_text(strip=True) if link_el else '',
-                        'snippet': snippet_el.get_text(strip=True) if snippet_el else '',
-                        'source':  'duckduckgo_html'
-                    })
-            return results
-        except Exception as e:
-            logger.error(f"Fallback búsqueda falló: {e}")
-            return []
-
-# ========== MOTOR LLM REAL ==========
-
-class LLMEngine:
-    """
-    Motor de IA multi-proveedor con fallback automático.
-    Orden de prioridad:
-      1. Groq  (Llama 3 / Mixtral — gratis, rápido, 24/7)
-      2. Ollama (modelo local en servidor propio / Colab)
-      3. Anthropic Claude (si hay API key)
-      4. OpenAI GPT (si hay API key)
-      5. Respuesta básica (sin IA externa)
-    """
-
-    def __init__(self):
-        self.anthropic_key = ANTHROPIC_API_KEY
-        self.openai_key    = OPENAI_API_KEY
-        self.groq_key      = os.environ.get('GROQ_API_KEY', '')
-        self.ollama_url    = os.environ.get('OLLAMA_URL', '')   # ej: https://xxxx.ngrok.io
-        self.groq_model    = os.environ.get('GROQ_MODEL',   'llama-3.1-8b-instant')
-        self.ollama_model  = os.environ.get('OLLAMA_MODEL', 'llama3.2')
-
-    def _build_context(self, user_message: str, memories: list, manual_knowledge: list) -> str:
-        parts = []
-        if manual_knowledge:
-            parts.append("=== CONOCIMIENTO BASE ===")
-            for mk in manual_knowledge[:5]:
-                parts.append(f"[{mk.category or 'General'}] {mk.title}:\n{mk.content[:500]}")
-            parts.append("")
-        if memories:
-            parts.append("=== CONOCIMIENTO APRENDIDO ===")
-            for mem in memories[:3]:
-                parts.append(f"Tema: {mem.topic or 'general'}\n{mem.content[:300]}")
-            parts.append("")
-        return "\n".join(parts)
-
-    def chat(self, user_message: str, system_prompt: str, context: str = "",
-             conversation_history: list = None, max_tokens: int = 1000) -> dict:
-        """Intenta cada proveedor en orden hasta obtener respuesta exitosa."""
-
-        full_system = system_prompt
-        if context:
-            full_system += f"\n\n{context}"
-
-        # Orden de prioridad configurable
-        provider = get_config('ai_provider', 'auto')
-
-        if provider == 'auto':
-            # Intentar en orden: Groq → Ollama → Anthropic → OpenAI → fallback
-            providers = ['groq', 'ollama', 'anthropic', 'openai']
-        else:
-            providers = [provider]
-
-        for p in providers:
-            result = self._try_provider(p, user_message, full_system, conversation_history, max_tokens)
-            if result.get('success'):
-                logger.info(f"✅ Respuesta exitosa via {p}")
-                return result
-            else:
-                logger.warning(f"⚠️ Proveedor {p} falló: {result.get('error', 'desconocido')}")
-
-        # Si todo falla, respuesta básica
-        return self._fallback_response(user_message)
-
-    def _try_provider(self, provider: str, user_message: str, system: str,
-                      history: list, max_tokens: int) -> dict:
-        try:
-            if provider == 'groq':
-                return self._call_groq(user_message, system, history, max_tokens)
-            elif provider == 'ollama':
-                return self._call_ollama(user_message, system, history, max_tokens)
-            elif provider == 'anthropic':
-                return self._call_anthropic(user_message, system, history, max_tokens)
-            elif provider == 'openai':
-                return self._call_openai(user_message, system, history, max_tokens)
-            return {'success': False, 'error': f'Proveedor {provider} desconocido'}
-        except Exception as e:
-            return {'success': False, 'error': str(e)}
-
-    # ── GROQ (Llama 3 gratis — prioridad 1) ────────────────────────────────
-    def _call_groq(self, user_message: str, system: str,
-                   history: list = None, max_tokens: int = 1000) -> dict:
-        if not self.groq_key:
-            return {'success': False, 'error': 'Sin GROQ_API_KEY'}
-
-        messages = [{'role': 'system', 'content': system}]
-        if history:
-            for h in history[-10:]:
-                messages.append({'role': h['role'], 'content': h['content']})
-        messages.append({'role': 'user', 'content': user_message})
-
-        resp = requests.post(
-            'https://api.groq.com/openai/v1/chat/completions',
-            headers={
-                'Authorization': f'Bearer {self.groq_key}',
-                'Content-Type':  'application/json'
-            },
-            json={
-                'model':       self.groq_model,
-                'messages':    messages,
-                'max_tokens':  max_tokens,
-                'temperature': 0.7
-            },
-            timeout=30
-        )
-        resp.raise_for_status()
-        data   = resp.json()
-        text   = data['choices'][0]['message']['content']
-        tokens = data.get('usage', {}).get('completion_tokens', 0)
-        return {
-            'success':  True,
-            'response': text,
-            'tokens':   tokens,
-            'provider': 'groq',
-            'model':    self.groq_model
-        }
-
-    # ── OLLAMA (modelo local / Colab — prioridad 2) ─────────────────────────
-    def _call_ollama(self, user_message: str, system: str,
-                     history: list = None, max_tokens: int = 1000) -> dict:
-        if not self.ollama_url:
-            return {'success': False, 'error': 'Sin OLLAMA_URL'}
-
-        # Construir prompt con historial
-        messages = [{'role': 'system', 'content': system}]
-        if history:
-            for h in history[-10:]:
-                messages.append({'role': h['role'], 'content': h['content']})
-        messages.append({'role': 'user', 'content': user_message})
-
-        base_url = self.ollama_url.rstrip('/')
-        resp = requests.post(
-            f'{base_url}/api/chat',
-            json={
-                'model':    self.ollama_model,
-                'messages': messages,
-                'stream':   False,
-                'options':  {'num_predict': max_tokens, 'temperature': 0.7}
-            },
-            timeout=120  # Ollama puede ser lento en Colab
-        )
-        resp.raise_for_status()
-        data = resp.json()
-        text = data.get('message', {}).get('content', '')
-        if not text:
-            return {'success': False, 'error': 'Ollama retornó respuesta vacía'}
-        return {
-            'success':  True,
-            'response': text,
-            'tokens':   data.get('eval_count', 0),
-            'provider': 'ollama',
-            'model':    self.ollama_model
-        }
-
-    # ── ANTHROPIC Claude ────────────────────────────────────────────────────
-    def _call_anthropic(self, user_message: str, system: str,
-                        history: list = None, max_tokens: int = 1000) -> dict:
-        if not self.anthropic_key:
-            return {'success': False, 'error': 'Sin ANTHROPIC_API_KEY'}
-
-        model    = get_config('ai_model', 'claude-haiku-4-5-20251001')
-        messages = []
-        if history:
-            for h in history[-10:]:
-                messages.append({'role': h['role'], 'content': h['content']})
-        messages.append({'role': 'user', 'content': user_message})
-
-        resp = requests.post(
-            'https://api.anthropic.com/v1/messages',
-            headers={
-                'x-api-key':         self.anthropic_key,
-                'anthropic-version': '2023-06-01',
-                'content-type':      'application/json'
-            },
-            json={'model': model, 'max_tokens': max_tokens, 'system': system, 'messages': messages},
-            timeout=30
-        )
-        resp.raise_for_status()
-        data   = resp.json()
-        text   = data['content'][0]['text']
-        tokens = data.get('usage', {}).get('output_tokens', 0)
-        return {'success': True, 'response': text, 'tokens': tokens, 'provider': 'anthropic', 'model': model}
-
-    # ── OPENAI GPT ──────────────────────────────────────────────────────────
-    def _call_openai(self, user_message: str, system: str,
-                     history: list = None, max_tokens: int = 1000) -> dict:
-        if not self.openai_key:
-            return {'success': False, 'error': 'Sin OPENAI_API_KEY'}
-
-        model    = get_config('ai_model', 'gpt-3.5-turbo')
-        messages = [{'role': 'system', 'content': system}]
-        if history:
-            for h in history[-10:]:
-                messages.append({'role': h['role'], 'content': h['content']})
-        messages.append({'role': 'user', 'content': user_message})
-
-        resp = requests.post(
-            'https://api.openai.com/v1/chat/completions',
-            headers={'Authorization': f'Bearer {self.openai_key}', 'Content-Type': 'application/json'},
-            json={'model': model, 'messages': messages, 'max_tokens': max_tokens},
-            timeout=30
-        )
-        resp.raise_for_status()
-        data   = resp.json()
-        text   = data['choices'][0]['message']['content']
-        tokens = data.get('usage', {}).get('completion_tokens', 0)
-        return {'success': True, 'response': text, 'tokens': tokens, 'provider': 'openai', 'model': model}
-
-    # ── FALLBACK (sin motor de IA) ──────────────────────────────────────────
-    def _fallback_response(self, user_message: str) -> dict:
-        msg_lower = user_message.lower()
-        if any(w in msg_lower for w in ['hola', 'buenas', 'hey', 'saludos']):
-            r = ("¡Hola! Soy Cic_IA. Actualmente no tengo ningún motor de IA conectado. "
-                 "El desarrollador debe configurar GROQ_API_KEY (gratis) u OLLAMA_URL.")
-        elif any(w in msg_lower for w in ['qué hora', 'qué día', 'fecha', 'hoy']):
-            now   = datetime.now()
-            dias  = ['lunes','martes','miércoles','jueves','viernes','sábado','domingo']
-            meses = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto',
-                     'septiembre','octubre','noviembre','diciembre']
-            r = f"Hoy es {dias[now.weekday()]}, {now.day} de {meses[now.month-1]} de {now.year} — {now.strftime('%H:%M')}"
-        else:
-            r = (f"Recibí: '{user_message[:80]}'. "
-                 "⚠️ Sin motor de IA activo. Configura GROQ_API_KEY o OLLAMA_URL en las variables de entorno.")
-        return {'success': False, 'response': r, 'provider': 'fallback', 'tokens': 0}
-
-
-# ========== MOTOR DE BÚSQUEDA DE MEMORIAS (optimizado) ==========
-
-class MemoryEngine:
-    @staticmethod
-    def search(query: str, limit: int = 5) -> list:
-        """Búsqueda eficiente por palabras clave — sin cargar toda la BD en RAM"""
-        words = [w for w in query.lower().split() if len(w) > 3]
-        if not words:
-            return []
-
-        try:
-            # Búsqueda por topic primero (indexado)
-            results = set()
-            for word in words[:5]:
-                mems = Memory.query.filter(
-                    Memory.topic.ilike(f'%{word}%')
-                ).order_by(Memory.relevance_score.desc()).limit(10).all()
-                results.update(m.id for m in mems)
-
-            # Búsqueda en contenido si no hay suficientes resultados
-            if len(results) < 3:
-                for word in words[:3]:
-                    mems = Memory.query.filter(
-                        Memory.content.ilike(f'%{word}%')
-                    ).order_by(Memory.relevance_score.desc()).limit(10).all()
-                    results.update(m.id for m in mems)
-
-            if not results:
-                return []
-
-            memories = Memory.query.filter(Memory.id.in_(list(results))).order_by(
-                Memory.relevance_score.desc(), Memory.access_count.desc()
-            ).limit(limit).all()
-
-            # Actualizar access_count en batch (eficiente)
-            ids = [m.id for m in memories]
-            if ids:
-                Memory.query.filter(Memory.id.in_(ids)).update(
-                    {'access_count': Memory.access_count + 1},
-                    synchronize_session=False
-                )
-                db.session.commit()
-
-            return memories
-        except Exception as e:
-            logger.error(f"Error buscando memorias: {e}")
-            return []
-
-    @staticmethod
-    def search_manual_knowledge(query: str, limit: int = 5) -> list:
-        """Busca en el conocimiento manual del desarrollador"""
-        words = [w for w in query.lower().split() if len(w) > 2]
-        if not words:
-            return ManualKnowledge.query.filter_by(active=True).order_by(
-                ManualKnowledge.priority.desc()
-            ).limit(limit).all()
-
-        results = set()
-        for word in words[:5]:
-            items = ManualKnowledge.query.filter(
-                ManualKnowledge.active == True,
-                db.or_(
-                    ManualKnowledge.content.ilike(f'%{word}%'),
-                    ManualKnowledge.title.ilike(f'%{word}%'),
-                    ManualKnowledge.category.ilike(f'%{word}%')
-                )
-            ).order_by(ManualKnowledge.priority.desc()).limit(10).all()
-            results.update(m.id for m in items)
-
-        if not results:
-            return []
-
-        return ManualKnowledge.query.filter(
-            ManualKnowledge.id.in_(list(results))
-        ).order_by(ManualKnowledge.priority.desc()).limit(limit).all()
-
-# ========== CLASE PRINCIPAL CIC_IA ==========
-
-class CicIA:
-    def __init__(self):
-        self.search_engine  = WebSearchEngine()
-        self.llm            = LLMEngine()
-        self.memory_engine  = MemoryEngine()
-        self._learning_thread = None
-        self._start_auto_learning()
-
-        with app.app_context():
-            logger.info("=" * 55)
-            logger.info("🤖 CIC_IA v8.0 INICIADA")
-            logger.info(f"   Memorias: {Memory.query.count()}")
-            logger.info(f"   Conversaciones: {Conversation.query.count()}")
-            logger.info(f"   Conocimiento manual: {ManualKnowledge.query.count()}")
-            provider = get_config('ai_provider', 'groq')
-            has_key  = bool(ANTHROPIC_API_KEY or OPENAI_API_KEY or os.environ.get('GROQ_API_KEY', ''))
-            logger.info(f"   Proveedor IA: {provider} ({'✅ API Key OK' if has_key else '⚠️ Sin API Key'})")
-            logger.info("=" * 55)
-
-    def _start_auto_learning(self):
-        self._learning_thread = threading.Thread(
-            target=self._auto_learning_loop, daemon=True
-        )
-        self._learning_thread.start()
-        # Iniciar keepalive para evitar que Render se duerma
-        threading.Thread(target=self._keepalive_loop, daemon=True).start()
-
-    def _keepalive_loop(self):
-        """
-        Ping cada 10 minutos al propio servidor para evitar el sleep de Render.
-        Render duerme servicios gratuitos tras 15 min de inactividad.
-        """
-        import urllib.request
-        time.sleep(30)  # Espera inicial
-        app_url = os.environ.get('RENDER_EXTERNAL_URL', '')
-        if not app_url:
-            logger.info("ℹ️ RENDER_EXTERNAL_URL no configurada — keepalive desactivado")
-            return
-        logger.info(f"💓 Keepalive activo → {app_url}/health cada 10 min")
-        while True:
-            try:
-                req = urllib.request.Request(
-                    f"{app_url}/health",
-                    headers={'User-Agent': 'CicIA-Keepalive/1.0'}
-                )
-                urllib.request.urlopen(req, timeout=10)
-                logger.info("💓 Keepalive OK")
-            except Exception as e:
-                logger.warning(f"💓 Keepalive error: {e}")
-            time.sleep(600)  # cada 10 minutos
-
-    def _auto_learning_loop(self):
-        time.sleep(60)  # Espera inicial
-        while True:
-            try:
-                with app.app_context():
-                    if get_config('auto_learning_enabled', True):
-                        self._perform_auto_learning()
-            except Exception as e:
-                logger.error(f"Error auto-learning: {e}")
-            interval = get_config('auto_learning_interval_hours', 2)
-            time.sleep(interval * 3600)
-
-    def _perform_auto_learning(self, topic: str = None) -> dict:
-        """Aprendizaje automático desde web"""
-        default_topics = [
-            'inteligencia artificial 2025', 'machine learning novedades',
-            'python avances', 'desarrollo web tendencias', 'ciencia datos'
-        ]
-        query = topic or random.choice(default_topics)
-        logger.info(f"🔍 Auto-aprendiendo: '{query}'")
-
-        results = self.search_engine.search(query, max_results=4)
-        if not results:
-            return {'learned': 0, 'topic': query, 'error': 'Sin resultados web'}
-
-        learned = 0
-        for r in results:
-            try:
-                snippet = r['snippet'][:120] if r['snippet'] else ''
-                if not snippet:
-                    continue
-                # Evitar duplicados eficientemente
-                exists = Memory.query.filter(Memory.content.ilike(f'%{snippet[:60]}%')).first()
-                if exists:
-                    continue
-                content = f"{r['title']}\n\n{r['snippet']}\n\nFuente: {r['url']}"
-                mem = Memory(
-                    content=content, source='auto_learning',
-                    topic=query, relevance_score=0.6
-                )
-                db.session.add(mem)
-                learned += 1
-            except Exception:
-                continue
-
-        if learned > 0:
-            db.session.commit()
-            today = date.today()
-            log = LearningLog.query.filter_by(date=today).first()
-            if not log:
-                log = LearningLog(date=today, count=0, web_searches=0, auto_learned=0)
-                db.session.add(log)
-            log.auto_learned += learned
-            db.session.commit()
-
-        logger.info(f"✅ Aprendidos {learned} memorias sobre '{query}'")
-        return {'learned': learned, 'topic': query}
-
-    def force_learn(self, topic: str, content: str = None, user_id: int = None) -> dict:
-        """Forzar aprendizaje sobre un tema — modo desarrollador"""
-        with app.app_context():
-            learned_items = []
-
-            # Si se provee contenido directo, guardarlo como conocimiento manual
-            if content:
-                mk = ManualKnowledge(
-                    title=topic,
-                    content=content,
-                    category='forzado',
-                    priority=2,
-                    added_by=user_id,
-                    tags=['forced_learning']
-                )
-                db.session.add(mk)
-                # También guardar como Memory para que el LLM lo use
-                mem = Memory(
-                    content=content,
-                    source='manual_dev',
-                    topic=topic,
-                    relevance_score=0.95,
-                    tags=['priority', 'manual']
-                )
-                db.session.add(mem)
-                db.session.commit()
-                learned_items.append({'type': 'manual', 'title': topic})
-
-            # Buscar en web también
-            web_result = self._perform_auto_learning(topic)
-            if web_result.get('learned', 0) > 0:
-                learned_items.append({'type': 'web', 'count': web_result['learned']})
-
-            return {
-                'success': True,
-                'topic': topic,
-                'manual_saved': bool(content),
-                'web_learned': web_result.get('learned', 0),
-                'total': len(learned_items)
-            }
-
-    def _get_user_conversation_history(self, user_id: int, limit: int = 10) -> list:
-        """
-        Recupera el historial real de conversaciones del usuario desde la BD.
-        Esto permite que la IA recuerde conversaciones ANTERIORES, no solo la actual.
-        """
-        if not user_id:
-            return []
-        try:
-            recent = Conversation.query.filter_by(user_id=user_id).order_by(
-                Conversation.timestamp.desc()
-            ).limit(limit).all()
-            history = []
-            for conv in reversed(recent):
-                history.append({'role': 'user',      'content': conv.user_message[:500]})
-                history.append({'role': 'assistant',  'content': conv.bot_response[:500]})
-            return history
-        except Exception as e:
-            logger.error(f"Error recuperando historial: {e}")
-            return []
-
-    def _build_reasoning_prompt(self, user_message: str, memories: list,
-                                 manual_knowledge: list, user_history: list) -> str:
-        """
-        Construye un system prompt enriquecido con:
-        - Instrucciones de razonamiento paso a paso (Chain of Thought)
-        - Conocimiento manual del desarrollador
-        - Memorias aprendidas relevantes
-        - Resumen del perfil del usuario basado en su historial
-        """
-        base_prompt = get_config(
-            'system_prompt',
-            'Eres Cic_IA, un asistente inteligente en español. Responde de forma clara, útil y amigable.'
-        )
-
-        parts = [base_prompt, ""]
-
-        # ── Chain of Thought: razonamiento paso a paso ──────────────────
-        parts.append("""=== INSTRUCCIONES DE RAZONAMIENTO ===
-Antes de responder, analiza internamente:
-1. ¿Qué está pidiendo exactamente el usuario?
-2. ¿Tengo información relevante en mi conocimiento?
-3. ¿El historial de conversación da contexto adicional?
-4. ¿Cuál es la respuesta más útil y precisa?
-Luego responde directamente sin mostrar este proceso al usuario.""")
-        parts.append("")
-
-        # ── Conocimiento manual (mayor prioridad) ───────────────────────
-        if manual_knowledge:
-            parts.append("=== CONOCIMIENTO BASE (usa esto como fuente prioritaria) ===")
-            for mk in manual_knowledge[:5]:
-                parts.append(f"[{mk.category or 'General'}] {mk.title}:\n{mk.content[:600]}")
-            parts.append("")
-
-        # ── Memorias aprendidas ─────────────────────────────────────────
-        if memories:
-            parts.append("=== CONOCIMIENTO APRENDIDO ===")
-            for mem in memories[:4]:
-                parts.append(f"Tema: {mem.topic or 'general'}\n{mem.content[:400]}")
-            parts.append("")
-
-        # ── Perfil del usuario basado en historial ──────────────────────
-        if user_history and len(user_history) >= 4:
-            parts.append("=== CONTEXTO DEL USUARIO ===")
-            parts.append("Has conversado antes con este usuario. Aquí hay contexto de conversaciones anteriores:")
-            # Resumir últimas 3 interacciones
-            for i in range(0, min(6, len(user_history)), 2):
-                if i+1 < len(user_history):
-                    u = user_history[i]['content'][:100]
-                    a = user_history[i+1]['content'][:100]
-                    parts.append(f"- Usuario preguntó: '{u}...' → Respondiste: '{a}...'")
-            parts.append("Usa este contexto para dar respuestas más personalizadas y coherentes.")
-            parts.append("")
-
-        return "\n".join(parts)
-
-    def chat(self, user_message: str, user_id: int = None,
-             conversation_history: list = None, mode: str = 'balanced') -> dict:
-        """
-        Procesamiento principal del chat con razonamiento mejorado.
-        
-        Capas de razonamiento:
-        1. Memoria persistente: historial real de la BD
-        2. Chain of Thought: razona antes de responder  
-        3. Contexto conversacional: historial de la sesión actual
-        """
-
-        # Validar longitud
-        if len(user_message) > 100000:
-            user_message = user_message[:100000]
-
-        # ── Capa 1: Recuperar historial persistente de la BD ────────────
-        db_history = self._get_user_conversation_history(user_id, limit=8)
-
-        # ── Combinar historial de BD con historial de sesión actual ─────
-        # Limitamos el historial para no superar el límite de tokens de Groq
-        # Groq llama-3.1-8b-instant: ~8k tokens de contexto
-        if conversation_history:
-            # Sesión actual tiene prioridad — últimos 6 intercambios (12 mensajes)
-            combined_history = conversation_history[-12:]
-        else:
-            # Sin sesión activa, usar BD pero limitado
-            combined_history = db_history[-6:]
-
-        # ── Buscar memorias y conocimiento relevante ────────────────────
-        memories         = self.memory_engine.search(user_message, limit=get_config('max_memory_results', 5))
-        manual_knowledge = self.memory_engine.search_manual_knowledge(user_message, limit=5)
-
-        # ── Capa 2: Construir prompt con Chain of Thought ───────────────
-        reasoning_prompt = self._build_reasoning_prompt(
-            user_message, memories, manual_knowledge, db_history
-        )
-
-        # ── Tokens según modo ───────────────────────────────────────────
-        tokens_map = {'fast': 600, 'balanced': 1200, 'complete': 2500}
-        max_tokens = tokens_map.get(mode, 1200)
-
-        # ── Capa 3: Llamar al LLM con contexto completo ─────────────────
-        llm_result = self.llm.chat(
-            user_message=user_message,
-            system_prompt=reasoning_prompt,
-            context="",  # ya está en el reasoning_prompt
-            conversation_history=combined_history,
-            max_tokens=max_tokens
-        )
-
-        response_text = llm_result['response']
-
-        # ── Búsqueda web si el LLM falla ────────────────────────────────
-        if not llm_result.get('success') and get_config('web_search_enabled', True):
-            web_data = self._search_and_cache(user_message)
-            if web_data:
-                response_text += f"\n\n📖 Información encontrada en la web:\n{web_data}"
-
-        # ── Guardar en BD para memoria futura ───────────────────────────
-        self._save_conversation(
-            user_msg=user_message,
-            bot_resp=response_text,
-            user_id=user_id,
-            tokens=llm_result.get('tokens', 0),
-            sources=['llm', llm_result.get('provider', 'unknown')]
-        )
-
-        return {
-            'response':        response_text,
-            'provider':        llm_result.get('provider', 'unknown'),
-            'model':           llm_result.get('model', 'unknown'),
-            'tokens_used':     llm_result.get('tokens', 0),
-            'memories_used':   len(memories),
-            'manual_kb_used':  len(manual_knowledge),
-            'history_used':    len(combined_history),
-            'success':         llm_result.get('success', False)
-        }
-
-    def _search_and_cache(self, query: str) -> str:
-        """Busca en web con caché"""
-        try:
-            cached = WebSearchCache.query.filter_by(query=query).first()
-            if cached and cached.expires_at and cached.expires_at > datetime.utcnow():
-                return cached.results.get('summary', '')
-
-            results = self.search_engine.search(query, max_results=3)
-            if not results:
-                return ''
-
-            summary = '\n'.join(
-                f"• {r['title']}: {r['snippet'][:200]}" for r in results
-            )
-
-            # Cachear
-            cache = WebSearchCache(
-                query=query,
-                results={'summary': summary},
-                expires_at=datetime.utcnow() + timedelta(hours=6)
-            )
-            db.session.merge(cache)
-            db.session.commit()
-            return summary
-        except Exception as e:
-            logger.error(f"Error web search: {e}")
-            return ''
-
-    def _save_conversation(self, user_msg: str, bot_resp: str,
-                           user_id: int = None, tokens: int = 0, sources: list = None):
-        try:
-            conv = Conversation(
-                user_id=user_id,
-                user_message=user_msg[:50000],
-                bot_response=bot_resp[:20000],
-                sources_used={'providers': sources or []},
-                tokens_used=tokens,
-                mode_used='chat'
-            )
-            db.session.add(conv)
-
-            today = date.today()
-            log = LearningLog.query.filter_by(date=today).first()
-            if not log:
-                log = LearningLog(date=today, count=1, web_searches=0, auto_learned=0)
-                db.session.add(log)
-            else:
-                log.count += 1
-            db.session.commit()
-        except Exception as e:
-            db.session.rollback()
-            logger.error(f"Error guardando conversación: {e}")
-
-    def get_stats(self) -> dict:
-        with app.app_context():
-            today = date.today()
-            log = LearningLog.query.filter_by(date=today).first()
-            return {
-                'total_memories':    Memory.query.count(),
-                'total_conversations': Conversation.query.count(),
-                'manual_knowledge':  ManualKnowledge.query.filter_by(active=True).count(),
-                'today_conversations': log.count if log else 0,
-                'today_auto_learned':  log.auto_learned if log else 0,
-                'ai_provider':       get_config('ai_provider', 'anthropic'),
-                'ai_model':          get_config('ai_model', 'claude-haiku-4-5-20251001'),
-                'has_api_key':       bool(ANTHROPIC_API_KEY or OPENAI_API_KEY or os.environ.get('GROQ_API_KEY', '')),
-                'web_search_enabled': get_config('web_search_enabled', True),
-            }
-
-
-# Instancia global
-cic_ia = CicIA()
-
-# ========== RUTAS PÚBLICAS ==========
-
-@app.route('/')
-def index():
-    return render_template('index.html')
-
-@app.route('/health')
-def health():
-    stats = cic_ia.get_stats()
-    return jsonify({
-        'status':    'healthy',
-        'version':   '8.0',
-        'timestamp': datetime.utcnow().isoformat(),
-        **stats
-    })
-
-# ========== AUTENTICACIÓN ==========
-
-@app.route('/api/auth/register', methods=['POST'])
-def register():
-    try:
-        data     = request.json or {}
-        username = data.get('username', '').strip()
-        email    = data.get('email', '').strip()
-        password = data.get('password', '')
-
-        if not username or len(username) < 3:
-            return jsonify({'success': False, 'error': 'Usuario debe tener al menos 3 caracteres'}), 400
-        if not password or len(password) < 6:
-            return jsonify({'success': False, 'error': 'Contraseña debe tener al menos 6 caracteres'}), 400
-
-        if User.query.filter_by(username=username).first():
-            return jsonify({'success': False, 'error': 'Nombre de usuario ya existe'}), 409
-        if email and User.query.filter_by(email=email).first():
-            return jsonify({'success': False, 'error': 'Email ya registrado'}), 409
-
-        user = User(username=username, email=email or f"{username}@cic.local")
-        user.set_password(password)
-        db.session.add(user)
-        db.session.commit()
-
-        token   = secrets.token_urlsafe(48)
-        expires = datetime.utcnow() + timedelta(days=30)
-        sess    = UserSession(user_id=user.id, token=token, expires_at=expires)
-        db.session.add(sess)
-        db.session.commit()
-
-        return jsonify({
-            'success': True, 'token': token,
-            'user': {'id': user.id, 'username': user.username, 'is_developer': user.is_developer}
-        })
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({'success': False, 'error': str(e)}), 500
-
-@app.route('/api/auth/login', methods=['POST'])
-def login():
-    try:
-        data     = request.json or {}
-        username = data.get('username', '').strip()
-        password = data.get('password', '')
-
-        user = User.query.filter_by(username=username).first()
-        if not user or not user.check_password(password):
-            return jsonify({'success': False, 'error': 'Credenciales inválidas'}), 401
-        if not user.is_active:
-            return jsonify({'success': False, 'error': 'Cuenta desactivada'}), 403
-
-        token   = secrets.token_urlsafe(48)
-        expires = datetime.utcnow() + timedelta(days=30)
-        sess    = UserSession(user_id=user.id, token=token, expires_at=expires)
-        db.session.add(sess)
-        db.session.commit()
-
-        return jsonify({
-            'success': True, 'token': token,
-            'user': {'id': user.id, 'username': user.username, 'is_developer': user.is_developer}
-        })
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({'success': False, 'error': str(e)}), 500
-
-@app.route('/api/auth/verify', methods=['GET'])
-@token_required
-def verify_token(current_user):
-    return jsonify({
-        'success': True,
-        'user': {'id': current_user.id, 'username': current_user.username, 'is_developer': current_user.is_developer}
-    })
-
-@app.route('/api/auth/logout', methods=['POST'])
-@token_required
-def logout(current_user):
-    token = _get_token_from_request()
-    UserSession.query.filter_by(token=token).delete()
-    db.session.commit()
-    return jsonify({'success': True, 'message': 'Sesión cerrada'})
-
-# ========== CHAT ==========
-
-@app.route('/api/chat', methods=['POST'])
-@token_required
-def chat(current_user):
-    try:
-        data    = request.json or {}
-        message = data.get('message', '').strip()
-        mode    = data.get('mode', 'balanced')
-        history = data.get('history', [])  # historial del frontend
-
-        if not message:
-            return jsonify({'error': 'Mensaje vacío'}), 400
-        if len(message) > 100000:
-            return jsonify({'error': 'Mensaje demasiado largo (máx 100,000 caracteres)'}), 400
-
-        result = cic_ia.chat(
-            user_message=message,
-            user_id=current_user.id,
-            conversation_history=history,
-            mode=mode
-        )
-        return jsonify(result)
-    except Exception as e:
-        logger.error(f"Error chat: {e}")
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/api/chat/history', methods=['GET'])
-@token_required
-def chat_history(current_user):
-    page     = request.args.get('page', 1, type=int)
-    per_page = min(request.args.get('per_page', 20, type=int), 100)
-
-    pagination = Conversation.query.filter_by(
-        user_id=current_user.id
-    ).order_by(Conversation.timestamp.desc()).paginate(
-        page=page, per_page=per_page, error_out=False
-    )
-
-    return jsonify({
-        'conversations': [{
-            'id':           c.id,
-            'user_message': c.user_message,
-            'bot_response': c.bot_response,
-            'timestamp':    c.timestamp.isoformat(),
-            'tokens_used':  c.tokens_used
-        } for c in pagination.items],
-        'total': pagination.total,
-        'pages': pagination.pages,
-        'current_page': page
-    })
-
-@app.route('/api/user/stats', methods=['GET'])
-@token_required
-def user_stats(current_user):
-    conv_count   = Conversation.query.filter_by(user_id=current_user.id).count()
-    total_tokens = db.session.query(
-        db.func.sum(Conversation.tokens_used)
-    ).filter_by(user_id=current_user.id).scalar() or 0
-
-    return jsonify({
-        'success':            True,
-        'user_id':            current_user.id,
-        'username':           current_user.username,
-        'conversation_count': conv_count,
-        'total_tokens_used':  total_tokens,
-        'is_developer':       current_user.is_developer,
-        'member_since':       current_user.created_at.isoformat()
-    })
-
-@app.route('/api/status')
-def status():
-    return jsonify(cic_ia.get_stats())
-
-# ========== LECTOR DE GITHUB Y ARCHIVOS ==========
-
-@app.route('/api/chat/read-github', methods=['POST'])
-@token_required
-def read_github(current_user):
-    """Lee código desde una URL de GitHub y lo agrega al contexto del chat"""
-    try:
-        data = request.json or {}
-        url  = data.get('url', '').strip()
-        if not url:
-            return jsonify({'error': 'URL requerida'}), 400
-
-        # Convertir URL de GitHub a raw
-        raw_url = url
-        if 'github.com' in url and '/blob/' in url:
-            raw_url = url.replace('github.com', 'raw.githubusercontent.com').replace('/blob/', '/')
-        elif 'github.com' in url and '/tree/' not in url and 'raw.githubusercontent.com' not in url:
-            # Intentar construir URL raw para archivos directos
-            raw_url = url.replace('github.com', 'raw.githubusercontent.com').replace('/blob/', '/')
-
-        import urllib.request
-        req_obj = urllib.request.Request(raw_url, headers={'User-Agent': 'CicIA/1.0'})
-        with urllib.request.urlopen(req_obj, timeout=15) as resp:
-            code_content = resp.read().decode('utf-8', errors='ignore')
-
-        # Limitar tamaño
-        if len(code_content) > 80000:
-            code_content = code_content[:80000] + "\n... [truncado por tamaño]"
-
-        # Detectar extensión/lenguaje
-        lang = 'plaintext'
-        if '.py' in url: lang = 'python'
-        elif '.js' in url: lang = 'javascript'
-        elif '.html' in url: lang = 'html'
-        elif '.css' in url: lang = 'css'
-        elif '.json' in url: lang = 'json'
-        elif '.ts' in url: lang = 'typescript'
-        elif '.md' in url: lang = 'markdown'
-
-        return jsonify({
-            'success':  True,
-            'content':  code_content,
-            'language': lang,
-            'url':      raw_url,
-            'lines':    code_content.count('\n') + 1,
-            'chars':    len(code_content)
-        })
-    except Exception as e:
-        return jsonify({'error': f'No se pudo leer el archivo: {str(e)}'}), 400
-
-@app.route('/api/chat/analyze-image', methods=['POST'])
-@token_required
-def analyze_image(current_user):
-    """Analiza una imagen — usa Groq Vision (gratis) o Anthropic como fallback"""
-    try:
-        data      = request.json or {}
-        image_b64 = data.get('image_b64', '')
-        message   = data.get('message', 'Describe esta imagen en detalle en español')
-        mime_type = data.get('mime_type', 'image/jpeg')
-
-        if not image_b64:
-            return jsonify({'error': 'imagen requerida'}), 400
-
-        groq_key = os.environ.get('GROQ_API_KEY', '')
-        system   = get_config('system_prompt', 'Eres Cic_IA, un asistente inteligente en español.')
-
-        # ── Groq Vision (gratis, prioridad 1) ──────────────────────────
-        if groq_key:
-            try:
-                data_url = f"data:{mime_type};base64,{image_b64}"
-                resp = requests.post(
-                    'https://api.groq.com/openai/v1/chat/completions',
-                    headers={
-                        'Authorization': f'Bearer {groq_key}',
-                        'Content-Type':  'application/json'
-                    },
-                    json={
-                        'model':      'llama-3.2-11b-vision-preview',
-                        'max_tokens': 1500,
-                        'messages': [
-                            {'role': 'system', 'content': system},
-                            {'role': 'user', 'content': [
-                                {'type': 'image_url', 'image_url': {'url': data_url}},
-                                {'type': 'text', 'text': message}
-                            ]}
-                        ]
-                    },
-                    timeout=30
-                )
-                resp.raise_for_status()
-                result_text = resp.json()['choices'][0]['message']['content']
-                tokens      = resp.json().get('usage', {}).get('completion_tokens', 0)
-
-                cic_ia._save_conversation(
-                    user_msg=f'[IMAGEN] {message}',
-                    bot_resp=result_text,
-                    user_id=current_user.id,
-                    tokens=tokens,
-                    sources=['groq_vision']
-                )
-                return jsonify({'success': True, 'response': result_text, 'provider': 'groq_vision', 'model': 'llama-3.2-11b-vision-preview', 'tokens': tokens})
-            except Exception as e:
-                logger.warning(f"Groq Vision falló: {e} — intentando Anthropic")
-
-        # ── Anthropic Vision (fallback) ─────────────────────────────────
-        if ANTHROPIC_API_KEY:
-            try:
-                resp = requests.post(
-                    'https://api.anthropic.com/v1/messages',
-                    headers={
-                        'x-api-key': ANTHROPIC_API_KEY,
-                        'anthropic-version': '2023-06-01',
-                        'content-type': 'application/json'
-                    },
-                    json={
-                        'model': 'claude-haiku-4-5-20251001',
-                        'max_tokens': 1500,
-                        'system': system,
-                        'messages': [{'role': 'user', 'content': [
-                            {'type': 'image', 'source': {'type': 'base64', 'media_type': mime_type, 'data': image_b64}},
-                            {'type': 'text', 'text': message}
-                        ]}]
-                    },
-                    timeout=30
-                )
-                resp.raise_for_status()
-                result_text = resp.json()['content'][0]['text']
-                tokens      = resp.json().get('usage', {}).get('output_tokens', 0)
-                cic_ia._save_conversation(
-                    user_msg=f'[IMAGEN] {message}',
-                    bot_resp=result_text,
-                    user_id=current_user.id,
-                    tokens=tokens,
-                    sources=['anthropic_vision']
-                )
-                return jsonify({'success': True, 'response': result_text, 'provider': 'anthropic_vision', 'tokens': tokens})
-            except Exception as e:
-                logger.error(f"Anthropic Vision falló: {e}")
-
-        # ── Sin soporte de visión ───────────────────────────────────────
-        return jsonify({
-            'success':  False,
-            'response': '⚠️ No hay proveedor de visión disponible. Configura GROQ_API_KEY en Render.',
-            'provider': 'fallback'
-        })
-
-    except Exception as e:
-        logger.error(f"Error análisis imagen: {e}")
-        return jsonify({'error': str(e)}), 500
-
-# ========== MÓDULOS (compatibilidad) ==========
-
-@app.route('/api/modules/list', methods=['GET'])
-def list_modules():
-    return jsonify({'modules': [
-        {'id': 'chat',          'name': 'Chat IA',              'icon': '🤖', 'status': 'active'},
-        {'id': 'web_search',    'name': 'Búsqueda Web',         'icon': '🔍', 'status': 'active'},
-        {'id': 'memory',        'name': 'Memoria',              'icon': '🧠', 'status': 'active'},
-        {'id': 'data_analysis', 'name': 'Análisis de Datos',    'icon': '📊', 'status': 'available'},
-        {'id': 'code_assistant','name': 'Asistente de Código',  'icon': '💻', 'status': 'available'},
-        {'id': 'file_manager',  'name': 'Archivos',             'icon': '📁', 'status': 'available'},
-    ]})
-
-# ==========================================
-# ========== PANEL DESARROLLADOR ==========
-# ==========================================
-
-@app.route('/developer')
-def developer_panel():
-    """Panel de desarrollador — renderiza template o retorna info básica"""
-    try:
-        return render_template('developer.html')
-    except Exception:
-        return jsonify({'message': 'Panel desarrollador activo. Usa la API /api/dev/*'})
-
-# --- Estadísticas detalladas ---
-
-@app.route('/api/dev/stats', methods=['GET'])
-@dev_required
-def dev_stats():
-    try:
-        today = date.today()
-        log   = LearningLog.query.filter_by(date=today).first()
-
-        # Historial de aprendizaje (últimos 7 días)
-        week_logs = LearningLog.query.filter(
-            LearningLog.date >= today - timedelta(days=7)
-        ).order_by(LearningLog.date.desc()).all()
-
-        # Últimas conversaciones
-        last_convs = Conversation.query.order_by(
-            Conversation.timestamp.desc()
-        ).limit(5).all()
-
-        return jsonify({
-            'system': {
-                'total_memories':      Memory.query.count(),
-                'total_conversations': Conversation.query.count(),
-                'total_users':         User.query.count(),
-                'active_sessions':     UserSession.query.count(),
-                'manual_knowledge':    ManualKnowledge.query.filter_by(active=True).count(),
-                'cached_searches':     _safe_count(WebSearchCache),
-            },
-            'today': {
-                'conversations': log.count if log else 0,
-                'auto_learned':  log.auto_learned if log else 0,
-                'web_searches':  log.web_searches if log else 0,
-            },
-            'week_activity': [{
-                'date':         l.date.isoformat(),
-                'conversations': l.count,
-                'auto_learned': l.auto_learned,
-            } for l in week_logs],
-            'recent_conversations': [{
-                'user':     c.user_message[:80],
-                'bot':      c.bot_response[:80],
-                'time':     c.timestamp.isoformat(),
-                'tokens':   c.tokens_used,
-            } for c in last_convs],
-            'ai_config': {
-                'provider':        get_config('ai_provider', 'groq'),
-                'model':           get_config('ai_model'),
-                'has_anthropic':   bool(ANTHROPIC_API_KEY),
-                'has_openai':      bool(OPENAI_API_KEY),
-                'has_groq':        bool(os.environ.get('GROQ_API_KEY', '')),
-                'system_prompt':   get_config('system_prompt'),
-                'max_tokens':      get_config('max_tokens'),
-                'auto_learning':   get_config('auto_learning_enabled'),
-                'web_search':      get_config('web_search_enabled'),
-            }
-        })
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-# --- Gestión de conocimiento manual ---
-
-@app.route('/api/dev/knowledge', methods=['GET'])
-@dev_required
-def dev_get_knowledge():
-    """Lista todo el conocimiento manual"""
-    page     = request.args.get('page', 1, type=int)
-    category = request.args.get('category', '')
-    query    = ManualKnowledge.query.filter_by(active=True)
-    if category:
-        query = query.filter_by(category=category)
-    pagination = query.order_by(
-        ManualKnowledge.priority.desc(), ManualKnowledge.created_at.desc()
-    ).paginate(page=page, per_page=20, error_out=False)
-
-    return jsonify({
-        'knowledge': [{
-            'id':       k.id,
-            'title':    k.title,
-            'category': k.category,
-            'content':  k.content[:300],
-            'priority': k.priority,
-            'tags':     k.tags,
-            'created':  k.created_at.isoformat()
-        } for k in pagination.items],
-        'total': pagination.total,
-        'pages': pagination.pages
-    })
-
-@app.route('/api/dev/knowledge', methods=['POST'])
-@dev_required
-def dev_add_knowledge():
-    """Agregar conocimiento manual — el dev enseña a la IA directamente"""
-    try:
-        data    = request.json or {}
-        title   = data.get('title', '').strip()
-        content = data.get('content', '').strip()
-
-        if not title or not content:
-            return jsonify({'error': 'title y content son requeridos'}), 400
-
-        # Obtener user_id del token
-        token   = _get_token_from_request()
-        session = UserSession.query.filter_by(token=token).first()
-        user_id = session.user_id if session else None
-
-        mk = ManualKnowledge(
-            title=title,
-            content=content,
-            category=data.get('category', 'general'),
-            tags=data.get('tags', []),
-            priority=data.get('priority', 1),
-            added_by=user_id
-        )
-        db.session.add(mk)
-
-        # También agregar a Memory para que el LLM lo use en contexto
-        mem = Memory(
-            content=f"{title}\n\n{content}",
-            source='manual_dev',
-            topic=title,
-            relevance_score=0.9 + (data.get('priority', 1) * 0.03),
-            tags=data.get('tags', [])
-        )
-        db.session.add(mem)
-        db.session.commit()
-
-        return jsonify({
-            'success':     True,
-            'id':          mk.id,
-            'message':     f'Conocimiento "{title}" agregado exitosamente',
-            'memory_id':   mem.id
-        })
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/api/dev/knowledge/<int:kid>', methods=['PUT'])
-@dev_required
-def dev_update_knowledge(kid):
-    """Actualizar conocimiento existente"""
-    try:
-        mk = ManualKnowledge.query.get_or_404(kid)
-        data = request.json or {}
-        if 'title'    in data: mk.title    = data['title']
-        if 'content'  in data: mk.content  = data['content']
-        if 'category' in data: mk.category = data['category']
-        if 'tags'     in data: mk.tags     = data['tags']
-        if 'priority' in data: mk.priority = data['priority']
-        if 'active'   in data: mk.active   = data['active']
-        mk.updated_at = datetime.utcnow()
-        db.session.commit()
-        return jsonify({'success': True, 'message': 'Actualizado correctamente'})
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/api/dev/knowledge/<int:kid>', methods=['DELETE'])
-@dev_required
-def dev_delete_knowledge(kid):
-    """Eliminar conocimiento"""
-    mk = ManualKnowledge.query.get_or_404(kid)
-    mk.active = False  # Soft delete
-    db.session.commit()
-    return jsonify({'success': True, 'message': 'Conocimiento desactivado'})
-
-# --- Aprendizaje forzado ---
-
-@app.route('/api/dev/learn', methods=['POST'])
-@dev_required
-def dev_force_learn():
-    """Forzar aprendizaje sobre un tema específico"""
-    try:
-        data    = request.json or {}
-        topic   = data.get('topic', '').strip()
-        content = data.get('content', '').strip()  # Opcional: contenido directo
-
-        if not topic:
-            return jsonify({'error': 'topic es requerido'}), 400
-
-        token   = _get_token_from_request()
-        session = UserSession.query.filter_by(token=token).first()
-        user_id = session.user_id if session else None
-
-        result = cic_ia.force_learn(topic=topic, content=content or None, user_id=user_id)
-        return jsonify(result)
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/api/dev/learn/bulk', methods=['POST'])
-@dev_required
-def dev_bulk_learn():
-    """Aprendizaje masivo — lista de temas o textos"""
-    try:
-        data  = request.json or {}
-        items = data.get('items', [])  # [{topic, content?}, ...]
-
-        if not items:
-            return jsonify({'error': 'items es requerido'}), 400
-        if len(items) > 50:
-            return jsonify({'error': 'Máximo 50 items por lote'}), 400
-
-        results = []
-        for item in items:
-            if isinstance(item, str):
-                item = {'topic': item}
-            r = cic_ia.force_learn(
-                topic=item.get('topic', ''),
-                content=item.get('content', '') or None
-            )
-            results.append(r)
-            time.sleep(0.5)  # Respetar rate limits
-
-        total_learned = sum(r.get('web_learned', 0) for r in results)
-        return jsonify({
-            'success': True,
-            'processed': len(results),
-            'total_learned': total_learned,
-            'results': results
-        })
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-# --- Configuración del sistema ---
-
-@app.route('/api/dev/config', methods=['GET'])
-@dev_required
-def dev_get_config():
-    """Ver toda la configuración del sistema"""
-    configs = SystemConfig.query.all()
-    return jsonify({
-        'config': {c.key: {'value': c.value, 'type': c.type, 'updated': c.updated_at.isoformat()} for c in configs}
-    })
-
-@app.route('/api/dev/config', methods=['PUT'])
-@dev_required
-def dev_update_config():
-    """Actualizar configuración en tiempo real"""
-    try:
-        data    = request.json or {}
-        updates = data.get('updates', {})  # {key: value, ...}
-
-        if not updates:
-            return jsonify({'error': 'updates es requerido'}), 400
-
-        # Keys protegidas que no se pueden cambiar por API
-        protected = {'SECRET_KEY', 'DATABASE_URL'}
-        updated = []
-        for key, value in updates.items():
-            if key in protected:
-                continue
-            set_config(key, value)
-            updated.append(key)
-
-        return jsonify({
-            'success': True,
-            'updated': updated,
-            'message': f'{len(updated)} configuraciones actualizadas'
-        })
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/api/dev/config/prompt', methods=['PUT'])
-@dev_required
-def dev_update_prompt():
-    """Actualizar el system prompt de la IA"""
-    try:
-        data   = request.json or {}
-        prompt = data.get('prompt', '').strip()
-        if not prompt:
-            return jsonify({'error': 'prompt es requerido'}), 400
-        if len(prompt) > 2000:
-            return jsonify({'error': 'Prompt muy largo (máx 2000 caracteres)'}), 400
-        set_config('system_prompt', prompt)
-        return jsonify({'success': True, 'message': 'System prompt actualizado'})
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-# --- Gestión de memorias ---
-
-@app.route('/api/dev/memories', methods=['GET'])
-@dev_required
-def dev_get_memories():
-    page     = request.args.get('page', 1, type=int)
-    per_page = min(request.args.get('per_page', 30, type=int), 100)
-    source   = request.args.get('source', '')
-    topic    = request.args.get('topic', '')
-
-    query = Memory.query
-    if source: query = query.filter_by(source=source)
-    if topic:  query = query.filter(Memory.topic.ilike(f'%{topic}%'))
-
-    # Ordenar por fecha más reciente primero (por defecto)
-    sort_by = request.args.get('sort', 'recent')
-    if sort_by == 'score':
-        query = query.order_by(Memory.relevance_score.desc(), Memory.created_at.desc())
-    elif sort_by == 'accesses':
-        query = query.order_by(Memory.access_count.desc(), Memory.created_at.desc())
-    else:  # recent (default)
-        query = query.order_by(Memory.created_at.desc())
-
-    pagination = query.paginate(page=page, per_page=per_page, error_out=False)
-
-    return jsonify({
-        'memories': [{
-            'id':        m.id,
-            'topic':     m.topic,
-            'content':   m.content[:400],
-            'source':    m.source,
-            'score':     m.relevance_score,
-            'accesses':  m.access_count,
-            'created':   m.created_at.isoformat()
-        } for m in pagination.items],
-        'total': pagination.total,
-        'pages': pagination.pages
-    })
-
-@app.route('/api/dev/memories/<int:mid>', methods=['DELETE'])
-@dev_required
-def dev_delete_memory(mid):
-    mem = Memory.query.get_or_404(mid)
-    db.session.delete(mem)
-    db.session.commit()
-    return jsonify({'success': True})
-
-@app.route('/api/dev/memories/clear', methods=['POST'])
-@dev_required
-def dev_clear_memories():
-    """Limpiar memorias por fuente"""
-    data   = request.json or {}
-    source = data.get('source', '')
-    confirm = data.get('confirm', '')
-
-    if confirm != 'CONFIRMAR':
-        return jsonify({'error': 'Agrega confirm: "CONFIRMAR" para proceder'}), 400
-
-    if source:
-        count = Memory.query.filter_by(source=source).count()
-        Memory.query.filter_by(source=source).delete()
-    else:
-        count = Memory.query.count()
-        Memory.query.delete()
-
-    db.session.commit()
-    return jsonify({'success': True, 'deleted': count})
-
-# --- Usuarios ---
-
-@app.route('/api/dev/users', methods=['GET'])
-@dev_required
-def dev_list_users():
-    users = User.query.all()
-    return jsonify({'users': [{
-        'id':          u.id,
-        'username':    u.username,
-        'email':       u.email,
-        'is_developer': u.is_developer,
-        'is_active':   u.is_active,
-        'created_at':  u.created_at.isoformat(),
-        'conversations': Conversation.query.filter_by(user_id=u.id).count()
-    } for u in users]})
-
-@app.route('/api/dev/users/<int:uid>/toggle-dev', methods=['POST'])
-@dev_required
-def dev_toggle_developer(uid):
-    """Dar/quitar rol de desarrollador"""
-    user = User.query.get_or_404(uid)
-    user.is_developer = not user.is_developer
-    db.session.commit()
-    return jsonify({'success': True, 'username': user.username, 'is_developer': user.is_developer})
-
-# --- Test de IA ---
-
-@app.route('/api/dev/test-ai', methods=['POST'])
-@dev_required
-def dev_test_ai():
-    """Probar la IA con un mensaje sin guardar en BD"""
-    try:
-        data    = request.json or {}
-        message = data.get('message', 'Hola, ¿funcionas correctamente?').strip()
-        prompt  = data.get('system_prompt', get_config('system_prompt'))
-
-        llm = LLMEngine()
-        result = llm.chat(
-            user_message=message,
-            system_prompt=prompt,
-            max_tokens=500
-        )
-        return jsonify({
-            'test_message':  message,
-            'response':      result['response'],
-            'provider':      result.get('provider'),
-            'model':         result.get('model'),
-            'tokens':        result.get('tokens', 0),
-            'success':       result.get('success', False)
-        })
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-# --- Crear primer usuario desarrollador (setup inicial) ---
-
-@app.route('/api/dev/setup', methods=['POST'])
-def dev_setup():
-    """
-    Setup inicial — SOLO funciona si NO existe ningún usuario desarrollador.
-    Una vez que existe un dev, este endpoint queda bloqueado automáticamente.
-    """
-    existing_dev = User.query.filter_by(is_developer=True).first()
-    if existing_dev:
-        return jsonify({'error': 'Ya existe un usuario desarrollador. Este endpoint está deshabilitado.'}), 403
-
-    data     = request.json or {}
-    username = data.get('username', '').strip()
-    password = data.get('password', '')
-    email    = data.get('email', f'{username}@cic.local')
-    setup_key = data.get('setup_key', '')
-
-    # Requiere una clave de setup configurada como variable de entorno
-    expected_key = os.environ.get('SETUP_KEY', '')
-    if expected_key and setup_key != expected_key:
-        return jsonify({'error': 'setup_key inválida'}), 403
-
-    if not username or not password or len(password) < 8:
-        return jsonify({'error': 'username y password (mín 8 chars) requeridos'}), 400
-
-    try:
-        user = User(username=username, email=email, is_developer=True)
-        user.set_password(password)
-        db.session.add(user)
-        db.session.commit()
-
-        token   = secrets.token_urlsafe(48)
-        expires = datetime.utcnow() + timedelta(days=90)
-        sess    = UserSession(user_id=user.id, token=token, expires_at=expires)
-        db.session.add(sess)
-        db.session.commit()
-
-        return jsonify({
-            'success':  True,
-            'message':  f'Desarrollador "{username}" creado. Guarda tu token.',
-            'token':    token,
-            'user_id':  user.id
-        })
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({'error': str(e)}), 500
-
-# ========== HEALTH CHECK (Keep-Alive para plan gratuito) ==========
-
-@app.route('/health')
-def health_check():
-    """
-    Endpoint de salud — úsalo con UptimeRobot cada 5 minutos.
-    Mantiene el Web Service activo y la DB sin suspenderse en plan Free.
-    """
-    status = {
-        'status': 'ok',
-        'service': 'Cic_IA',
-        'version': '8.0',
-        'timestamp': datetime.utcnow().isoformat()
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cic_IA — Panel Desarrollador</title>
+<style>
+  :root {
+    --bg: #0f1117; --bg2: #1a1d2e; --bg3: #242840;
+    --accent: #6c63ff; --accent2: #48dbfb; --green: #1dd1a1;
+    --red: #ff6b6b; --yellow: #ffd93d; --text: #e2e8f0; --text2: #94a3b8;
+    --radius: 10px; --shadow: 0 4px 24px rgba(0,0,0,0.4);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+  /* Layout */
+  .layout { display: flex; min-height: 100vh; }
+  .sidebar { width: 240px; background: var(--bg2); padding: 24px 0; display: flex; flex-direction: column; border-right: 1px solid #2d3561; flex-shrink: 0; }
+  .main { flex: 1; padding: 32px; overflow-y: auto; }
+
+  /* Sidebar */
+  .logo { padding: 0 24px 24px; border-bottom: 1px solid #2d3561; }
+  .logo h1 { font-size: 1.3rem; color: var(--accent); }
+  .logo span { font-size: 0.75rem; color: var(--text2); }
+  .nav { padding: 16px 0; flex: 1; }
+  .nav-item { display: flex; align-items: center; gap: 10px; padding: 12px 24px; cursor: pointer; color: var(--text2); font-size: 0.9rem; transition: all .2s; border-left: 3px solid transparent; }
+  .nav-item:hover, .nav-item.active { color: var(--text); background: rgba(108,99,255,.1); border-left-color: var(--accent); }
+  .nav-item .icon { font-size: 1.1rem; width: 20px; text-align: center; }
+
+  /* Sections */
+  .section { display: none; }
+  .section.active { display: block; }
+  h2 { font-size: 1.5rem; margin-bottom: 8px; }
+  .subtitle { color: var(--text2); margin-bottom: 24px; font-size: 0.9rem; }
+
+  /* Cards */
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 24px; }
+  .card { background: var(--bg2); border-radius: var(--radius); padding: 20px; border: 1px solid #2d3561; }
+  .card .value { font-size: 2rem; font-weight: 700; color: var(--accent); }
+  .card .label { font-size: 0.8rem; color: var(--text2); margin-top: 4px; }
+  .card.green .value { color: var(--green); }
+  .card.yellow .value { color: var(--yellow); }
+  .card.red .value { color: var(--red); }
+
+  /* Alerts */
+  .alert { padding: 12px 16px; border-radius: var(--radius); margin-bottom: 16px; font-size: 0.9rem; }
+  .alert-warn { background: rgba(255,211,61,.1); border: 1px solid var(--yellow); color: var(--yellow); }
+  .alert-ok   { background: rgba(29,209,161,.1); border: 1px solid var(--green);  color: var(--green); }
+  .alert-err  { background: rgba(255,107,107,.1); border: 1px solid var(--red);   color: var(--red); }
+  .alert-info { background: rgba(108,99,255,.1);  border: 1px solid var(--accent); color: var(--accent2); }
+
+  /* Forms */
+  .form-group { margin-bottom: 16px; }
+  label { display: block; font-size: 0.85rem; color: var(--text2); margin-bottom: 6px; }
+  input, textarea, select {
+    width: 100%; padding: 10px 14px; background: var(--bg3);
+    border: 1px solid #2d3561; border-radius: 8px; color: var(--text);
+    font-size: 0.9rem; font-family: inherit; transition: border .2s;
+  }
+  input:focus, textarea:focus, select:focus { outline: none; border-color: var(--accent); }
+  textarea { resize: vertical; min-height: 100px; }
+
+  /* Buttons */
+  .btn { padding: 10px 20px; border-radius: 8px; border: none; cursor: pointer; font-size: 0.9rem; font-weight: 600; transition: all .2s; }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover { background: #5a52e0; }
+  .btn-green { background: var(--green); color: #0f1117; }
+  .btn-green:hover { background: #15b88b; }
+  .btn-red { background: var(--red); color: #fff; }
+  .btn-red:hover { background: #e55a5a; }
+  .btn-outline { background: transparent; border: 1px solid var(--accent); color: var(--accent); }
+  .btn-outline:hover { background: rgba(108,99,255,.1); }
+  .btn-sm { padding: 6px 12px; font-size: 0.8rem; }
+  .btn:disabled { opacity: .5; cursor: not-allowed; }
+
+  /* Table */
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+  th { padding: 12px 16px; text-align: left; color: var(--text2); border-bottom: 1px solid #2d3561; font-weight: 600; }
+  td { padding: 12px 16px; border-bottom: 1px solid #1e2340; }
+  tr:hover td { background: rgba(108,99,255,.05); }
+
+  /* Badges */
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: 0.75rem; font-weight: 600; }
+  .badge-green  { background: rgba(29,209,161,.15); color: var(--green); }
+  .badge-yellow { background: rgba(255,211,61,.15);  color: var(--yellow); }
+  .badge-red    { background: rgba(255,107,107,.15); color: var(--red); }
+  .badge-blue   { background: rgba(72,219,251,.15);  color: var(--accent2); }
+
+  /* Chat test */
+  .chat-box { background: var(--bg2); border-radius: var(--radius); padding: 20px; min-height: 200px; max-height: 400px; overflow-y: auto; margin-bottom: 12px; border: 1px solid #2d3561; }
+  .msg { margin-bottom: 12px; }
+  .msg.user .bubble { background: var(--accent); color: #fff; border-radius: 12px 12px 4px 12px; padding: 10px 14px; display: inline-block; max-width: 80%; }
+  .msg.bot  .bubble { background: var(--bg3); color: var(--text); border-radius: 12px 12px 12px 4px; padding: 10px 14px; display: inline-block; max-width: 80%; }
+  .msg.user { text-align: right; }
+  .msg-meta { font-size: 0.75rem; color: var(--text2); margin-top: 4px; }
+
+  /* Code */
+  pre { background: #0d0f1a; border: 1px solid #2d3561; border-radius: 8px; padding: 16px; overflow-x: auto; font-size: 0.85rem; color: var(--accent2); }
+
+  /* Row actions */
+  .row-actions { display: flex; gap: 8px; }
+
+  /* Status dot */
+  .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 6px; }
+  .dot-green  { background: var(--green); box-shadow: 0 0 6px var(--green); }
+  .dot-yellow { background: var(--yellow); }
+  .dot-red    { background: var(--red); }
+
+  /* Responsive */
+  @media (max-width: 768px) {
+    .sidebar { width: 60px; }
+    .logo h1, .logo span, .nav-item span { display: none; }
+    .nav-item { justify-content: center; padding: 14px; }
+    .main { padding: 16px; }
+  }
+
+  /* Login screen */
+  .login-screen { display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+  .login-box { background: var(--bg2); padding: 40px; border-radius: 16px; width: 100%; max-width: 400px; border: 1px solid #2d3561; }
+  .login-box h1 { text-align: center; margin-bottom: 8px; }
+  .login-box p  { text-align: center; color: var(--text2); margin-bottom: 28px; font-size: 0.9rem; }
+
+  .tabs { display: flex; gap: 0; margin-bottom: 20px; border-bottom: 1px solid #2d3561; }
+  .tab { padding: 10px 20px; cursor: pointer; color: var(--text2); font-size: 0.9rem; border-bottom: 2px solid transparent; }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+</style>
+</head>
+<body>
+
+<!-- =========================================== -->
+<!-- LOGIN                                        -->
+<!-- =========================================== -->
+<div id="loginScreen" class="login-screen">
+  <div class="login-box">
+    <h1>🤖 Cic_IA</h1>
+    <p>Panel de Desarrollador v8.0</p>
+    <div id="loginAlert"></div>
+    <div class="form-group">
+      <label>Usuario</label>
+      <input type="text" id="loginUser" placeholder="tu_usuario" />
+    </div>
+    <div class="form-group">
+      <label>Contraseña</label>
+      <input type="password" id="loginPass" placeholder="••••••••" onkeydown="if(event.key==='Enter') doLogin()" />
+    </div>
+    <button class="btn btn-primary" style="width:100%" onclick="doLogin()">Iniciar Sesión</button>
+    <div style="text-align:center;margin-top:16px;font-size:0.8rem;color:var(--text2)">
+      ¿Primer uso? <a href="#" onclick="showSetup()" style="color:var(--accent)">Configurar acceso inicial</a>
+    </div>
+  </div>
+</div>
+
+<!-- Setup modal -->
+<div id="setupModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:100;display:none;align-items:center;justify-content:center">
+  <div class="login-box" style="max-width:440px">
+    <h1 style="font-size:1.2rem;margin-bottom:16px">⚙️ Configuración Inicial</h1>
+    <div id="setupAlert"></div>
+    <div class="form-group"><label>Usuario dev</label><input type="text" id="setupUser" /></div>
+    <div class="form-group"><label>Contraseña (mín 8 chars)</label><input type="password" id="setupPass" /></div>
+    <div class="form-group"><label>Setup Key (variable SETUP_KEY en entorno, puede estar vacía)</label><input type="text" id="setupKey" /></div>
+    <div style="display:flex;gap:10px">
+      <button class="btn btn-primary" style="flex:1" onclick="doSetup()">Crear cuenta dev</button>
+      <button class="btn btn-outline" onclick="hideSetup()">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- =========================================== -->
+<!-- PANEL PRINCIPAL                             -->
+<!-- =========================================== -->
+<div id="panel" class="layout" style="display:none">
+
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="logo">
+      <h1>🤖 Cic_IA</h1>
+      <span>Panel Dev v8.0</span>
+    </div>
+    <nav class="nav">
+      <div class="nav-item active" onclick="showSection('dashboard')">
+        <span class="icon">📊</span><span>Dashboard</span>
+      </div>
+      <div class="nav-item" onclick="showSection('knowledge')">
+        <span class="icon">🧠</span><span>Conocimiento</span>
+      </div>
+      <div class="nav-item" onclick="showSection('learn')">
+        <span class="icon">📚</span><span>Aprendizaje</span>
+      </div>
+      <div class="nav-item" onclick="showSection('memories')">
+        <span class="icon">💾</span><span>Memorias</span>
+      </div>
+      <div class="nav-item" onclick="showSection('config')">
+        <span class="icon">⚙️</span><span>Configuración</span>
+      </div>
+      <div class="nav-item" onclick="showSection('chat')">
+        <span class="icon">💬</span><span>Test Chat</span>
+      </div>
+      <div class="nav-item" onclick="showSection('users')">
+        <span class="icon">👥</span><span>Usuarios</span>
+      </div>
+    </nav>
+    <div style="padding:16px 24px;border-top:1px solid #2d3561">
+      <div style="font-size:0.8rem;color:var(--text2)" id="sidebarUser">—</div>
+      <button class="btn btn-outline btn-sm" style="margin-top:8px;width:100%" onclick="doLogout()">Salir</button>
+    </div>
+  </aside>
+
+  <!-- Main content -->
+  <main class="main">
+
+    <!-- DASHBOARD -->
+    <section id="sec-dashboard" class="section active">
+      <h2>Dashboard</h2>
+      <p class="subtitle">Resumen del sistema en tiempo real</p>
+      <div id="dashAlert"></div>
+      <div class="cards" id="dashCards">
+        <div class="card"><div class="value" id="d-memories">—</div><div class="label">Memorias totales</div></div>
+        <div class="card green"><div class="value" id="d-convs">—</div><div class="label">Conversaciones</div></div>
+        <div class="card yellow"><div class="value" id="d-kb">—</div><div class="label">Conocimiento manual</div></div>
+        <div class="card"><div class="value" id="d-today">—</div><div class="label">Mensajes hoy</div></div>
+        <div class="card" id="d-aicard"><div class="value" id="d-ai">—</div><div class="label">Proveedor IA</div></div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+        <div>
+          <h3 style="margin-bottom:12px;font-size:1rem">Últimas conversaciones</h3>
+          <div id="recentConvs" style="background:var(--bg2);border-radius:var(--radius);border:1px solid #2d3561;overflow:hidden">
+            <div style="padding:16px;color:var(--text2);font-size:0.85rem">Cargando...</div>
+          </div>
+        </div>
+        <div>
+          <h3 style="margin-bottom:12px;font-size:1rem">Actividad (7 días)</h3>
+          <div id="weekActivity" style="background:var(--bg2);border-radius:var(--radius);border:1px solid #2d3561;overflow:hidden">
+            <div style="padding:16px;color:var(--text2);font-size:0.85rem">Cargando...</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- CONOCIMIENTO MANUAL -->
+    <section id="sec-knowledge" class="section">
+      <h2>🧠 Conocimiento Manual</h2>
+      <p class="subtitle">Enseña directamente a la IA — este conocimiento se usa en cada respuesta</p>
+
+      <div style="background:var(--bg2);border-radius:var(--radius);padding:24px;border:1px solid #2d3561;margin-bottom:24px">
+        <h3 style="margin-bottom:16px;font-size:1rem">➕ Agregar nuevo conocimiento</h3>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+          <div class="form-group">
+            <label>Título / Tema *</label>
+            <input type="text" id="kb-title" placeholder="Ej: Horarios de atención, Cómo funciona X..." />
+          </div>
+          <div class="form-group">
+            <label>Categoría</label>
+            <input type="text" id="kb-category" placeholder="Ej: empresa, producto, soporte..." />
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Contenido *</label>
+          <textarea id="kb-content" rows="5" placeholder="Escribe aquí la información que quieres que la IA sepa y use en sus respuestas..."></textarea>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr auto;gap:16px;align-items:end">
+          <div class="form-group" style="margin:0">
+            <label>Tags (separados por coma)</label>
+            <input type="text" id="kb-tags" placeholder="tag1, tag2, tag3" />
+          </div>
+          <div style="display:flex;gap:8px">
+            <select id="kb-priority" style="width:auto">
+              <option value="1">Prioridad Normal</option>
+              <option value="2">Prioridad Alta</option>
+              <option value="3">Crítica</option>
+            </select>
+            <button class="btn btn-primary" onclick="addKnowledge()">Guardar</button>
+          </div>
+        </div>
+        <div id="kbAddAlert" style="margin-top:12px"></div>
+      </div>
+
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+        <h3 style="font-size:1rem">Base de conocimiento</h3>
+        <button class="btn btn-outline btn-sm" onclick="loadKnowledge()">🔄 Actualizar</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Título</th><th>Categoría</th><th>Prioridad</th><th>Preview</th><th>Fecha</th><th>Acciones</th></tr></thead>
+          <tbody id="kbTable"><tr><td colspan="6" style="color:var(--text2);text-align:center;padding:24px">Cargando...</td></tr></tbody>
+        </table>
+      </div>
+      <div id="kbPagination" style="margin-top:16px;display:flex;gap:8px;justify-content:center"></div>
+    </section>
+
+    <!-- APRENDIZAJE FORZADO -->
+    <section id="sec-learn" class="section">
+      <h2>📚 Aprendizaje Forzado</h2>
+      <p class="subtitle">Fuerza a la IA a aprender sobre temas específicos desde la web o texto directo</p>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+
+        <div style="background:var(--bg2);border-radius:var(--radius);padding:24px;border:1px solid #2d3561">
+          <h3 style="margin-bottom:16px;font-size:1rem">🔍 Aprender desde la Web</h3>
+          <div class="form-group">
+            <label>Tema a buscar</label>
+            <input type="text" id="learn-topic" placeholder="Ej: Python avanzado, Historia de Chile..." />
+          </div>
+          <div class="form-group">
+            <label>Contenido adicional (opcional)</label>
+            <textarea id="learn-content" rows="4" placeholder="Si tienes texto específico que quieres que la IA aprenda, pégalo aquí..."></textarea>
+          </div>
+          <button class="btn btn-primary" style="width:100%" onclick="forceLearning()">🚀 Iniciar aprendizaje</button>
+          <div id="learnAlert" style="margin-top:12px"></div>
+        </div>
+
+        <div style="background:var(--bg2);border-radius:var(--radius);padding:24px;border:1px solid #2d3561">
+          <h3 style="margin-bottom:16px;font-size:1rem">📋 Aprendizaje Masivo</h3>
+          <div class="form-group">
+            <label>Lista de temas (uno por línea)</label>
+            <textarea id="bulk-topics" rows="8" placeholder="Inteligencia artificial&#10;Python programación&#10;Historia de Chile&#10;..."></textarea>
+          </div>
+          <button class="btn btn-green" style="width:100%" onclick="bulkLearning()">⚡ Aprender todos</button>
+          <div id="bulkAlert" style="margin-top:12px"></div>
+        </div>
+      </div>
+
+      <div style="margin-top:24px;background:var(--bg2);border-radius:var(--radius);padding:24px;border:1px solid #2d3561">
+        <h3 style="margin-bottom:12px;font-size:1rem">📅 Log de aprendizaje reciente</h3>
+        <div id="learningLog" style="color:var(--text2);font-size:0.85rem">Cargando...</div>
+      </div>
+    </section>
+
+    <!-- MEMORIAS -->
+    <section id="sec-memories" class="section">
+      <h2>💾 Memorias</h2>
+      <p class="subtitle">Todo lo que la IA ha aprendido y almacenado</p>
+      <div style="display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap">
+        <input type="text" id="mem-search" placeholder="Buscar por tema..." style="max-width:300px" />
+        <select id="mem-source">
+          <option value="">Todas las fuentes</option>
+          <option value="auto_learning">Auto-aprendizaje</option>
+          <option value="web_search">Búsqueda web</option>
+          <option value="manual_dev">Manual (dev)</option>
+        </select>
+        <button class="btn btn-outline btn-sm" onclick="loadMemories()">🔍 Filtrar</button>
+        <button class="btn btn-red btn-sm" onclick="clearMemories()" style="margin-left:auto">🗑️ Limpiar selección</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Tema</th><th>Fuente</th><th>Score</th><th>Accesos</th><th>Fecha</th><th>Preview</th><th></th></tr></thead>
+          <tbody id="memTable"><tr><td colspan="7" style="color:var(--text2);text-align:center;padding:24px">Cargando...</td></tr></tbody>
+        </table>
+      </div>
+      <div id="memPagination" style="margin-top:16px;display:flex;gap:8px;justify-content:center"></div>
+    </section>
+
+    <!-- CONFIGURACIÓN -->
+    <section id="sec-config" class="section">
+      <h2>⚙️ Configuración</h2>
+      <p class="subtitle">Ajusta el comportamiento de la IA en tiempo real</p>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+
+        <div style="background:var(--bg2);border-radius:var(--radius);padding:24px;border:1px solid #2d3561">
+          <h3 style="margin-bottom:16px;font-size:1rem">🤖 Proveedor de IA</h3>
+          <div class="form-group">
+            <label>Proveedor</label>
+            <select id="cfg-provider">
+              <option value="anthropic">Anthropic (Claude)</option>
+              <option value="openai">OpenAI (GPT)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Modelo</label>
+            <input type="text" id="cfg-model" placeholder="claude-haiku-4-5-20251001" />
+          </div>
+          <div class="form-group">
+            <label>Máximo de tokens por respuesta</label>
+            <input type="number" id="cfg-tokens" min="100" max="4000" value="1000" />
+          </div>
+          <button class="btn btn-primary" onclick="saveAIConfig()">Guardar</button>
+        </div>
+
+        <div style="background:var(--bg2);border-radius:var(--radius);padding:24px;border:1px solid #2d3561">
+          <h3 style="margin-bottom:16px;font-size:1rem">🔄 Auto-aprendizaje</h3>
+          <div class="form-group">
+            <label>Auto-aprendizaje activado</label>
+            <select id="cfg-autolearn">
+              <option value="true">✅ Activado</option>
+              <option value="false">❌ Desactivado</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Intervalo (horas)</label>
+            <input type="number" id="cfg-interval" min="1" max="24" value="2" />
+          </div>
+          <div class="form-group">
+            <label>Búsqueda web en respuestas</label>
+            <select id="cfg-websearch">
+              <option value="true">✅ Activada</option>
+              <option value="false">❌ Desactivada</option>
+            </select>
+          </div>
+          <button class="btn btn-primary" onclick="saveLearningConfig()">Guardar</button>
+        </div>
+      </div>
+
+      <div style="background:var(--bg2);border-radius:var(--radius);padding:24px;border:1px solid #2d3561;margin-top:20px">
+        <h3 style="margin-bottom:16px;font-size:1rem">💬 System Prompt (Personalidad de la IA)</h3>
+        <div class="form-group">
+          <textarea id="cfg-prompt" rows="5" placeholder="Eres Cic_IA..."></textarea>
+        </div>
+        <div style="display:flex;gap:12px">
+          <button class="btn btn-primary" onclick="savePrompt()">Guardar Prompt</button>
+          <button class="btn btn-outline" onclick="resetPrompt()">Restablecer</button>
+        </div>
+        <div id="cfgAlert" style="margin-top:12px"></div>
+      </div>
+    </section>
+
+    <!-- TEST CHAT -->
+    <section id="sec-chat" class="section">
+      <h2>💬 Test de Chat</h2>
+      <p class="subtitle">Prueba la IA directamente desde el panel</p>
+
+      <div style="background:var(--bg2);border-radius:var(--radius);padding:24px;border:1px solid #2d3561">
+        <div style="display:flex;gap:12px;margin-bottom:16px;align-items:center">
+          <label style="color:var(--text2);font-size:0.85rem;white-space:nowrap">System prompt:</label>
+          <input type="text" id="test-prompt" placeholder="Opcional — usa el configurado por defecto" style="flex:1" />
+          <select id="test-mode">
+            <option value="balanced">Balanceado</option>
+            <option value="fast">Rápido</option>
+            <option value="complete">Completo</option>
+          </select>
+        </div>
+        <div class="chat-box" id="testChat">
+          <div style="text-align:center;color:var(--text2);font-size:0.85rem;padding:40px 0">Escribe un mensaje para probar la IA</div>
+        </div>
+        <div style="display:flex;gap:10px">
+          <input type="text" id="testMsg" placeholder="Escribe un mensaje..." onkeydown="if(event.key==='Enter')sendTestMsg()" style="flex:1" />
+          <button class="btn btn-primary" onclick="sendTestMsg()">Enviar</button>
+          <button class="btn btn-outline" onclick="clearChat()">Limpiar</button>
+        </div>
+        <div id="testInfo" style="margin-top:10px;font-size:0.8rem;color:var(--text2)"></div>
+      </div>
+
+      <div style="margin-top:20px;background:var(--bg2);border-radius:var(--radius);padding:20px;border:1px solid #2d3561">
+        <h3 style="margin-bottom:12px;font-size:1rem">📡 API Reference</h3>
+        <pre id="apiRef">Cargando configuración...</pre>
+      </div>
+    </section>
+
+    <!-- USUARIOS -->
+    <section id="sec-users" class="section">
+      <h2>👥 Usuarios</h2>
+      <p class="subtitle">Gestión de usuarios del sistema</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>ID</th><th>Usuario</th><th>Email</th><th>Rol</th><th>Estado</th><th>Mensajes</th><th>Registro</th><th>Acciones</th></tr></thead>
+          <tbody id="usersTable"><tr><td colspan="8" style="color:var(--text2);text-align:center;padding:24px">Cargando...</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<script>
+const API = '';
+let TOKEN = localStorage.getItem('dev_token') || '';
+let currentUser = null;
+let currentPage = { memories: 1, knowledge: 1 };
+
+// ============ AUTH ============
+
+async function doLogin() {
+  const user = document.getElementById('loginUser').value.trim();
+  const pass = document.getElementById('loginPass').value;
+  showAlert('loginAlert', '', '');
+  if (!user || !pass) return showAlert('loginAlert', 'Completa todos los campos', 'err');
+
+  try {
+    const r = await api('/api/auth/login', 'POST', { username: user, password: pass }, false);
+    if (r.success) {
+      TOKEN = r.token;
+      currentUser = r.user;
+      localStorage.setItem('dev_token', TOKEN);
+      if (!r.user.is_developer) {
+        showAlert('loginAlert', 'Esta cuenta no tiene privilegios de desarrollador', 'err');
+        TOKEN = ''; localStorage.removeItem('dev_token');
+        return;
+      }
+      showPanel();
+    } else {
+      showAlert('loginAlert', r.error || 'Error de login', 'err');
     }
-    try:
-        db.session.execute(text('SELECT 1'))
-        status['db'] = 'connected'
-        return jsonify(status), 200
-    except Exception as e:
-        status['status'] = 'degraded'
-        status['db'] = 'error'
-        status['detail'] = str(e)
-        return jsonify(status), 503
+  } catch(e) {
+    showAlert('loginAlert', 'Error de conexión: ' + e.message, 'err');
+  }
+}
 
-@app.route('/ping')
-def ping():
-    """Ping simple para keep-alive"""
-    return 'pong', 200
+async function doLogout() {
+  try { await api('/api/auth/logout', 'POST'); } catch {}
+  TOKEN = ''; localStorage.removeItem('dev_token');
+  location.reload();
+}
 
-# ========== MANEJO DE ERRORES ==========
+function showSetup() {
+  document.getElementById('setupModal').style.display = 'flex';
+}
+function hideSetup() {
+  document.getElementById('setupModal').style.display = 'none';
+}
 
-@app.errorhandler(404)
-def not_found(error):
-    if request.path.startswith('/api/'):
-        return jsonify({'error': 'Endpoint no encontrado'}), 404
-    try:
-        return render_template('index.html')
-    except Exception:
-        return jsonify({'error': 'Not found'}), 404
+async function doSetup() {
+  const user = document.getElementById('setupUser').value.trim();
+  const pass = document.getElementById('setupPass').value;
+  const key  = document.getElementById('setupKey').value.trim();
+  showAlert('setupAlert', '', '');
 
-@app.errorhandler(500)
-def internal_error(error):
-    db.session.rollback()
-    return jsonify({'error': 'Error interno del servidor'}), 500
+  try {
+    const r = await api('/api/dev/setup', 'POST', { username: user, password: pass, setup_key: key }, false);
+    if (r.success) {
+      showAlert('setupAlert', '✅ ' + r.message, 'ok');
+      setTimeout(() => hideSetup(), 2000);
+    } else {
+      showAlert('setupAlert', r.error || 'Error', 'err');
+    }
+  } catch(e) {
+    showAlert('setupAlert', e.message, 'err');
+  }
+}
 
-@app.errorhandler(413)
-def too_large(error):
-    return jsonify({'error': 'Archivo demasiado grande (máx 32MB)'}), 413
+// ============ LAYOUT ============
 
-# ========== INICIO ==========
+function showPanel() {
+  document.getElementById('loginScreen').style.display = 'none';
+  document.getElementById('panel').style.display = 'flex';
+  document.getElementById('sidebarUser').textContent = currentUser?.username || '—';
+  loadDashboard();
+}
 
-if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5000))
-    app.run(host='0.0.0.0', port=port, debug=False)
+function showSection(name) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('sec-' + name).classList.add('active');
+  event.currentTarget.classList.add('active');
+
+  // Lazy load
+  if (name === 'knowledge') loadKnowledge();
+  if (name === 'memories')  loadMemories();
+  if (name === 'config')    loadConfig();
+  if (name === 'users')     loadUsers();
+  if (name === 'learn')     loadLearningLog();
+  if (name === 'chat')      loadAPIRef();
+}
+
+// ============ API HELPER ============
+
+async function api(path, method = 'GET', body = null, auth = true) {
+  const headers = { 'Content-Type': 'application/json' };
+  if (auth && TOKEN) headers['Authorization'] = 'Bearer ' + TOKEN;
+  const opts = { method, headers };
+  if (body) opts.body = JSON.stringify(body);
+  const r = await fetch(API + path, opts);
+  const data = await r.json();
+  if (!r.ok && data.error) throw new Error(data.error);
+  return data;
+}
+
+function showAlert(id, msg, type) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  if (!msg) { el.innerHTML = ''; return; }
+  const cls = { ok: 'alert-ok', err: 'alert-err', warn: 'alert-warn', info: 'alert-info' }[type] || 'alert-info';
+  el.innerHTML = `<div class="alert ${cls}">${msg}</div>`;
+}
+
+// ============ DASHBOARD ============
+
+async function loadDashboard() {
+  try {
+    const d = await api('/api/dev/stats');
+    document.getElementById('d-memories').textContent = d.system.total_memories.toLocaleString();
+    document.getElementById('d-convs').textContent    = d.system.total_conversations.toLocaleString();
+    document.getElementById('d-kb').textContent       = d.system.manual_knowledge.toLocaleString();
+    document.getElementById('d-today').textContent    = d.today.conversations;
+
+    const hasKey = d.ai_config.has_anthropic || d.ai_config.has_openai || d.ai_config.has_groq;
+    document.getElementById('d-ai').innerHTML = `<span class="dot ${hasKey ? 'dot-green' : 'dot-red'}"></span>${d.ai_config.provider}`;
+    if (!hasKey) showAlert('dashAlert', '⚠️ No hay API Key configurada. Configura GROQ_API_KEY, ANTHROPIC_API_KEY o OPENAI_API_KEY como variable de entorno.', 'warn');
+
+    // Recent conversations
+    const rc = document.getElementById('recentConvs');
+    if (d.recent_conversations?.length) {
+      rc.innerHTML = d.recent_conversations.map(c => `
+        <div style="padding:12px 16px;border-bottom:1px solid #1e2340">
+          <div style="font-size:0.85rem;color:var(--text2)">👤 ${esc(c.user.substring(0,80))}</div>
+          <div style="font-size:0.85rem;margin-top:4px">🤖 ${esc(c.bot.substring(0,80))}</div>
+          <div style="font-size:0.75rem;color:var(--text2);margin-top:4px">${new Date(c.time).toLocaleString()} · ${c.tokens} tokens</div>
+        </div>
+      `).join('');
+    } else {
+      rc.innerHTML = '<div style="padding:20px;color:var(--text2);text-align:center;font-size:0.85rem">Sin conversaciones aún</div>';
+    }
+
+    // Week activity
+    const wa = document.getElementById('weekActivity');
+    if (d.week_activity?.length) {
+      wa.innerHTML = `<table style="width:100%"><thead><tr><th>Fecha</th><th>Mensajes</th><th>Aprendido</th></tr></thead><tbody>` +
+        d.week_activity.map(w => `<tr><td>${w.date}</td><td>${w.conversations}</td><td>${w.auto_learned}</td></tr>`).join('') +
+        '</tbody></table>';
+    }
+  } catch(e) {
+    showAlert('dashAlert', 'Error cargando stats: ' + e.message, 'err');
+  }
+}
+
+// ============ KNOWLEDGE ============
+
+let kbPage = 1;
+async function loadKnowledge(page = 1) {
+  kbPage = page;
+  try {
+    const d = await api(`/api/dev/knowledge?page=${page}`);
+    const priorityLabel = { 1: 'Normal', 2: '<span class="badge badge-yellow">Alta</span>', 3: '<span class="badge badge-red">Crítica</span>' };
+    document.getElementById('kbTable').innerHTML = d.knowledge.length ? d.knowledge.map(k => `
+      <tr>
+        <td><strong>${esc(k.title)}</strong></td>
+        <td><span class="badge badge-blue">${esc(k.category || '—')}</span></td>
+        <td>${priorityLabel[k.priority] || k.priority}</td>
+        <td style="color:var(--text2);font-size:0.82rem">${esc(k.content)}</td>
+        <td style="font-size:0.8rem;color:var(--text2)">${new Date(k.created).toLocaleDateString()}</td>
+        <td><div class="row-actions">
+          <button class="btn btn-red btn-sm" onclick="deleteKnowledge(${k.id})">🗑️</button>
+        </div></td>
+      </tr>
+    `).join('') : '<tr><td colspan="6" style="text-align:center;color:var(--text2);padding:24px">Sin conocimiento aún. ¡Agrega el primero!</td></tr>';
+
+    renderPagination('kbPagination', d.pages, kbPage, loadKnowledge);
+  } catch(e) {
+    document.getElementById('kbTable').innerHTML = `<tr><td colspan="6" style="color:var(--red)">${e.message}</td></tr>`;
+  }
+}
+
+async function addKnowledge() {
+  const title    = document.getElementById('kb-title').value.trim();
+  const content  = document.getElementById('kb-content').value.trim();
+  const category = document.getElementById('kb-category').value.trim();
+  const tags     = document.getElementById('kb-tags').value.split(',').map(t => t.trim()).filter(Boolean);
+  const priority = parseInt(document.getElementById('kb-priority').value);
+
+  if (!title || !content) return showAlert('kbAddAlert', 'Título y contenido son requeridos', 'err');
+
+  try {
+    showAlert('kbAddAlert', 'Guardando...', 'info');
+    const r = await api('/api/dev/knowledge', 'POST', { title, content, category, tags, priority });
+    showAlert('kbAddAlert', '✅ ' + r.message, 'ok');
+    ['kb-title','kb-content','kb-category','kb-tags'].forEach(id => document.getElementById(id).value = '');
+    loadKnowledge();
+  } catch(e) {
+    showAlert('kbAddAlert', '❌ ' + e.message, 'err');
+  }
+}
+
+async function deleteKnowledge(id) {
+  if (!confirm('¿Desactivar este conocimiento?')) return;
+  try {
+    await api(`/api/dev/knowledge/${id}`, 'DELETE');
+    loadKnowledge(kbPage);
+  } catch(e) { alert(e.message); }
+}
+
+// ============ LEARNING ============
+
+async function forceLearning() {
+  const topic   = document.getElementById('learn-topic').value.trim();
+  const content = document.getElementById('learn-content').value.trim();
+  if (!topic) return showAlert('learnAlert', 'El tema es requerido', 'err');
+
+  try {
+    showAlert('learnAlert', '⏳ Aprendiendo...', 'info');
+    const r = await api('/api/dev/learn', 'POST', { topic, content: content || undefined });
+    showAlert('learnAlert', `✅ Completado — ${r.web_learned} memorias web aprendidas${r.manual_saved ? ' + conocimiento manual guardado' : ''}`, 'ok');
+    loadLearningLog();
+  } catch(e) {
+    showAlert('learnAlert', '❌ ' + e.message, 'err');
+  }
+}
+
+async function bulkLearning() {
+  const text   = document.getElementById('bulk-topics').value.trim();
+  const topics = text.split('\n').map(t => t.trim()).filter(Boolean);
+  if (!topics.length) return showAlert('bulkAlert', 'Agrega al menos un tema', 'err');
+
+  try {
+    showAlert('bulkAlert', `⏳ Procesando ${topics.length} temas...`, 'info');
+    const items = topics.map(t => ({ topic: t }));
+    const r = await api('/api/dev/learn/bulk', 'POST', { items });
+    showAlert('bulkAlert', `✅ Procesados ${r.processed} temas — ${r.total_learned} memorias aprendidas`, 'ok');
+    loadLearningLog();
+  } catch(e) {
+    showAlert('bulkAlert', '❌ ' + e.message, 'err');
+  }
+}
+
+async function loadLearningLog() {
+  try {
+    const d = await api('/api/dev/stats');
+    const el = document.getElementById('learningLog');
+    if (d.week_activity?.length) {
+      el.innerHTML = d.week_activity.map(w =>
+        `<div style="display:flex;gap:16px;padding:8px 0;border-bottom:1px solid #1e2340">
+          <span style="width:100px">${w.date}</span>
+          <span><strong>${w.conversations}</strong> mensajes</span>
+          <span><strong style="color:var(--green)">${w.auto_learned}</strong> aprendidos</span>
+        </div>`
+      ).join('');
+    } else {
+      el.innerHTML = 'Sin actividad reciente';
+    }
+  } catch {}
+}
+
+// ============ MEMORIES ============
+
+let memPage = 1;
+async function loadMemories(page = 1) {
+  memPage = page;
+  const topic  = document.getElementById('mem-search').value.trim();
+  const source = document.getElementById('mem-source').value;
+  let url = `/api/dev/memories?page=${page}`;
+  if (topic)  url += `&topic=${encodeURIComponent(topic)}`;
+  if (source) url += `&source=${source}`;
+
+  try {
+    const d = await api(url);
+    document.getElementById('memTable').innerHTML = d.memories.length ? d.memories.map(m => `
+      <tr>
+        <td style="max-width:150px">${esc((m.topic || '—').substring(0,50))}</td>
+        <td><span class="badge ${m.source === 'manual_dev' ? 'badge-blue' : 'badge-green'}">${m.source}</span></td>
+        <td>${(m.score || 0).toFixed(2)}</td>
+        <td>${m.accesses}</td>
+        <td style="font-size:0.8rem;color:var(--text2)">${new Date(m.created).toLocaleDateString()}</td>
+        <td style="color:var(--text2);font-size:0.82rem;max-width:200px">${esc(m.content)}</td>
+        <td><button class="btn btn-red btn-sm" onclick="deleteMemory(${m.id})">🗑️</button></td>
+      </tr>
+    `).join('') : '<tr><td colspan="7" style="text-align:center;color:var(--text2);padding:24px">Sin memorias</td></tr>';
+    renderPagination('memPagination', d.pages, memPage, loadMemories);
+  } catch(e) {
+    document.getElementById('memTable').innerHTML = `<tr><td colspan="7" style="color:var(--red)">${e.message}</td></tr>`;
+  }
+}
+
+async function deleteMemory(id) {
+  if (!confirm('¿Eliminar esta memoria?')) return;
+  try {
+    await api(`/api/dev/memories/${id}`, 'DELETE');
+    loadMemories(memPage);
+  } catch(e) { alert(e.message); }
+}
+
+async function clearMemories() {
+  const source  = document.getElementById('mem-source').value;
+  const confirm_text = source ? `¿Limpiar memorias de fuente "${source}"?` : '¿Limpiar TODAS las memorias? Esta acción no se puede deshacer.';
+  if (!confirm(confirm_text)) return;
+  try {
+    const r = await api('/api/dev/memories/clear', 'POST', { source: source || undefined, confirm: 'CONFIRMAR' });
+    alert(`✅ Eliminadas ${r.deleted} memorias`);
+    loadMemories(1);
+  } catch(e) { alert(e.message); }
+}
+
+// ============ CONFIG ============
+
+async function loadConfig() {
+  try {
+    const d = await api('/api/dev/config');
+    const c = d.config;
+    const v = key => c[key]?.value || '';
+    document.getElementById('cfg-provider').value   = v('ai_provider');
+    document.getElementById('cfg-model').value      = v('ai_model');
+    document.getElementById('cfg-tokens').value     = v('max_tokens') || '1000';
+    document.getElementById('cfg-autolearn').value  = v('auto_learning_enabled') || 'true';
+    document.getElementById('cfg-interval').value   = v('auto_learning_interval_hours') || '2';
+    document.getElementById('cfg-websearch').value  = v('web_search_enabled') || 'true';
+    document.getElementById('cfg-prompt').value     = v('system_prompt');
+  } catch(e) {
+    showAlert('cfgAlert', 'Error: ' + e.message, 'err');
+  }
+}
+
+async function saveAIConfig() {
+  try {
+    await api('/api/dev/config', 'PUT', { updates: {
+      ai_provider: document.getElementById('cfg-provider').value,
+      ai_model:    document.getElementById('cfg-model').value,
+      max_tokens:  document.getElementById('cfg-tokens').value,
+    }});
+    showAlert('cfgAlert', '✅ Configuración de IA guardada', 'ok');
+  } catch(e) { showAlert('cfgAlert', '❌ ' + e.message, 'err'); }
+}
+
+async function saveLearningConfig() {
+  try {
+    await api('/api/dev/config', 'PUT', { updates: {
+      auto_learning_enabled:        document.getElementById('cfg-autolearn').value,
+      auto_learning_interval_hours: document.getElementById('cfg-interval').value,
+      web_search_enabled:           document.getElementById('cfg-websearch').value,
+    }});
+    showAlert('cfgAlert', '✅ Configuración de aprendizaje guardada', 'ok');
+  } catch(e) { showAlert('cfgAlert', '❌ ' + e.message, 'err'); }
+}
+
+async function savePrompt() {
+  const prompt = document.getElementById('cfg-prompt').value.trim();
+  if (!prompt) return showAlert('cfgAlert', 'El prompt no puede estar vacío', 'err');
+  try {
+    await api('/api/dev/config/prompt', 'PUT', { prompt });
+    showAlert('cfgAlert', '✅ System prompt actualizado', 'ok');
+  } catch(e) { showAlert('cfgAlert', '❌ ' + e.message, 'err'); }
+}
+
+function resetPrompt() {
+  document.getElementById('cfg-prompt').value = 'Eres Cic_IA, un asistente inteligente en español. Responde de forma clara, útil y amigable.';
+}
+
+// ============ TEST CHAT ============
+
+const chatHistory = [];
+
+async function sendTestMsg() {
+  const msg = document.getElementById('testMsg').value.trim();
+  if (!msg) return;
+  document.getElementById('testMsg').value = '';
+
+  const box = document.getElementById('testChat');
+
+  // Agregar mensaje usuario
+  const userDiv = document.createElement('div');
+  userDiv.className = 'msg user';
+  userDiv.innerHTML = `<div class="bubble">${esc(msg)}</div>`;
+  box.appendChild(userDiv);
+
+  // Agregar burbuja de espera
+  const botDiv = document.createElement('div');
+  botDiv.className = 'msg bot';
+  botDiv.id = 'lastBot';
+  botDiv.innerHTML = `<div class="bubble" style="color:var(--text2)">⏳ Pensando...</div>`;
+  box.appendChild(botDiv);
+  box.scrollTop = box.scrollHeight;
+
+  const customPrompt = document.getElementById('test-prompt').value.trim();
+  const mode = document.getElementById('test-mode').value;
+
+  try {
+    let r;
+    if (customPrompt) {
+      r = await api('/api/dev/test-ai', 'POST', { message: msg, system_prompt: customPrompt });
+    } else {
+      r = await api('/api/chat', 'POST', { message: msg, mode, history: chatHistory });
+    }
+
+    chatHistory.push({ role: 'user', content: msg });
+    chatHistory.push({ role: 'assistant', content: r.response });
+    if (chatHistory.length > 20) chatHistory.splice(0, 2);
+
+    // Actualizar solo la burbuja del bot sin tocar el resto
+    const lastBot = document.getElementById('lastBot');
+    if (lastBot) {
+      lastBot.innerHTML = `<div class="bubble">${esc(r.response).replace(/\n/g,'<br>')}</div>`;
+      lastBot.removeAttribute('id'); // evitar duplicados
+    }
+    document.getElementById('testInfo').textContent =
+      `Provider: ${r.provider || '—'} | Model: ${r.model || '—'} | Tokens: ${r.tokens_used ?? r.tokens ?? 0}`;
+  } catch(e) {
+    const lastBot = document.getElementById('lastBot');
+    if (lastBot) {
+      lastBot.innerHTML = `<div class="bubble" style="color:var(--red)">Error: ${esc(e.message)}</div>`;
+      lastBot.removeAttribute('id');
+    }
+  }
+  box.scrollTop = box.scrollHeight;
+}
+
+function clearChat() {
+  chatHistory.length = 0;
+  document.getElementById('testChat').innerHTML = '<div style="text-align:center;color:var(--text2);font-size:0.85rem;padding:40px 0">Chat limpiado</div>';
+  document.getElementById('testInfo').textContent = '';
+}
+
+function loadAPIRef() {
+  document.getElementById('apiRef').textContent = `# Endpoints principales — requieren Authorization: Bearer <TOKEN>
+
+POST /api/chat              — Chat con la IA
+GET  /api/chat/history      — Historial del usuario
+GET  /api/user/stats        — Stats del usuario
+
+# Endpoints desarrollador — requieren cuenta dev
+
+GET  /api/dev/stats                    — Stats completas del sistema
+GET  /api/dev/knowledge                — Listar conocimiento manual
+POST /api/dev/knowledge                — Agregar conocimiento
+PUT  /api/dev/knowledge/:id            — Editar conocimiento
+DEL  /api/dev/knowledge/:id            — Desactivar conocimiento
+POST /api/dev/learn                    — Forzar aprendizaje (topic, content?)
+POST /api/dev/learn/bulk               — Aprendizaje masivo [{topic, content?}]
+GET  /api/dev/config                   — Ver configuración
+PUT  /api/dev/config                   — Actualizar config {updates: {key: val}}
+PUT  /api/dev/config/prompt            — Actualizar system prompt
+GET  /api/dev/memories                 — Listar memorias
+DEL  /api/dev/memories/:id             — Eliminar memoria
+POST /api/dev/memories/clear           — Limpiar memorias {source?, confirm: "CONFIRMAR"}
+POST /api/dev/test-ai                  — Test IA sin guardar {message, system_prompt?}
+GET  /api/dev/users                    — Listar usuarios
+POST /api/dev/users/:id/toggle-dev     — Dar/quitar rol dev`;
+}
+
+// ============ USERS ============
+
+async function loadUsers() {
+  try {
+    const d = await api('/api/dev/users');
+    document.getElementById('usersTable').innerHTML = d.users.map(u => `
+      <tr>
+        <td>${u.id}</td>
+        <td><strong>${esc(u.username)}</strong></td>
+        <td style="color:var(--text2);font-size:0.85rem">${esc(u.email)}</td>
+        <td>${u.is_developer ? '<span class="badge badge-red">Dev</span>' : '<span class="badge badge-green">Usuario</span>'}</td>
+        <td>${u.is_active ? '<span class="badge badge-green">Activo</span>' : '<span class="badge badge-red">Inactivo</span>'}</td>
+        <td>${u.conversations}</td>
+        <td style="font-size:0.8rem;color:var(--text2)">${new Date(u.created_at).toLocaleDateString()}</td>
+        <td>
+          <button class="btn btn-outline btn-sm" onclick="toggleDev(${u.id})" title="Cambiar rol dev">
+            ${u.is_developer ? '👤 Quitar dev' : '👨‍💻 Hacer dev'}
+          </button>
+        </td>
+      </tr>
+    `).join('');
+  } catch(e) {
+    document.getElementById('usersTable').innerHTML = `<tr><td colspan="8" style="color:var(--red)">Error: ${e.message}</td></tr>`;
+  }
+}
+
+async function toggleDev(id) {
+  try {
+    const r = await api(`/api/dev/users/${id}/toggle-dev`, 'POST');
+    loadUsers();
+  } catch(e) { alert(e.message); }
+}
+
+// ============ UTILS ============
+
+function esc(str) {
+  return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function renderPagination(containerId, totalPages, currentPage, loadFn) {
+  const el = document.getElementById(containerId);
+  if (totalPages <= 1) { el.innerHTML = ''; return; }
+  let html = '';
+  for (let i = 1; i <= totalPages; i++) {
+    html += `<button class="btn btn-sm ${i === currentPage ? 'btn-primary' : 'btn-outline'}" onclick="${loadFn.name}(${i})">${i}</button>`;
+  }
+  el.innerHTML = html;
+}
+
+// ============ INIT ============
+
+window.addEventListener('load', async () => {
+  if (TOKEN) {
+    try {
+      const r = await api('/api/auth/verify', 'GET');
+      if (r.success && r.user.is_developer) {
+        currentUser = r.user;
+        showPanel();
+        return;
+      }
+    } catch {}
+    TOKEN = ''; localStorage.removeItem('dev_token');
+  }
+});
+</script>
+</body>
+</html>
