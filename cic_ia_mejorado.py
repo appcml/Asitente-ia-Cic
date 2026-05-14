@@ -1842,6 +1842,35 @@ def dev_setup():
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
 
+# ========== HEALTH CHECK (Keep-Alive para plan gratuito) ==========
+
+@app.route('/health')
+def health_check():
+    """
+    Endpoint de salud — úsalo con UptimeRobot cada 5 minutos.
+    Mantiene el Web Service activo y la DB sin suspenderse en plan Free.
+    """
+    status = {
+        'status': 'ok',
+        'service': 'Cic_IA',
+        'version': '8.0',
+        'timestamp': datetime.utcnow().isoformat()
+    }
+    try:
+        db.session.execute(text('SELECT 1'))
+        status['db'] = 'connected'
+        return jsonify(status), 200
+    except Exception as e:
+        status['status'] = 'degraded'
+        status['db'] = 'error'
+        status['detail'] = str(e)
+        return jsonify(status), 503
+
+@app.route('/ping')
+def ping():
+    """Ping simple para keep-alive"""
+    return 'pong', 200
+
 # ========== MANEJO DE ERRORES ==========
 
 @app.errorhandler(404)
