@@ -363,14 +363,17 @@
           <h3 style="margin-bottom:16px;font-size:1rem">🤖 Proveedor de IA</h3>
           <div class="form-group">
             <label>Proveedor</label>
-            <select id="cfg-provider">
-              <option value="anthropic">Anthropic (Claude)</option>
-              <option value="openai">OpenAI (GPT)</option>
+            <select id="cfg-provider" onchange="updateModelSuggestion()">
+              <option value="auto">🤖 Automático (recomendado)</option>
+              <option value="groq">⚡ Groq (gratis y rápido)</option>
+              <option value="anthropic">🟣 Anthropic (Claude)</option>
+              <option value="openai">🟢 OpenAI (GPT)</option>
+              <option value="ollama">🖥️ Ollama (local)</option>
             </select>
           </div>
           <div class="form-group">
-            <label>Modelo</label>
-            <input type="text" id="cfg-model" placeholder="claude-haiku-4-5-20251001" />
+            <label>Modelo <span id="model-hint" style="color:var(--text2);font-size:0.8rem"></span></label>
+            <input type="text" id="cfg-model" placeholder="Se selecciona automáticamente" />
           </div>
           <div class="form-group">
             <label>Máximo de tokens por respuesta</label>
@@ -785,6 +788,25 @@ async function loadConfig() {
     document.getElementById('cfg-prompt').value     = v('system_prompt');
   } catch(e) {
     showAlert('cfgAlert', 'Error: ' + e.message, 'err');
+  }
+}
+
+function updateModelSuggestion() {
+  const provider = document.getElementById('cfg-provider').value;
+  const modelInput = document.getElementById('cfg-model');
+  const hint = document.getElementById('model-hint');
+  const models = {
+    auto:      { placeholder: 'Selección automática según disponibilidad', hint: '— usa el mejor proveedor disponible', default: '' },
+    groq:      { placeholder: 'llama-3.1-8b-instant', hint: '— gratis, muy rápido', default: 'llama-3.1-8b-instant' },
+    anthropic: { placeholder: 'claude-haiku-4-5-20251001', hint: '— requiere ANTHROPIC_API_KEY', default: 'claude-haiku-4-5-20251001' },
+    openai:    { placeholder: 'gpt-4o-mini', hint: '— requiere OPENAI_API_KEY', default: 'gpt-4o-mini' },
+    ollama:    { placeholder: 'llama3.2', hint: '— requiere OLLAMA_URL configurada', default: 'llama3.2' },
+  };
+  const m = models[provider] || models.auto;
+  modelInput.placeholder = m.placeholder;
+  if (hint) hint.textContent = m.hint;
+  if (!modelInput.value || Object.values(models).some(x => x.default === modelInput.value)) {
+    modelInput.value = m.default;
   }
 }
 
