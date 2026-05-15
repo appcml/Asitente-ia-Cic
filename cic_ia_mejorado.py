@@ -448,11 +448,24 @@ class LLMEngine:
         except Exception as e:
             return {'success': False, 'error': str(e)}
 
-    # ── GROQ (Llama 3 gratis — prioridad 1) ────────────────────────────────
+    # ── GROQ (Llama gratis — prioridad 1) ──────────────────────────────────
     def _call_groq(self, user_message: str, system: str,
                    history: list = None, max_tokens: int = 1000) -> dict:
         if not self.groq_key:
             return {'success': False, 'error': 'Sin GROQ_API_KEY'}
+
+        # Lista de modelos Groq en orden de preferencia (actualizados 2025)
+        # Si GROQ_MODEL está configurado, se intenta primero
+        groq_models = [
+            self.groq_model,                        # Variable de entorno o config
+            'llama-3.3-70b-versatile',              # Mejor calidad disponible
+            'llama3-8b-8192',                       # Rápido y estable
+            'gemma2-9b-it',                         # Alternativa Google
+            'mixtral-8x7b-32768',                   # Alternativa Mistral
+        ]
+        # Eliminar duplicados manteniendo orden
+        seen = set()
+        groq_models = [m for m in groq_models if m not in seen and not seen.add(m)]
 
         messages = [{'role': 'system', 'content': system}]
         if history:
@@ -460,31 +473,48 @@ class LLMEngine:
                 messages.append({'role': h['role'], 'content': h['content']})
         messages.append({'role': 'user', 'content': user_message})
 
-        resp = requests.post(
-            'https://api.groq.com/openai/v1/chat/completions',
-            headers={
-                'Authorization': f'Bearer {self.groq_key}',
-                'Content-Type':  'application/json'
-            },
-            json={
-                'model':       self.groq_model,
-                'messages':    messages,
-                'max_tokens':  max_tokens,
-                'temperature': 0.7
-            },
-            timeout=30
-        )
-        resp.raise_for_status()
-        data   = resp.json()
-        text   = data['choices'][0]['message']['content']
-        tokens = data.get('usage', {}).get('completion_tokens', 0)
-        return {
-            'success':  True,
-            'response': text,
-            'tokens':   tokens,
-            'provider': 'groq',
-            'model':    self.groq_model
-        }
+        last_error = 'Sin respuesta'
+        for model in groq_models:
+            try:
+                resp = requests.post(
+                    'https://api.groq.com/openai/v1/chat/completions',
+                    headers={
+                        'Authorization': f'Bearer {self.groq_key}',
+                        'Content-Type':  'application/json'
+                    },
+                    json={
+                        'model':       model,
+                        'messages':    messages,
+                        'max_tokens':  max_tokens,
+                        'temperature': 0.7
+                    },
+                    timeout=30
+                )
+                if resp.status_code == 200:
+                    data   = resp.json()
+                    text   = data['choices'][0]['message']['content']
+                    tokens = data.get('usage', {}).get('completion_tokens', 0)
+                    logger.info(f"✅ Groq OK con modelo: {model}")
+                    return {
+                        'success':  True,
+                        'response': text,
+                        'tokens':   tokens,
+                        'provider': 'groq',
+                        'model':    model
+                    }
+                else:
+                    err_data = resp.json() if resp.content else {}
+                    last_error = err_data.get('error', {}).get('message', f'HTTP {resp.status_code}')
+                    logger.warning(f"⚠️ Groq modelo {model} falló: {last_error}")
+                    # Si es error de autenticación, no intentar más modelos
+                    if resp.status_code in (401, 403):
+                        return {'success': False, 'error': f'Groq auth error: {last_error}'}
+            except Exception as e:
+                last_error = str(e)
+                logger.warning(f"⚠️ Groq modelo {model} excepción: {e}")
+                continue
+
+        return {'success': False, 'error': f'Todos los modelos Groq fallaron. Último error: {last_error}'}
 
     # ── OLLAMA (modelo local / Colab — prioridad 2) ─────────────────────────
     def _call_ollama(self, user_message: str, system: str,
@@ -581,8 +611,7 @@ class LLMEngine:
     def _fallback_response(self, user_message: str) -> dict:
         msg_lower = user_message.lower()
         if any(w in msg_lower for w in ['hola', 'buenas', 'hey', 'saludos']):
-            r = ("¡Hola! Soy Cic_IA. Actualmente no tengo ningún motor de IA conectado. "
-                 "El desarrollador debe configurar GROQ_API_KEY (gratis) u OLLAMA_URL.")
+            r = "¡Hola! Soy Cic_IA. En este momento estoy teniendo problemas para conectarme al motor de IA. Por favor intenta en unos minutos."
         elif any(w in msg_lower for w in ['qué hora', 'qué día', 'fecha', 'hoy']):
             now   = datetime.now()
             dias  = ['lunes','martes','miércoles','jueves','viernes','sábado','domingo']
@@ -590,9 +619,8 @@ class LLMEngine:
                      'septiembre','octubre','noviembre','diciembre']
             r = f"Hoy es {dias[now.weekday()]}, {now.day} de {meses[now.month-1]} de {now.year} — {now.strftime('%H:%M')}"
         else:
-            r = (f"Recibí: '{user_message[:80]}'. "
-                 "⚠️ Sin motor de IA activo. Configura GROQ_API_KEY o OLLAMA_URL en las variables de entorno.")
-        return {'success': False, 'response': r, 'provider': 'fallback', 'tokens': 0}
+            r = "Lo siento, en este momento no puedo procesar tu solicitud. El motor de IA no está disponible temporalmente. Por favor intenta de nuevo en unos minutos."
+        return {'success': False, 'response': r, 'provider': 'fallback', 'tokens': 0, 'model': 'none'}
 
 
 # ========== MOTOR DE BÚSQUEDA DE MEMORIAS (optimizado) ==========
@@ -1288,8 +1316,6 @@ def analyze_image(current_user):
         system   = get_config('system_prompt', 'Eres Cic_IA, un asistente inteligente en español.')
 
         # ── Groq Vision (gratis, prioridad 1) ──────────────────────────
-        # Modelo con visión actual de Groq (llama-3.2 fue deprecado)
-        GROQ_VISION_MODEL = 'meta-llama/llama-4-scout-17b-16e-instruct'
         if groq_key:
             try:
                 data_url = f"data:{mime_type};base64,{image_b64}"
@@ -1300,7 +1326,7 @@ def analyze_image(current_user):
                         'Content-Type':  'application/json'
                     },
                     json={
-                        'model':      GROQ_VISION_MODEL,
+                        'model':      'llama-3.2-11b-vision-preview',
                         'max_tokens': 1500,
                         'messages': [
                             {'role': 'system', 'content': system},
@@ -1323,7 +1349,7 @@ def analyze_image(current_user):
                     tokens=tokens,
                     sources=['groq_vision']
                 )
-                return jsonify({'success': True, 'response': result_text, 'provider': 'groq_vision', 'model': GROQ_VISION_MODEL, 'tokens': tokens})
+                return jsonify({'success': True, 'response': result_text, 'provider': 'groq_vision', 'model': 'llama-3.2-11b-vision-preview', 'tokens': tokens})
             except Exception as e:
                 logger.warning(f"Groq Vision falló: {e} — intentando Anthropic")
 
