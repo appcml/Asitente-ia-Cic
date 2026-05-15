@@ -1055,32 +1055,6 @@ cic_ia = CicIA()
 def index():
     return render_template('index.html')
 
-@app.route('/developer')
-def developer_panel():
-    """
-    Panel de desarrollador — protegido a nivel de servidor.
-    Sin token válido de dev → 404 silencioso (no revelar la existencia del panel).
-    """
-    token = request.args.get('token', '').strip()
-    if not token:
-        # Sin token: mostrar solo si no hay dev aún (setup inicial)
-        existing_dev = User.query.filter_by(is_developer=True).first()
-        if not existing_dev:
-            return render_template('developer.html')
-        return render_template('index.html'), 404
-
-    session = UserSession.query.filter_by(token=token).first()
-    if not session:
-        return render_template('index.html'), 404
-    if session.expires_at and session.expires_at < datetime.utcnow():
-        db.session.delete(session)
-        db.session.commit()
-        return render_template('index.html'), 404
-    user = User.query.get(session.user_id)
-    if not user or not user.is_developer or not user.is_active:
-        return render_template('index.html'), 404
-    return render_template('developer.html')
-
 @app.route('/health')
 def health():
     stats = cic_ia.get_stats()
@@ -1095,17 +1069,6 @@ def health():
 
 @app.route('/api/auth/register', methods=['POST'])
 def register():
-    """
-    Registro público — DESHABILITADO por defecto.
-    Para habilitar: variable de entorno ALLOW_PUBLIC_REGISTER=true en Render.
-    Los usuarios normales los crea el desarrollador desde el panel.
-    """
-    allow_public = os.environ.get('ALLOW_PUBLIC_REGISTER', 'false').lower() == 'true'
-    if not allow_public:
-        return jsonify({
-            'success': False,
-            'error': 'El registro está deshabilitado. Contacta al administrador para obtener acceso.'
-        }), 403
     try:
         data     = request.json or {}
         username = data.get('username', '').strip()
@@ -1116,13 +1079,13 @@ def register():
             return jsonify({'success': False, 'error': 'Usuario debe tener al menos 3 caracteres'}), 400
         if not password or len(password) < 6:
             return jsonify({'success': False, 'error': 'Contraseña debe tener al menos 6 caracteres'}), 400
+
         if User.query.filter_by(username=username).first():
             return jsonify({'success': False, 'error': 'Nombre de usuario ya existe'}), 409
         if email and User.query.filter_by(email=email).first():
             return jsonify({'success': False, 'error': 'Email ya registrado'}), 409
 
-        # CRÍTICO: registro público nunca crea desarrolladores
-        user = User(username=username, email=email or f"{username}@cic.local", is_developer=False)
+        user = User(username=username, email=email or f"{username}@cic.local")
         user.set_password(password)
         db.session.add(user)
         db.session.commit()
@@ -1135,7 +1098,7 @@ def register():
 
         return jsonify({
             'success': True, 'token': token,
-            'user': {'id': user.id, 'username': user.username, 'is_developer': False}
+            'user': {'id': user.id, 'username': user.username, 'is_developer': user.is_developer}
         })
     except Exception as e:
         db.session.rollback()
@@ -1325,6 +1288,8 @@ def analyze_image(current_user):
         system   = get_config('system_prompt', 'Eres Cic_IA, un asistente inteligente en español.')
 
         # ── Groq Vision (gratis, prioridad 1) ──────────────────────────
+        # Modelo con visión actual de Groq (llama-3.2 fue deprecado)
+        GROQ_VISION_MODEL = 'meta-llama/llama-4-scout-17b-16e-instruct'
         if groq_key:
             try:
                 data_url = f"data:{mime_type};base64,{image_b64}"
@@ -1335,7 +1300,7 @@ def analyze_image(current_user):
                         'Content-Type':  'application/json'
                     },
                     json={
-                        'model':      'llama-3.2-11b-vision-preview',
+                        'model':      GROQ_VISION_MODEL,
                         'max_tokens': 1500,
                         'messages': [
                             {'role': 'system', 'content': system},
@@ -1358,7 +1323,7 @@ def analyze_image(current_user):
                     tokens=tokens,
                     sources=['groq_vision']
                 )
-                return jsonify({'success': True, 'response': result_text, 'provider': 'groq_vision', 'model': 'llama-3.2-11b-vision-preview', 'tokens': tokens})
+                return jsonify({'success': True, 'response': result_text, 'provider': 'groq_vision', 'model': GROQ_VISION_MODEL, 'tokens': tokens})
             except Exception as e:
                 logger.warning(f"Groq Vision falló: {e} — intentando Anthropic")
 
@@ -1424,8 +1389,14 @@ def list_modules():
 # ==========================================
 # ========== PANEL DESARROLLADOR ==========
 # ==========================================
-# NOTA: La ruta /developer está definida arriba con protección de token.
-# Esta sección contiene únicamente los endpoints de API /api/dev/*
+
+@app.route('/developer')
+def developer_panel():
+    """Panel de desarrollador — renderiza template o retorna info básica"""
+    try:
+        return render_template('developer.html')
+    except Exception:
+        return jsonify({'message': 'Panel desarrollador activo. Usa la API /api/dev/*'})
 
 # --- Estadísticas detalladas ---
 
@@ -1796,78 +1767,6 @@ def dev_toggle_developer(uid):
     user.is_developer = not user.is_developer
     db.session.commit()
     return jsonify({'success': True, 'username': user.username, 'is_developer': user.is_developer})
-
-@app.route('/api/dev/users/create', methods=['POST'])
-@dev_required
-def dev_create_user():
-    """
-    El desarrollador crea usuarios normales desde el panel.
-    CRÍTICO: is_developer siempre False — nunca puede ser True aquí.
-    """
-    try:
-        data     = request.json or {}
-        username = data.get('username', '').strip()
-        email    = data.get('email', '').strip()
-        password = data.get('password', '')
-
-        if not username or len(username) < 3:
-            return jsonify({'success': False, 'error': 'Usuario debe tener al menos 3 caracteres'}), 400
-        if not password or len(password) < 6:
-            return jsonify({'success': False, 'error': 'Contraseña debe tener al menos 6 caracteres'}), 400
-        if User.query.filter_by(username=username).first():
-            return jsonify({'success': False, 'error': 'El nombre de usuario ya existe'}), 409
-        if email and User.query.filter_by(email=email).first():
-            return jsonify({'success': False, 'error': 'El email ya está registrado'}), 409
-
-        user = User(
-            username=username,
-            email=email or f"{username}@cic.local",
-            is_developer=False  # ← SIEMPRE False
-        )
-        user.set_password(password)
-        db.session.add(user)
-        db.session.commit()
-        logger.info(f"Usuario normal '{username}' creado por desarrollador")
-        return jsonify({'success': True, 'message': f'Usuario "{username}" creado', 'username': username, 'user_id': user.id})
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({'success': False, 'error': str(e)}), 500
-
-@app.route('/api/dev/users/<int:uid>/toggle-active', methods=['POST'])
-@dev_required
-def dev_toggle_active(uid):
-    """Activar o desactivar un usuario sin eliminarlo"""
-    user = User.query.get_or_404(uid)
-    token   = _get_token_from_request()
-    session = UserSession.query.filter_by(token=token).first()
-    if session and session.user_id == uid:
-        return jsonify({'error': 'No puedes desactivar tu propia cuenta'}), 400
-    user.is_active = not user.is_active
-    db.session.commit()
-    return jsonify({'success': True, 'username': user.username, 'is_active': user.is_active})
-
-@app.route('/api/dev/users/<int:uid>/reset-password', methods=['POST'])
-@dev_required
-def dev_reset_password(uid):
-    """Solo el dev puede resetear contraseñas de usuarios normales"""
-    user = User.query.get_or_404(uid)
-    if user.is_developer:
-        return jsonify({'error': 'No se puede resetear la contraseña de un desarrollador desde aquí'}), 403
-    data = request.json or {}
-    new_password = data.get('new_password', '')
-    if not new_password or len(new_password) < 6:
-        return jsonify({'error': 'Contraseña debe tener al menos 6 caracteres'}), 400
-    user.set_password(new_password)
-    UserSession.query.filter_by(user_id=uid).delete()
-    db.session.commit()
-    logger.info(f"Contraseña de '{user.username}' reseteada por dev")
-    return jsonify({'success': True, 'message': f'Contraseña de "{user.username}" actualizada'})
-
-@app.route('/api/dev/setup-status', methods=['GET'])
-def dev_setup_status():
-    """Indica si ya existe un dev. Solo devuelve un booleano — sin datos sensibles."""
-    has_dev = User.query.filter_by(is_developer=True, is_active=True).first() is not None
-    return jsonify({'has_developer': has_dev})
 
 # --- Test de IA ---
 
