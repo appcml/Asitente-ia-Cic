@@ -1424,14 +1424,8 @@ def list_modules():
 # ==========================================
 # ========== PANEL DESARROLLADOR ==========
 # ==========================================
-
-@app.route('/developer')
-def developer_panel():
-    """Panel de desarrollador — renderiza template o retorna info básica"""
-    try:
-        return render_template('developer.html')
-    except Exception:
-        return jsonify({'message': 'Panel desarrollador activo. Usa la API /api/dev/*'})
+# NOTA: La ruta /developer está definida arriba con protección de token.
+# Esta sección contiene únicamente los endpoints de API /api/dev/*
 
 # --- Estadísticas detalladas ---
 
