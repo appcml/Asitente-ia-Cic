@@ -39,7 +39,9 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(
 }
 .nav-item:hover,.nav-item.active{color:var(--text);background:rgba(108,99,255,.1);border-left-color:var(--accent);}
 .nav-item .icon{font-size:1rem;width:20px;text-align:center;flex-shrink:0;}
-.sidebar-foot{padding:12px 16px;border-top:1px solid #2d3561;}
+.sidebar-foot{padding:12px 16px;border-top:1px solid #2d3561;flex-shrink:0;}
+/* Asegurar que sidebar siempre muestre el footer */
+.sidebar{overflow:visible;}
 
 /* ── MAIN CONTENT ── */
 .main-wrap{flex:1;display:flex;overflow:hidden;}
@@ -302,15 +304,23 @@ tr:hover td{background:rgba(108,99,255,.04);}
       <div class="nav-item" onclick="showSection('users',this)"><span class="icon">👥</span><span>Usuarios</span></div>
     </nav>
     <div class="sidebar-foot">
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;padding:8px 10px;background:rgba(108,99,255,.08);border-radius:8px;border:1px solid #2d3561">
-        <span style="font-size:1.1rem">👤</span>
-        <div>
-          <div style="font-size:.82rem;color:var(--text);font-weight:600" id="sidebarUser">—</div>
-          <div style="font-size:.7rem;color:var(--accent)">🔴 Desarrollador</div>
+      <!-- Usuario actual -->
+      <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:rgba(108,99,255,.08);border-radius:8px;border:1px solid #2d3561;margin-bottom:8px;overflow:hidden">
+        <span style="font-size:1.1rem;flex-shrink:0">👤</span>
+        <div style="overflow:hidden">
+          <div style="font-size:.8rem;color:var(--text);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" id="sidebarUser">—</div>
+          <div style="font-size:.65rem;color:var(--accent)">🔴 Dev</div>
         </div>
       </div>
-      <button class="btn btn-red btn-sm" style="width:100%;display:flex;align-items:center;justify-content:center;gap:6px" onclick="doLogout()">
-        <span>🚪</span><span>Cerrar Sesión</span>
+      <!-- Botón cerrar sesión — siempre visible -->
+      <button onclick="doLogout()" style="
+        width:100%;display:flex;align-items:center;justify-content:center;gap:8px;
+        padding:9px 12px;background:rgba(255,107,107,.15);border:1px solid var(--red);
+        border-radius:8px;color:var(--red);font-size:.82rem;font-weight:600;
+        cursor:pointer;transition:all .2s;
+      " onmouseover="this.style.background='rgba(255,107,107,.3)'" onmouseout="this.style.background='rgba(255,107,107,.15)'">
+        <span style="font-size:1rem">🚪</span>
+        <span class="logout-label">Cerrar Sesión</span>
       </button>
     </div>
   </aside>
@@ -537,11 +547,9 @@ tr:hover td{background:rgba(108,99,255,.04);}
       <section id="sec-users" class="section">
         <h2>👥 Usuarios</h2><p class="subtitle">Gestión de usuarios del sistema</p>
 
-        <!-- Crear usuario normal -->
+        <!-- Formulario crear usuario normal -->
         <div class="panel" style="margin-bottom:20px">
-          <h3 style="margin-bottom:14px;font-size:.95rem;display:flex;align-items:center;gap:8px">
-            <span>➕</span> Crear usuario normal
-          </h3>
+          <h3 style="margin-bottom:14px;font-size:.95rem">➕ Crear usuario normal</h3>
           <div class="grid2">
             <div class="form-group">
               <label>Nombre de usuario *</label>
@@ -558,12 +566,12 @@ tr:hover td{background:rgba(108,99,255,.04);}
           </div>
           <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
             <button class="btn btn-primary" onclick="createNormalUser()">✅ Crear usuario</button>
-            <span style="font-size:.75rem;color:var(--text2)">⚠️ Estos usuarios solo acceden al chat — nunca son desarrolladores.</span>
+            <span style="font-size:.75rem;color:var(--text2)">⚠️ Estos usuarios solo acceden al chat. Nunca son desarrolladores.</span>
           </div>
           <div id="newUserAlert" style="margin-top:10px"></div>
         </div>
 
-        <!-- Lista -->
+        <!-- Lista de usuarios -->
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
           <h3 style="font-size:.9rem">Lista de usuarios</h3>
           <button class="btn btn-outline btn-sm" onclick="loadUsers()">🔄 Actualizar</button>
@@ -1350,7 +1358,6 @@ async function savePrompt(){
 function resetPrompt(){document.getElementById('cfg-prompt').value='Eres Cic_IA, un asistente inteligente en español. Responde de forma clara, útil y amigable.';}
 
 /* ══ USERS ══ */
-/* ══ USERS ══ */
 async function loadUsers(){
   try{
     const d=await req('/api/dev/users');
@@ -1363,11 +1370,9 @@ async function loadUsers(){
       <td style="font-size:.75rem;color:var(--text2)">${new Date(u.created_at).toLocaleDateString()}</td>
       <td style="display:flex;gap:5px;flex-wrap:wrap">
         ${!u.is_developer?`
-          <button class="btn btn-outline btn-sm" onclick="toggleActive(${u.id})" title="${u.is_active?'Desactivar':'Activar'} usuario">
-            ${u.is_active?'🔒 Desactivar':'✅ Activar'}
-          </button>
+          <button class="btn btn-outline btn-sm" onclick="toggleActive(${u.id})">${u.is_active?'🔒 Desactivar':'✅ Activar'}</button>
           <button class="btn btn-sm" style="background:#2d3561;color:var(--text)" onclick="resetUserPass(${u.id},'${esc(u.username)}')">🔑 Resetear</button>
-        `:`<span style="font-size:.75rem;color:var(--text2)">Cuenta protegida</span>`}
+        `:'<span style="font-size:.72rem;color:var(--text2)">Protegido</span>'}
       </td>
     </tr>`).join('');
   }catch(e){
@@ -1380,7 +1385,7 @@ async function createNormalUser(){
   const email=document.getElementById('new-user-email').value.trim();
   const password=document.getElementById('new-user-pass').value;
   if(!username)return showAlert('newUserAlert','El nombre de usuario es requerido','err');
-  if(!password||password.length<6)return showAlert('newUserAlert','La contraseña debe tener al menos 6 caracteres','err');
+  if(!password||password.length<6)return showAlert('newUserAlert','Contraseña mínimo 6 caracteres','err');
   try{
     showAlert('newUserAlert','⏳ Creando usuario...','info');
     const r=await req('/api/dev/users/create','POST',{username,email,password});
@@ -1401,10 +1406,10 @@ async function toggleActive(id){
 async function resetUserPass(id,username){
   const newPass=prompt(`Nueva contraseña para "${username}" (mín. 6 caracteres):`);
   if(newPass===null)return;
-  if(!newPass||newPass.length<6)return alert('La contraseña debe tener al menos 6 caracteres');
+  if(!newPass||newPass.length<6)return alert('Mínimo 6 caracteres');
   try{
     await req(`/api/dev/users/${id}/reset-password`,'POST',{new_password:newPass});
-    alert(`✅ Contraseña de "${username}" actualizada correctamente`);
+    alert(`✅ Contraseña de "${username}" actualizada`);
   }catch(e){alert('Error: '+e.message);}
 }
 
