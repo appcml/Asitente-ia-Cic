@@ -130,23 +130,60 @@
 <body>
 
 <!-- =========================================== -->
-<!-- LOGIN                                        -->
+<!-- LOGIN / REGISTRO USUARIO NORMAL             -->
 <!-- =========================================== -->
 <div id="loginScreen" class="login-screen">
   <div class="login-box">
     <h1>🤖 Cic_IA</h1>
-    <p>Panel de Desarrollador v8.0</p>
+    <p id="loginSubtitle">Asistente Inteligente</p>
+
+    <!-- Tabs: Iniciar Sesión / Crear Cuenta -->
+    <div class="tabs">
+      <div class="tab active" id="tabLogin" onclick="switchTab('login')">Iniciar Sesión</div>
+      <div class="tab" id="tabRegister" onclick="switchTab('register')">Crear Cuenta</div>
+    </div>
+
     <div id="loginAlert"></div>
-    <div class="form-group">
-      <label>Usuario</label>
-      <input type="text" id="loginUser" placeholder="tu_usuario" />
+
+    <!-- Formulario Login -->
+    <div id="formLogin">
+      <div class="form-group">
+        <label>Usuario</label>
+        <input type="text" id="loginUser" placeholder="tu_usuario" autocomplete="username"/>
+      </div>
+      <div class="form-group">
+        <label>Contraseña</label>
+        <input type="password" id="loginPass" placeholder="••••••••" autocomplete="current-password"
+               onkeydown="if(event.key==='Enter') doLogin()"/>
+      </div>
+      <button class="btn btn-primary" style="width:100%" onclick="doLogin()">Iniciar Sesión</button>
     </div>
-    <div class="form-group">
-      <label>Contraseña</label>
-      <input type="password" id="loginPass" placeholder="••••••••" onkeydown="if(event.key==='Enter') doLogin()" />
+
+    <!-- Formulario Registro -->
+    <div id="formRegister" style="display:none">
+      <div id="registerNotice" class="alert alert-info" style="margin-bottom:12px;display:none">
+        El registro está deshabilitado. Contacta al administrador para obtener acceso.
+      </div>
+      <div id="registerForm">
+        <div class="form-group">
+          <label>Nombre de usuario *</label>
+          <input type="text" id="regUser" placeholder="usuario123" autocomplete="username"/>
+        </div>
+        <div class="form-group">
+          <label>Email (opcional)</label>
+          <input type="email" id="regEmail" placeholder="correo@ejemplo.com" autocomplete="email"/>
+        </div>
+        <div class="form-group">
+          <label>Contraseña * (mín. 6 caracteres)</label>
+          <input type="password" id="regPass" placeholder="••••••••" autocomplete="new-password"
+                 onkeydown="if(event.key==='Enter') doRegister()"/>
+        </div>
+        <button class="btn btn-primary" style="width:100%" onclick="doRegister()">Crear Cuenta</button>
+      </div>
     </div>
-    <button class="btn btn-primary" style="width:100%" onclick="doLogin()">Iniciar Sesión</button>
-    <div style="text-align:center;margin-top:16px;font-size:0.8rem;color:var(--text2)">
+
+    <!-- Setup inicial del desarrollador (solo si no hay dev aún) -->
+    <div id="setupLinkWrap" style="text-align:center;margin-top:14px;font-size:0.78rem;color:var(--text2);display:none">
       ¿Primer uso? <a href="#" onclick="showSetup()" style="color:var(--accent)">Configurar acceso inicial</a>
     </div>
   </div>
@@ -363,17 +400,14 @@
           <h3 style="margin-bottom:16px;font-size:1rem">🤖 Proveedor de IA</h3>
           <div class="form-group">
             <label>Proveedor</label>
-            <select id="cfg-provider" onchange="updateModelSuggestion()">
-              <option value="auto">🤖 Automático (recomendado)</option>
-              <option value="groq">⚡ Groq (gratis y rápido)</option>
-              <option value="anthropic">🟣 Anthropic (Claude)</option>
-              <option value="openai">🟢 OpenAI (GPT)</option>
-              <option value="ollama">🖥️ Ollama (local)</option>
+            <select id="cfg-provider">
+              <option value="anthropic">Anthropic (Claude)</option>
+              <option value="openai">OpenAI (GPT)</option>
             </select>
           </div>
           <div class="form-group">
-            <label>Modelo <span id="model-hint" style="color:var(--text2);font-size:0.8rem"></span></label>
-            <input type="text" id="cfg-model" placeholder="Se selecciona automáticamente" />
+            <label>Modelo</label>
+            <input type="text" id="cfg-model" placeholder="claude-haiku-4-5-20251001" />
           </div>
           <div class="form-group">
             <label>Máximo de tokens por respuesta</label>
@@ -468,11 +502,37 @@
 
 <script>
 const API = '';
-let TOKEN = localStorage.getItem('dev_token') || '';
+let TOKEN = localStorage.getItem('cic_token') || '';
 let currentUser = null;
 let currentPage = { memories: 1, knowledge: 1 };
 
 // ============ AUTH ============
+
+function switchTab(tab) {
+  const isLogin = tab === 'login';
+  document.getElementById('formLogin').style.display    = isLogin ? 'block' : 'none';
+  document.getElementById('formRegister').style.display = isLogin ? 'none' : 'block';
+  document.getElementById('tabLogin').classList.toggle('active', isLogin);
+  document.getElementById('tabRegister').classList.toggle('active', !isLogin);
+  showAlert('loginAlert', '', '');
+
+  // Al abrir registro, verificar si está habilitado
+  if (!isLogin) checkRegisterStatus();
+}
+
+async function checkRegisterStatus() {
+  try {
+    const r = await fetch('/api/auth/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: '', password: '' })
+    });
+    const d = await r.json();
+    const disabled = r.status === 403 && d.error?.includes('deshabilitado');
+    document.getElementById('registerNotice').style.display = disabled ? 'block' : 'none';
+    document.getElementById('registerForm').style.display   = disabled ? 'none' : 'block';
+  } catch {}
+}
 
 async function doLogin() {
   const user = document.getElementById('loginUser').value.trim();
@@ -485,24 +545,51 @@ async function doLogin() {
     if (r.success) {
       TOKEN = r.token;
       currentUser = r.user;
-      localStorage.setItem('dev_token', TOKEN);
-      if (!r.user.is_developer) {
-        showAlert('loginAlert', 'Esta cuenta no tiene privilegios de desarrollador', 'err');
-        TOKEN = ''; localStorage.removeItem('dev_token');
+      localStorage.setItem('cic_token', TOKEN);
+
+      if (r.user.is_developer) {
+        // Desarrollador → redirigir al panel dev con token en URL
+        window.location.href = `/developer?token=${TOKEN}`;
         return;
       }
+      // Usuario normal → mostrar panel de chat
       showPanel();
     } else {
-      showAlert('loginAlert', r.error || 'Error de login', 'err');
+      showAlert('loginAlert', r.error || 'Credenciales inválidas', 'err');
     }
   } catch(e) {
     showAlert('loginAlert', 'Error de conexión: ' + e.message, 'err');
   }
 }
 
+async function doRegister() {
+  const username = document.getElementById('regUser').value.trim();
+  const email    = document.getElementById('regEmail').value.trim();
+  const password = document.getElementById('regPass').value;
+  showAlert('loginAlert', '', '');
+
+  if (!username) return showAlert('loginAlert', 'El nombre de usuario es requerido', 'err');
+  if (!password || password.length < 6) return showAlert('loginAlert', 'La contraseña debe tener al menos 6 caracteres', 'err');
+
+  try {
+    showAlert('loginAlert', '⏳ Creando cuenta...', 'info');
+    const r = await api('/api/auth/register', 'POST', { username, email, password }, false);
+    if (r.success) {
+      TOKEN = r.token;
+      currentUser = r.user;
+      localStorage.setItem('cic_token', TOKEN);
+      showPanel();
+    } else {
+      showAlert('loginAlert', r.error || 'Error al registrarse', 'err');
+    }
+  } catch(e) {
+    showAlert('loginAlert', e.message, 'err');
+  }
+}
+
 async function doLogout() {
   try { await api('/api/auth/logout', 'POST'); } catch {}
-  TOKEN = ''; localStorage.removeItem('dev_token');
+  TOKEN = ''; localStorage.removeItem('cic_token');
   location.reload();
 }
 
@@ -538,7 +625,12 @@ function showPanel() {
   document.getElementById('loginScreen').style.display = 'none';
   document.getElementById('panel').style.display = 'flex';
   document.getElementById('sidebarUser').textContent = currentUser?.username || '—';
-  loadDashboard();
+  // Para usuarios normales, mostrar solo sección de chat
+  if (!currentUser?.is_developer) {
+    showSection('chat');
+  } else {
+    loadDashboard();
+  }
 }
 
 function showSection(name) {
@@ -587,9 +679,9 @@ async function loadDashboard() {
     document.getElementById('d-kb').textContent       = d.system.manual_knowledge.toLocaleString();
     document.getElementById('d-today').textContent    = d.today.conversations;
 
-    const hasKey = d.ai_config.has_anthropic || d.ai_config.has_openai || d.ai_config.has_groq;
+    const hasKey = d.ai_config.has_anthropic || d.ai_config.has_openai;
     document.getElementById('d-ai').innerHTML = `<span class="dot ${hasKey ? 'dot-green' : 'dot-red'}"></span>${d.ai_config.provider}`;
-    if (!hasKey) showAlert('dashAlert', '⚠️ No hay API Key configurada. Configura GROQ_API_KEY, ANTHROPIC_API_KEY o OPENAI_API_KEY como variable de entorno.', 'warn');
+    if (!hasKey) showAlert('dashAlert', '⚠️ No hay API Key configurada. La IA usará modo fallback. Configura ANTHROPIC_API_KEY o OPENAI_API_KEY como variable de entorno.', 'warn');
 
     // Recent conversations
     const rc = document.getElementById('recentConvs');
@@ -791,25 +883,6 @@ async function loadConfig() {
   }
 }
 
-function updateModelSuggestion() {
-  const provider = document.getElementById('cfg-provider').value;
-  const modelInput = document.getElementById('cfg-model');
-  const hint = document.getElementById('model-hint');
-  const models = {
-    auto:      { placeholder: 'Selección automática según disponibilidad', hint: '— usa el mejor proveedor disponible', default: '' },
-    groq:      { placeholder: 'llama-3.1-8b-instant', hint: '— gratis, muy rápido', default: 'llama-3.1-8b-instant' },
-    anthropic: { placeholder: 'claude-haiku-4-5-20251001', hint: '— requiere ANTHROPIC_API_KEY', default: 'claude-haiku-4-5-20251001' },
-    openai:    { placeholder: 'gpt-4o-mini', hint: '— requiere OPENAI_API_KEY', default: 'gpt-4o-mini' },
-    ollama:    { placeholder: 'llama3.2', hint: '— requiere OLLAMA_URL configurada', default: 'llama3.2' },
-  };
-  const m = models[provider] || models.auto;
-  modelInput.placeholder = m.placeholder;
-  if (hint) hint.textContent = m.hint;
-  if (!modelInput.value || Object.values(models).some(x => x.default === modelInput.value)) {
-    modelInput.value = m.default;
-  }
-}
-
 async function saveAIConfig() {
   try {
     await api('/api/dev/config', 'PUT', { updates: {
@@ -850,35 +923,23 @@ function resetPrompt() {
 const chatHistory = [];
 
 async function sendTestMsg() {
-  const input = document.getElementById('testMsg');
-  const msg = input.value.trim();
+  const msg = document.getElementById('testMsg').value.trim();
   if (!msg) return;
-  input.value = '';
-  input.focus();
+  document.getElementById('testMsg').value = '';
 
   const box = document.getElementById('testChat');
-
-  // Limpiar placeholder inicial
-  if (box.querySelector('[data-placeholder]')) box.innerHTML = '';
-
-  // Agregar mensaje usuario
-  const userDiv = document.createElement('div');
-  userDiv.className = 'msg user';
-  userDiv.innerHTML = `<div class="bubble">${esc(msg)}</div>`;
-  box.appendChild(userDiv);
-
-  // Agregar burbuja de espera
-  const botDiv = document.createElement('div');
-  botDiv.className = 'msg bot';
-  botDiv.id = 'lastBot';
-  botDiv.innerHTML = `<div class="bubble" style="color:var(--text2)">⏳ Pensando...</div>`;
-  box.appendChild(botDiv);
+  box.innerHTML += `<div class="msg user"><div class="bubble">${esc(msg)}</div></div>`;
+  box.innerHTML += `<div class="msg bot" id="lastBot"><div class="bubble" style="color:var(--text2)">⏳ Pensando...</div></div>`;
   box.scrollTop = box.scrollHeight;
 
   const customPrompt = document.getElementById('test-prompt').value.trim();
   const mode = document.getElementById('test-mode').value;
 
   try {
+    let payload = { message: msg };
+    if (customPrompt) payload.system_prompt = customPrompt;
+
+    // Usar endpoint de test si hay prompt personalizado, sino chat normal
     let r;
     if (customPrompt) {
       r = await api('/api/dev/test-ai', 'POST', { message: msg, system_prompt: customPrompt });
@@ -888,22 +949,15 @@ async function sendTestMsg() {
 
     chatHistory.push({ role: 'user', content: msg });
     chatHistory.push({ role: 'assistant', content: r.response });
-    if (chatHistory.length > 40) chatHistory.splice(0, 2); // mantener 20 turnos
+    if (chatHistory.length > 20) chatHistory.splice(0, 2);
 
-    // Actualizar burbuja del bot SIN tocar el resto del historial
-    const lastBot = document.getElementById('lastBot');
-    if (lastBot) {
-      lastBot.innerHTML = `<div class="bubble">${esc(r.response).replace(/\n/g,'<br>')}</div>`;
-      lastBot.removeAttribute('id');
-    }
+    document.getElementById('lastBot').innerHTML =
+      `<div class="bubble">${esc(r.response).replace(/\n/g,'<br>')}</div>`;
     document.getElementById('testInfo').textContent =
-      `Provider: ${r.provider || '—'} | Model: ${r.model || '—'} | Tokens: ${r.tokens_used ?? r.tokens ?? 0} | Turno ${Math.ceil(chatHistory.length / 2)}`;
+      `Provider: ${r.provider || '—'} | Model: ${r.model || '—'} | Tokens: ${r.tokens_used ?? r.tokens ?? 0}`;
   } catch(e) {
-    const lastBot = document.getElementById('lastBot');
-    if (lastBot) {
-      lastBot.innerHTML = `<div class="bubble" style="color:var(--red)">❌ Error: ${esc(e.message)}</div>`;
-      lastBot.removeAttribute('id');
-    }
+    document.getElementById('lastBot').innerHTML =
+      `<div class="bubble" style="color:var(--red)">Error: ${esc(e.message)}</div>`;
   }
   box.scrollTop = box.scrollHeight;
 }
@@ -993,16 +1047,30 @@ function renderPagination(containerId, totalPages, currentPage, loadFn) {
 // ============ INIT ============
 
 window.addEventListener('load', async () => {
+  // Verificar si hay dev configurado — mostrar/ocultar link de setup
+  try {
+    const s = await fetch('/api/dev/setup-status');
+    if (s.ok) {
+      const sData = await s.json();
+      document.getElementById('setupLinkWrap').style.display = sData.has_developer ? 'none' : 'block';
+    }
+  } catch {}
+
   if (TOKEN) {
     try {
       const r = await api('/api/auth/verify', 'GET');
-      if (r.success && r.user.is_developer) {
+      if (r.success) {
         currentUser = r.user;
+        if (r.user.is_developer) {
+          // Dev autenticado en index → redirigir al panel dev
+          window.location.href = `/developer?token=${TOKEN}`;
+          return;
+        }
         showPanel();
         return;
       }
     } catch {}
-    TOKEN = ''; localStorage.removeItem('dev_token');
+    TOKEN = ''; localStorage.removeItem('cic_token');
   }
 });
 </script>
