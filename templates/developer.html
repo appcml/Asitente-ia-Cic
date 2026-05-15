@@ -584,7 +584,7 @@ tr:hover td{background:rgba(108,99,255,.04);}
 
 <script>
 const API='';
-let TOKEN=localStorage.getItem('dev_token')||'';
+let TOKEN=localStorage.getItem('cic_token')||'';
 let currentUser=null;
 const chatHistory=[];
 let allHistory=[];
@@ -601,7 +601,7 @@ async function doLogin(){
     const r=await req('/api/auth/login','POST',{username:user,password:pass},false);
     if(r.success){
       if(!r.user.is_developer)return showAlert('loginAlert','Sin privilegios de desarrollador','err');
-      TOKEN=r.token;currentUser=r.user;localStorage.setItem('dev_token',TOKEN);
+      TOKEN=r.token;currentUser=r.user;localStorage.setItem('cic_token',TOKEN);
       document.getElementById('loginScreen').style.display='none';
       document.getElementById('mainApp').style.display='flex';
       document.getElementById('sidebarUser').textContent=r.user.username;
@@ -611,7 +611,10 @@ async function doLogin(){
 }
 async function doLogout(){
   try{await req('/api/auth/logout','POST');}catch{}
-  TOKEN='';localStorage.removeItem('dev_token');location.reload();
+  TOKEN='';
+  localStorage.removeItem('cic_token');
+  // Redirigir a la pantalla principal de usuarios normales
+  window.location.href='/';
 }
 function showSetup(){document.getElementById('setupModal').style.display='flex';}
 function hideSetup(){document.getElementById('setupModal').style.display='none';}
@@ -1439,7 +1442,10 @@ window.addEventListener('load',async()=>{
         loadDashboard();return;
       }
     }catch{}
-    TOKEN='';localStorage.removeItem('dev_token');
+    // Token inválido o no es dev — limpiar y redirigir a inicio
+    TOKEN='';
+    localStorage.removeItem('cic_token');
+    window.location.href='/';
   }
 });
 </script>
