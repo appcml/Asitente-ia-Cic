@@ -448,17 +448,17 @@ class LLMEngine:
         except Exception as e:
             return {'success': False, 'error': str(e)}
 
-    # ── GROQ (prioridad 1) ──────────────────────────────────────────────────
+    # ── GROQ (prioridad 1 — fallback automático entre modelos) ─────────────
     def _call_groq(self, user_message: str, system: str,
                    history: list = None, max_tokens: int = 8000) -> dict:
         if not self.groq_key:
             return {'success': False, 'error': 'Sin GROQ_API_KEY'}
 
-        # Modelos en orden de preferencia (2025) — fallback automático
+        # Fallback automático: si un modelo falla, prueba el siguiente
         groq_models = [
             self.groq_model,            # Configurado en entorno/BD
-            'llama-3.3-70b-versatile',  # 128k contexto, 32k output — ideal para código
-            'llama3-8b-8192',           # Rápido, contexto 8k
+            'llama-3.3-70b-versatile',  # 128k contexto, 32k output
+            'llama3-8b-8192',           # Rápido, 8k contexto
             'gemma2-9b-it',             # Alternativa Google
             'mixtral-8x7b-32768',       # 32k contexto
         ]
@@ -478,7 +478,7 @@ class LLMEngine:
                     'https://api.groq.com/openai/v1/chat/completions',
                     headers={'Authorization': f'Bearer {self.groq_key}', 'Content-Type': 'application/json'},
                     json={'model': model, 'messages': messages, 'max_tokens': max_tokens, 'temperature': 0.7},
-                    timeout=120  # 2 minutos — código largo puede tardar
+                    timeout=120
                 )
                 if resp.status_code == 200:
                     data   = resp.json()
@@ -489,12 +489,10 @@ class LLMEngine:
 
                 err_data   = resp.json() if resp.content else {}
                 last_error = err_data.get('error', {}).get('message', f'HTTP {resp.status_code}')
-                logger.warning(f"⚠️ Groq {model} falló ({resp.status_code}): {last_error}")
-
+                logger.warning(f"⚠️ Groq {model} ({resp.status_code}): {last_error}")
                 if resp.status_code in (401, 403):
-                    return {'success': False, 'error': f'Groq auth: {last_error}'}
-
-                # Error de contexto → reintentar solo con el mensaje actual
+                    return {'success': False, 'error': f'Auth: {last_error}'}
+                # Overflow de contexto → reintentar solo con mensaje actual
                 if resp.status_code == 400 and ('context' in last_error.lower() or 'length' in last_error.lower()):
                     resp2 = requests.post(
                         'https://api.groq.com/openai/v1/chat/completions',
@@ -512,7 +510,7 @@ class LLMEngine:
                 logger.warning(f"⚠️ Groq {model} excepción: {e}")
                 continue
 
-        return {'success': False, 'error': f'Todos los modelos Groq fallaron. Último: {last_error}'}
+        return {'success': False, 'error': f'Todos los modelos Groq fallaron: {last_error}'}
 
     # ── OLLAMA (modelo local / Colab — prioridad 2) ─────────────────────────
     def _call_ollama(self, user_message: str, system: str,
@@ -605,7 +603,7 @@ class LLMEngine:
         tokens = data.get('usage', {}).get('completion_tokens', 0)
         return {'success': True, 'response': text, 'tokens': tokens, 'provider': 'openai', 'model': model}
 
-    # ── FALLBACK (sin motor de IA disponible) ──────────────────────────────
+    # ── FALLBACK ────────────────────────────────────────────────────────────
     def _fallback_response(self, user_message: str) -> dict:
         msg_lower = user_message.lower()
         if any(w in msg_lower for w in ['hola', 'buenas', 'hey', 'saludos']):
@@ -872,11 +870,12 @@ class CicIA:
     def _build_reasoning_prompt(self, user_message: str, memories: list,
                                  manual_knowledge: list, user_history: list) -> str:
         """
-        Construye un system prompt enriquecido con:
-        - Instrucciones de razonamiento paso a paso (Chain of Thought)
-        - Conocimiento manual del desarrollador
-        - Memorias aprendidas relevantes
-        - Resumen del perfil del usuario basado en su historial
+        Sistema de razonamiento avanzado con:
+        - Detección automática del tipo de tarea
+        - Chain-of-Thought estructurado por dominio
+        - Verificación interna antes de responder
+        - Manejo de restricciones exactas
+        - Teoría de mente y perspectivas múltiples
         """
         base_prompt = get_config(
             'system_prompt',
@@ -885,19 +884,69 @@ class CicIA:
 
         parts = [base_prompt, ""]
 
-        # ── Chain of Thought: razonamiento paso a paso ──────────────────
-        parts.append("""=== INSTRUCCIONES DE RAZONAMIENTO ===
-Antes de responder, analiza internamente:
-1. ¿Qué está pidiendo exactamente el usuario?
-2. ¿Tengo información relevante en mi conocimiento?
-3. ¿El historial de conversación da contexto adicional?
-4. ¿Cuál es la respuesta más útil y precisa?
-Luego responde directamente sin mostrar este proceso al usuario.""")
+        # ── Sistema de razonamiento avanzado ────────────────────────────
+        parts.append("""=== SISTEMA DE RAZONAMIENTO AVANZADO ===
+
+PASO 1 — CLASIFICAR LA TAREA (hazlo internamente):
+Determina el tipo:
+  [RESTRICCION] → hay reglas exactas (N palabras, sin letra X, formato específico)
+  [MATEMATICA]  → cálculos, proporcionalidad, lógica formal, probabilidades
+  [CODIGO]      → programación, debugging, arquitectura de software
+  [CIENCIA]     → física, química, biología, conceptos técnicos
+  [SOCIAL]      → perspectivas múltiples, teoría de mente, inferencia social
+  [CREATIVO]    → escritura, ideas, síntesis conceptual
+  [GENERAL]     → conversación, información, ayuda general
+
+PASO 2 — APLICAR EL PROTOCOLO DEL TIPO:
+
+Si [RESTRICCION]:
+  → Lee CADA restricción. Enuméralas.
+  → Genera respuesta candidata.
+  → VERIFICA cada restricción una por una antes de responder.
+  → Si falla alguna, regenera internamente. NUNCA ignores una restricción.
+  → Ejemplo: "exactamente 7 palabras" → cuenta en silencio: 1,2,3,4,5,6,7 ✓
+
+Si [MATEMATICA] o [LOGICA]:
+  → Descompón en pasos numerados explícitos.
+  → Trabaja con variables concretas, no lenguaje vago.
+  → Verifica la respuesta con un caso de prueba simple.
+  → Ejemplo "100 máquinas × 5min/objeto = 5 min total (paralelo, no secuencial)"
+
+Si [CODIGO]:
+  → Entiende el objetivo completo antes de escribir una línea.
+  → Escribe código completo y funcional, no fragmentos.
+  → Incluye manejo de errores y casos edge.
+  → Agrega comentarios en partes no obvias.
+  → Verifica mentalmente la lógica antes de presentar.
+
+Si [CIENCIA]:
+  → Distingue entre intuición textual y modelado real.
+  → Usa conceptos precisos, no aproximaciones vagas.
+  → Cuando hay ecuaciones relevantes, inclúyelas.
+  → Reconoce los límites de tu conocimiento honestamente.
+
+Si [SOCIAL] / teoría de mente:
+  → Mapea EXPLÍCITAMENTE qué sabe cada persona involucrada.
+  → Formato: "A sabe X. B sabe Y. A cree que B sabe Z."
+  → Razona desde cada perspectiva por separado.
+  → La respuesta final debe reflejar la perspectiva correcta según la pregunta.
+
+PASO 3 — VERIFICACIÓN INTERNA (siempre, antes de responder):
+  □ ¿Respondí exactamente lo que se preguntó?
+  □ ¿Cumplí todas las restricciones mencionadas?
+  □ ¿Mi respuesta es verificable o tiene lógica interna consistente?
+  □ ¿Estoy siendo honesto sobre lo que no sé?
+
+PASO 4 — RESPONDER
+  → Responde directamente. No muestres el proceso de razonamiento al usuario
+     a menos que explícitamente te lo pidan.
+  → Si la tarea es muy compleja, muestra el razonamiento paso a paso (esto ayuda).
+  → Sé preciso, completo y honesto.""")
         parts.append("")
 
         # ── Conocimiento manual (mayor prioridad) ───────────────────────
         if manual_knowledge:
-            parts.append("=== CONOCIMIENTO BASE (usa esto como fuente prioritaria) ===")
+            parts.append("=== CONOCIMIENTO BASE (fuente prioritaria) ===")
             for mk in manual_knowledge[:5]:
                 parts.append(f"[{mk.category or 'General'}] {mk.title}:\n{mk.content[:600]}")
             parts.append("")
@@ -912,14 +961,13 @@ Luego responde directamente sin mostrar este proceso al usuario.""")
         # ── Perfil del usuario basado en historial ──────────────────────
         if user_history and len(user_history) >= 4:
             parts.append("=== CONTEXTO DEL USUARIO ===")
-            parts.append("Has conversado antes con este usuario. Aquí hay contexto de conversaciones anteriores:")
-            # Resumir últimas 3 interacciones
+            parts.append("Historial reciente de esta conversación:")
             for i in range(0, min(6, len(user_history)), 2):
                 if i+1 < len(user_history):
-                    u = user_history[i]['content'][:100]
-                    a = user_history[i+1]['content'][:100]
-                    parts.append(f"- Usuario preguntó: '{u}...' → Respondiste: '{a}...'")
-            parts.append("Usa este contexto para dar respuestas más personalizadas y coherentes.")
+                    u = user_history[i]['content'][:120]
+                    a = user_history[i+1]['content'][:120]
+                    parts.append(f"- Usuario: '{u}' → Tú: '{a}'")
+            parts.append("Mantén coherencia con el contexto anterior.")
             parts.append("")
 
         return "\n".join(parts)
@@ -939,23 +987,22 @@ Luego responde directamente sin mostrar este proceso al usuario.""")
         if len(user_message) > 100000:
             user_message = user_message[:100000]
 
-        # ── Capa 1: Recuperar historial persistente de la BD ────────────
+        # ── Capa 1: Recuperar historial ──────────────────────────────────
         db_history = self._get_user_conversation_history(user_id, limit=8)
 
-        # ── Gestión inteligente de contexto ─────────────────────────────
-        # llama-3.3-70b tiene 128k de contexto — podemos ser más generosos
-        CHAR_LIMIT_MSG     = 40000  # Código largo bienvenido
-        CHAR_LIMIT_HISTORY = 12000  # Historial amplio
+        # ── Gestión de contexto (llama-3.3-70b: 128k ctx) ───────────────
+        CHAR_LIMIT_MSG     = 40000
+        CHAR_LIMIT_HISTORY = 12000
 
         if len(user_message) > CHAR_LIMIT_MSG:
-            user_message = user_message[:CHAR_LIMIT_MSG] + "\n[... texto truncado ...]"
+            user_message = user_message[:CHAR_LIMIT_MSG] + "\n[... truncado ...]"
 
         if conversation_history:
-            raw = conversation_history[-16:]  # hasta 8 intercambios
+            raw = conversation_history[-16:]
             combined_history = []
             total = 0
             for msg in reversed(raw):
-                content = str(msg.get('content', ''))[:1500]  # más chars por mensaje
+                content = str(msg.get('content', ''))[:1500]
                 total += len(content)
                 if total > CHAR_LIMIT_HISTORY:
                     break
@@ -973,14 +1020,7 @@ Luego responde directamente sin mostrar este proceso al usuario.""")
         )
 
         # ── Tokens según modo ───────────────────────────────────────────
-        # Límites de tokens por modo
-        # llama-3.3-70b-versatile soporta hasta 32,768 tokens de OUTPUT
-        # Para código completo necesitamos al menos 8,000-16,000
-        tokens_map = {
-            'fast':     4000,   # Respuestas rápidas / preguntas simples
-            'balanced': 8000,   # Conversación normal + código mediano
-            'complete': 16000,  # Código complejo, archivos completos, análisis largos
-        }
+        tokens_map = {'fast': 4000, 'balanced': 8000, 'complete': 16000}
         max_tokens = tokens_map.get(mode, 8000)
 
         # ── Capa 3: Llamar al LLM con contexto completo ─────────────────
