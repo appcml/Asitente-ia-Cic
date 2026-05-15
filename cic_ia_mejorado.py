@@ -1058,27 +1058,17 @@ def index():
 @app.route('/developer')
 def developer_panel():
     """
-    Ruta del panel de desarrollador.
-    Seguridad multicapa:
-      1. Si hay token en query param → validar que sea de un desarrollador real.
-      2. Si no hay token → devolver 404 (no revelar que el panel existe).
-    La página en sí tiene su propia capa de autenticación JS,
-    pero ocultarla del todo reduce la superficie de ataque.
+    Panel de desarrollador — protegido a nivel de servidor.
+    Sin token válido de dev → 404 silencioso (no revelar la existencia del panel).
     """
     token = request.args.get('token', '').strip()
-
-    # Sin token → 404 para no revelar la existencia del panel
     if not token:
-        # Aún así servimos el HTML para que el login JS funcione
-        # pero solo si existe al menos un dev registrado
+        # Sin token: mostrar solo si no hay dev aún (setup inicial)
         existing_dev = User.query.filter_by(is_developer=True).first()
         if not existing_dev:
-            # Primera vez: mostrar panel para setup inicial
             return render_template('developer.html')
-        # Ya hay dev: no revelar el panel sin token — redirigir al inicio
         return render_template('index.html'), 404
 
-    # Con token → verificar que sea válido y de un desarrollador
     session = UserSession.query.filter_by(token=token).first()
     if not session:
         return render_template('index.html'), 404
@@ -1089,7 +1079,6 @@ def developer_panel():
     user = User.query.get(session.user_id)
     if not user or not user.is_developer or not user.is_active:
         return render_template('index.html'), 404
-
     return render_template('developer.html')
 
 @app.route('/health')
@@ -1107,20 +1096,16 @@ def health():
 @app.route('/api/auth/register', methods=['POST'])
 def register():
     """
-    Registro de usuarios.
-    SEGURIDAD: El registro público está DESHABILITADO por defecto.
-    Solo el desarrollador puede crear usuarios normales desde /api/dev/users/create.
-    
-    Si necesitas habilitar auto-registro, configura la variable de entorno:
-      ALLOW_PUBLIC_REGISTER=true
+    Registro público — DESHABILITADO por defecto.
+    Para habilitar: variable de entorno ALLOW_PUBLIC_REGISTER=true en Render.
+    Los usuarios normales los crea el desarrollador desde el panel.
     """
     allow_public = os.environ.get('ALLOW_PUBLIC_REGISTER', 'false').lower() == 'true'
     if not allow_public:
         return jsonify({
             'success': False,
-            'error':   'El registro público está deshabilitado. Contacta al administrador.'
+            'error': 'El registro está deshabilitado. Contacta al administrador para obtener acceso.'
         }), 403
-
     try:
         data     = request.json or {}
         username = data.get('username', '').strip()
@@ -1131,13 +1116,12 @@ def register():
             return jsonify({'success': False, 'error': 'Usuario debe tener al menos 3 caracteres'}), 400
         if not password or len(password) < 6:
             return jsonify({'success': False, 'error': 'Contraseña debe tener al menos 6 caracteres'}), 400
-
         if User.query.filter_by(username=username).first():
             return jsonify({'success': False, 'error': 'Nombre de usuario ya existe'}), 409
         if email and User.query.filter_by(email=email).first():
             return jsonify({'success': False, 'error': 'Email ya registrado'}), 409
 
-        # CRÍTICO: los usuarios registrados públicamente NUNCA son desarrolladores
+        # CRÍTICO: registro público nunca crea desarrolladores
         user = User(username=username, email=email or f"{username}@cic.local", is_developer=False)
         user.set_password(password)
         db.session.add(user)
@@ -1441,8 +1425,13 @@ def list_modules():
 # ========== PANEL DESARROLLADOR ==========
 # ==========================================
 
-# NOTA: La ruta /developer está definida arriba en RUTAS PÚBLICAS con
-# protección multicapa. Esta sección contiene solo los endpoints de API.
+@app.route('/developer')
+def developer_panel():
+    """Panel de desarrollador — renderiza template o retorna info básica"""
+    try:
+        return render_template('developer.html')
+    except Exception:
+        return jsonify({'message': 'Panel desarrollador activo. Usa la API /api/dev/*'})
 
 # --- Estadísticas detalladas ---
 
@@ -1814,6 +1803,78 @@ def dev_toggle_developer(uid):
     db.session.commit()
     return jsonify({'success': True, 'username': user.username, 'is_developer': user.is_developer})
 
+@app.route('/api/dev/users/create', methods=['POST'])
+@dev_required
+def dev_create_user():
+    """
+    El desarrollador crea usuarios normales desde el panel.
+    CRÍTICO: is_developer siempre False — nunca puede ser True aquí.
+    """
+    try:
+        data     = request.json or {}
+        username = data.get('username', '').strip()
+        email    = data.get('email', '').strip()
+        password = data.get('password', '')
+
+        if not username or len(username) < 3:
+            return jsonify({'success': False, 'error': 'Usuario debe tener al menos 3 caracteres'}), 400
+        if not password or len(password) < 6:
+            return jsonify({'success': False, 'error': 'Contraseña debe tener al menos 6 caracteres'}), 400
+        if User.query.filter_by(username=username).first():
+            return jsonify({'success': False, 'error': 'El nombre de usuario ya existe'}), 409
+        if email and User.query.filter_by(email=email).first():
+            return jsonify({'success': False, 'error': 'El email ya está registrado'}), 409
+
+        user = User(
+            username=username,
+            email=email or f"{username}@cic.local",
+            is_developer=False  # ← SIEMPRE False
+        )
+        user.set_password(password)
+        db.session.add(user)
+        db.session.commit()
+        logger.info(f"Usuario normal '{username}' creado por desarrollador")
+        return jsonify({'success': True, 'message': f'Usuario "{username}" creado', 'username': username, 'user_id': user.id})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/dev/users/<int:uid>/toggle-active', methods=['POST'])
+@dev_required
+def dev_toggle_active(uid):
+    """Activar o desactivar un usuario sin eliminarlo"""
+    user = User.query.get_or_404(uid)
+    token   = _get_token_from_request()
+    session = UserSession.query.filter_by(token=token).first()
+    if session and session.user_id == uid:
+        return jsonify({'error': 'No puedes desactivar tu propia cuenta'}), 400
+    user.is_active = not user.is_active
+    db.session.commit()
+    return jsonify({'success': True, 'username': user.username, 'is_active': user.is_active})
+
+@app.route('/api/dev/users/<int:uid>/reset-password', methods=['POST'])
+@dev_required
+def dev_reset_password(uid):
+    """Solo el dev puede resetear contraseñas de usuarios normales"""
+    user = User.query.get_or_404(uid)
+    if user.is_developer:
+        return jsonify({'error': 'No se puede resetear la contraseña de un desarrollador desde aquí'}), 403
+    data = request.json or {}
+    new_password = data.get('new_password', '')
+    if not new_password or len(new_password) < 6:
+        return jsonify({'error': 'Contraseña debe tener al menos 6 caracteres'}), 400
+    user.set_password(new_password)
+    UserSession.query.filter_by(user_id=uid).delete()
+    db.session.commit()
+    logger.info(f"Contraseña de '{user.username}' reseteada por dev")
+    return jsonify({'success': True, 'message': f'Contraseña de "{user.username}" actualizada'})
+
+@app.route('/api/dev/setup-status', methods=['GET'])
+def dev_setup_status():
+    """Indica si ya existe un dev. Solo devuelve un booleano — sin datos sensibles."""
+    has_dev = User.query.filter_by(is_developer=True, is_active=True).first() is not None
+    return jsonify({'has_developer': has_dev})
+
 # --- Test de IA ---
 
 @app.route('/api/dev/test-ai', methods=['POST'])
@@ -1842,90 +1903,33 @@ def dev_test_ai():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-@app.route('/api/dev/setup-status', methods=['GET'])
-def dev_setup_status():
-    """
-    Indica si ya existe un usuario desarrollador configurado.
-    Usado por el frontend para mostrar/ocultar el link de setup inicial.
-    No revela datos sensibles — solo un booleano.
-    """
-    has_dev = User.query.filter_by(is_developer=True, is_active=True).first() is not None
-    return jsonify({'has_developer': has_dev})
-
-
-@app.route('/api/dev/users/<int:uid>/reset-password', methods=['POST'])
-@dev_required
-def dev_reset_password(uid):
-    """Solo el desarrollador puede resetear contraseñas de usuarios normales"""
-    user = User.query.get_or_404(uid)
-    if user.is_developer:
-        return jsonify({'error': 'No se puede resetear la contraseña de un desarrollador desde aquí'}), 403
-    data = request.json or {}
-    new_password = data.get('new_password', '')
-    if not new_password or len(new_password) < 6:
-        return jsonify({'error': 'Contraseña debe tener al menos 6 caracteres'}), 400
-    user.set_password(new_password)
-    db.session.commit()
-    # Invalidar todas las sesiones activas del usuario
-    UserSession.query.filter_by(user_id=uid).delete()
-    db.session.commit()
-    logger.info(f"Contraseña de usuario '{user.username}' (id={uid}) reseteada por desarrollador")
-    return jsonify({'success': True, 'message': f'Contraseña de "{user.username}" actualizada'})
-
-
 # --- Crear primer usuario desarrollador (setup inicial) ---
-
-# Registro de intentos de setup por IP para prevenir abuso
-_setup_attempts: dict = {}  # {ip: [timestamp, ...]}
 
 @app.route('/api/dev/setup', methods=['POST'])
 def dev_setup():
     """
     Setup inicial — SOLO funciona si NO existe ningún usuario desarrollador.
-    Una vez que existe un dev, este endpoint queda completamente bloqueado.
-    Rate limit: máximo 5 intentos por IP cada 10 minutos.
+    Una vez que existe un dev, este endpoint queda bloqueado automáticamente.
     """
-    # ── Bloquear si ya existe un desarrollador ─────────────────────────────
     existing_dev = User.query.filter_by(is_developer=True).first()
     if existing_dev:
-        # Respuesta genérica — no revelar información del sistema
-        logger.warning(f"Intento de acceso a /api/dev/setup bloqueado (ya existe dev). IP: {request.remote_addr}")
-        return jsonify({'error': 'No disponible'}), 403
+        return jsonify({'error': 'Ya existe un usuario desarrollador. Este endpoint está deshabilitado.'}), 403
 
-    # ── Rate limiting por IP ────────────────────────────────────────────────
-    ip = request.remote_addr or 'unknown'
-    now = datetime.utcnow()
-    window = timedelta(minutes=10)
-    attempts = _setup_attempts.get(ip, [])
-    # Limpiar intentos fuera de la ventana
-    attempts = [t for t in attempts if now - t < window]
-    if len(attempts) >= 5:
-        logger.warning(f"Rate limit setup alcanzado para IP {ip}")
-        return jsonify({'error': 'Demasiados intentos. Espera 10 minutos.'}), 429
-    attempts.append(now)
-    _setup_attempts[ip] = attempts
-
-    data      = request.json or {}
-    username  = data.get('username', '').strip()
-    password  = data.get('password', '')
-    email     = data.get('email', f'{username}@cic.local')
+    data     = request.json or {}
+    username = data.get('username', '').strip()
+    password = data.get('password', '')
+    email    = data.get('email', f'{username}@cic.local')
     setup_key = data.get('setup_key', '')
 
-    # ── Validar SETUP_KEY de entorno ────────────────────────────────────────
+    # Requiere una clave de setup configurada como variable de entorno
     expected_key = os.environ.get('SETUP_KEY', '')
     if expected_key and setup_key != expected_key:
-        logger.warning(f"setup_key inválida desde IP {ip}")
-        return jsonify({'error': 'Credenciales inválidas'}), 403
+        return jsonify({'error': 'setup_key inválida'}), 403
 
-    if not username or len(username) < 3:
-        return jsonify({'error': 'Usuario debe tener al menos 3 caracteres'}), 400
-    if not password or len(password) < 8:
-        return jsonify({'error': 'Contraseña debe tener al menos 8 caracteres'}), 400
+    if not username or not password or len(password) < 8:
+        return jsonify({'error': 'username y password (mín 8 chars) requeridos'}), 400
 
     try:
-        if User.query.filter_by(username=username).first():
-            return jsonify({'error': 'Nombre de usuario ya existe'}), 409
-
         user = User(username=username, email=email, is_developer=True)
         user.set_password(password)
         db.session.add(user)
@@ -1937,77 +1941,15 @@ def dev_setup():
         db.session.add(sess)
         db.session.commit()
 
-        logger.info(f"✅ Desarrollador principal '{username}' creado desde IP {ip}")
         return jsonify({
-            'success': True,
-            'message': f'Desarrollador "{username}" creado exitosamente.',
-            'token':   token,
-            'user_id': user.id
+            'success':  True,
+            'message':  f'Desarrollador "{username}" creado. Guarda tu token.',
+            'token':    token,
+            'user_id':  user.id
         })
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
-
-
-# --- El desarrollador crea usuarios normales ---
-
-@app.route('/api/dev/users/create', methods=['POST'])
-@dev_required
-def dev_create_user():
-    """
-    Solo el desarrollador puede crear nuevos usuarios normales desde el panel.
-    Los usuarios normales NUNCA tienen is_developer=True.
-    """
-    try:
-        data     = request.json or {}
-        username = data.get('username', '').strip()
-        email    = data.get('email', '').strip()
-        password = data.get('password', '')
-
-        if not username or len(username) < 3:
-            return jsonify({'success': False, 'error': 'Usuario debe tener al menos 3 caracteres'}), 400
-        if not password or len(password) < 6:
-            return jsonify({'success': False, 'error': 'Contraseña debe tener al menos 6 caracteres'}), 400
-        if User.query.filter_by(username=username).first():
-            return jsonify({'success': False, 'error': 'El nombre de usuario ya existe'}), 409
-        if email and User.query.filter_by(email=email).first():
-            return jsonify({'success': False, 'error': 'El email ya está registrado'}), 409
-
-        # CRÍTICO: is_developer siempre False para usuarios creados desde aquí
-        user = User(
-            username=username,
-            email=email or f"{username}@cic.local",
-            is_developer=False   # ← NUNCA puede ser True aquí
-        )
-        user.set_password(password)
-        db.session.add(user)
-        db.session.commit()
-
-        logger.info(f"Usuario normal '{username}' creado por desarrollador")
-        return jsonify({
-            'success':  True,
-            'message':  f'Usuario "{username}" creado exitosamente',
-            'user_id':  user.id,
-            'username': user.username
-        })
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({'success': False, 'error': str(e)}), 500
-
-
-@app.route('/api/dev/users/<int:uid>/toggle-active', methods=['POST'])
-@dev_required
-def dev_toggle_active(uid):
-    """Activar o desactivar un usuario (sin eliminarlo)"""
-    user = User.query.get_or_404(uid)
-    # No permitir desactivarse a sí mismo
-    token   = _get_token_from_request()
-    session = UserSession.query.filter_by(token=token).first()
-    if session and session.user_id == uid:
-        return jsonify({'error': 'No puedes desactivar tu propia cuenta'}), 400
-    user.is_active = not user.is_active
-    db.session.commit()
-    return jsonify({'success': True, 'username': user.username, 'is_active': user.is_active})
 
 # ========== MANEJO DE ERRORES ==========
 
