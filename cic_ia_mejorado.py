@@ -448,20 +448,19 @@ class LLMEngine:
         except Exception as e:
             return {'success': False, 'error': str(e)}
 
-    # ── GROQ (Llama gratis — prioridad 1) ──────────────────────────────────
+    # ── GROQ (Llama 3 gratis — prioridad 1) ────────────────────────────────
     def _call_groq(self, user_message: str, system: str,
                    history: list = None, max_tokens: int = 1000) -> dict:
         if not self.groq_key:
             return {'success': False, 'error': 'Sin GROQ_API_KEY'}
 
-        # Lista de modelos Groq en orden de preferencia (actualizados 2025)
-        # Si GROQ_MODEL está configurado, se intenta primero
+        # Lista de modelos en orden de preferencia (2025)
         groq_models = [
-            self.groq_model,                        # Variable de entorno o config
-            'llama-3.3-70b-versatile',              # Mejor calidad disponible
-            'llama3-8b-8192',                       # Rápido y estable
-            'gemma2-9b-it',                         # Alternativa Google
-            'mixtral-8x7b-32768',                   # Alternativa Mistral
+            self.groq_model,            # Configurado en entorno/BD
+            'llama-3.3-70b-versatile',  # Mejor calidad, 128k contexto
+            'llama3-8b-8192',           # Rápido y estable
+            'gemma2-9b-it',             # Alternativa Google
+            'mixtral-8x7b-32768',       # 32k contexto — bueno para textos largos
         ]
         # Eliminar duplicados manteniendo orden
         seen = set()
@@ -495,26 +494,34 @@ class LLMEngine:
                     text   = data['choices'][0]['message']['content']
                     tokens = data.get('usage', {}).get('completion_tokens', 0)
                     logger.info(f"✅ Groq OK con modelo: {model}")
-                    return {
-                        'success':  True,
-                        'response': text,
-                        'tokens':   tokens,
-                        'provider': 'groq',
-                        'model':    model
-                    }
+                    return {'success': True, 'response': text, 'tokens': tokens,
+                            'provider': 'groq', 'model': model}
                 else:
-                    err_data = resp.json() if resp.content else {}
+                    err_data   = resp.json() if resp.content else {}
                     last_error = err_data.get('error', {}).get('message', f'HTTP {resp.status_code}')
-                    logger.warning(f"⚠️ Groq modelo {model} falló: {last_error}")
-                    # Si es error de autenticación, no intentar más modelos
+                    logger.warning(f"⚠️ Groq modelo {model} falló ({resp.status_code}): {last_error}")
                     if resp.status_code in (401, 403):
-                        return {'success': False, 'error': f'Groq auth error: {last_error}'}
+                        return {'success': False, 'error': f'Groq auth: {last_error}'}
+                    # Para errores de contexto, intentar truncar historial y reintentar el mismo modelo
+                    if resp.status_code == 400 and 'context' in last_error.lower():
+                        messages_short = [messages[0], messages[-1]]  # solo system + msg actual
+                        resp2 = requests.post(
+                            'https://api.groq.com/openai/v1/chat/completions',
+                            headers={'Authorization': f'Bearer {self.groq_key}', 'Content-Type': 'application/json'},
+                            json={'model': model, 'messages': messages_short, 'max_tokens': max_tokens, 'temperature': 0.7},
+                            timeout=30
+                        )
+                        if resp2.status_code == 200:
+                            text = resp2.json()['choices'][0]['message']['content']
+                            return {'success': True, 'response': text,
+                                    'tokens': resp2.json().get('usage', {}).get('completion_tokens', 0),
+                                    'provider': 'groq', 'model': model}
             except Exception as e:
                 last_error = str(e)
                 logger.warning(f"⚠️ Groq modelo {model} excepción: {e}")
                 continue
 
-        return {'success': False, 'error': f'Todos los modelos Groq fallaron. Último error: {last_error}'}
+        return {'success': False, 'error': f'Todos los modelos Groq fallaron. Último: {last_error}'}
 
     # ── OLLAMA (modelo local / Colab — prioridad 2) ─────────────────────────
     def _call_ollama(self, user_message: str, system: str,
@@ -607,11 +614,11 @@ class LLMEngine:
         tokens = data.get('usage', {}).get('completion_tokens', 0)
         return {'success': True, 'response': text, 'tokens': tokens, 'provider': 'openai', 'model': model}
 
-    # ── FALLBACK (sin motor de IA) ──────────────────────────────────────────
+    # ── FALLBACK (sin motor de IA disponible) ──────────────────────────────
     def _fallback_response(self, user_message: str) -> dict:
         msg_lower = user_message.lower()
         if any(w in msg_lower for w in ['hola', 'buenas', 'hey', 'saludos']):
-            r = "¡Hola! Soy Cic_IA. En este momento estoy teniendo problemas para conectarme al motor de IA. Por favor intenta en unos minutos."
+            r = "¡Hola! Soy Cic_IA. En este momento estoy teniendo problemas para conectarme al motor de IA. Por favor intenta de nuevo en unos minutos."
         elif any(w in msg_lower for w in ['qué hora', 'qué día', 'fecha', 'hoy']):
             now   = datetime.now()
             dias  = ['lunes','martes','miércoles','jueves','viernes','sábado','domingo']
@@ -944,14 +951,29 @@ Luego responde directamente sin mostrar este proceso al usuario.""")
         # ── Capa 1: Recuperar historial persistente de la BD ────────────
         db_history = self._get_user_conversation_history(user_id, limit=8)
 
-        # ── Combinar historial de BD con historial de sesión actual ─────
-        # Limitamos el historial para no superar el límite de tokens de Groq
-        # Groq llama-3.1-8b-instant: ~8k tokens de contexto
+        # ── Gestión inteligente de contexto ─────────────────────────────
+        # Estimamos ~4 chars = 1 token. Groq llama3-8b: 8192 tokens max.
+        # Reservamos: 2000 para system prompt, 1200 para respuesta, resto para historial.
+        CHAR_LIMIT_HISTORY = 8000   # ~2000 tokens de historial máximo
+        CHAR_LIMIT_MSG     = 12000  # Truncar mensajes muy largos del usuario
+
+        # Truncar mensaje si es demasiado largo (evita context_length_exceeded)
+        if len(user_message) > CHAR_LIMIT_MSG:
+            user_message = user_message[:CHAR_LIMIT_MSG] + "\n\n[... texto truncado por longitud ...]"
+            logger.info(f"Mensaje truncado a {CHAR_LIMIT_MSG} chars para evitar overflow")
+
         if conversation_history:
-            # Sesión actual tiene prioridad — últimos 6 intercambios (12 mensajes)
-            combined_history = conversation_history[-12:]
+            # Sesión actual — tomar los más recientes y truncar cada mensaje
+            raw_history = conversation_history[-12:]
+            combined_history = []
+            total_chars = 0
+            for msg in reversed(raw_history):
+                content = str(msg.get('content', ''))[:800]  # max 800 chars por mensaje
+                total_chars += len(content)
+                if total_chars > CHAR_LIMIT_HISTORY:
+                    break
+                combined_history.insert(0, {'role': msg['role'], 'content': content})
         else:
-            # Sin sesión activa, usar BD pero limitado
             combined_history = db_history[-6:]
 
         # ── Buscar memorias y conocimiento relevante ────────────────────
