@@ -130,14 +130,14 @@
 <body>
 
 <!-- =========================================== -->
-<!-- LOGIN / REGISTRO USUARIO NORMAL             -->
+<!-- LOGIN / REGISTRO                            -->
 <!-- =========================================== -->
 <div id="loginScreen" class="login-screen">
   <div class="login-box">
     <h1>🤖 Cic_IA</h1>
     <p id="loginSubtitle">Asistente Inteligente</p>
 
-    <!-- Tabs: Iniciar Sesión / Crear Cuenta -->
+    <!-- Tabs -->
     <div class="tabs">
       <div class="tab active" id="tabLogin" onclick="switchTab('login')">Iniciar Sesión</div>
       <div class="tab" id="tabRegister" onclick="switchTab('register')">Crear Cuenta</div>
@@ -181,16 +181,11 @@
         <button class="btn btn-primary" style="width:100%" onclick="doRegister()">Crear Cuenta</button>
       </div>
     </div>
-
-    <!-- Setup inicial del desarrollador (solo si no hay dev aún) -->
-    <div id="setupLinkWrap" style="text-align:center;margin-top:14px;font-size:0.78rem;color:var(--text2);display:none">
-      ¿Primer uso? <a href="#" onclick="showSetup()" style="color:var(--accent)">Configurar acceso inicial</a>
-    </div>
   </div>
 </div>
 
-<!-- Setup modal -->
-<div id="setupModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:100;display:none;align-items:center;justify-content:center">
+<!-- Setup modal (solo primer uso) -->
+<div id="setupModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:100;align-items:center;justify-content:center">
   <div class="login-box" style="max-width:440px">
     <h1 style="font-size:1.2rem;margin-bottom:16px">⚙️ Configuración Inicial</h1>
     <div id="setupAlert"></div>
@@ -511,12 +506,10 @@ let currentPage = { memories: 1, knowledge: 1 };
 function switchTab(tab) {
   const isLogin = tab === 'login';
   document.getElementById('formLogin').style.display    = isLogin ? 'block' : 'none';
-  document.getElementById('formRegister').style.display = isLogin ? 'none' : 'block';
+  document.getElementById('formRegister').style.display = isLogin ? 'none'  : 'block';
   document.getElementById('tabLogin').classList.toggle('active', isLogin);
   document.getElementById('tabRegister').classList.toggle('active', !isLogin);
   showAlert('loginAlert', '', '');
-
-  // Al abrir registro, verificar si está habilitado
   if (!isLogin) checkRegisterStatus();
 }
 
@@ -530,7 +523,7 @@ async function checkRegisterStatus() {
     const d = await r.json();
     const disabled = r.status === 403 && d.error?.includes('deshabilitado');
     document.getElementById('registerNotice').style.display = disabled ? 'block' : 'none';
-    document.getElementById('registerForm').style.display   = disabled ? 'none' : 'block';
+    document.getElementById('registerForm').style.display   = disabled ? 'none'  : 'block';
   } catch {}
 }
 
@@ -539,17 +532,15 @@ async function doLogin() {
   const pass = document.getElementById('loginPass').value;
   showAlert('loginAlert', '', '');
   if (!user || !pass) return showAlert('loginAlert', 'Completa todos los campos', 'err');
-
   try {
     const r = await api('/api/auth/login', 'POST', { username: user, password: pass }, false);
     if (r.success) {
       TOKEN = r.token;
       currentUser = r.user;
       localStorage.setItem('cic_token', TOKEN);
-
       if (r.user.is_developer) {
-        // Desarrollador → redirigir al panel dev con token en URL
-        window.location.href = `/developer?token=${TOKEN}`;
+        // Dev → redirigir al panel dev con token
+        window.location.href = '/developer?token=' + TOKEN;
         return;
       }
       // Usuario normal → mostrar panel de chat
@@ -567,30 +558,25 @@ async function doRegister() {
   const email    = document.getElementById('regEmail').value.trim();
   const password = document.getElementById('regPass').value;
   showAlert('loginAlert', '', '');
-
   if (!username) return showAlert('loginAlert', 'El nombre de usuario es requerido', 'err');
-  if (!password || password.length < 6) return showAlert('loginAlert', 'La contraseña debe tener al menos 6 caracteres', 'err');
-
+  if (!password || password.length < 6) return showAlert('loginAlert', 'Contraseña mínimo 6 caracteres', 'err');
   try {
     showAlert('loginAlert', '⏳ Creando cuenta...', 'info');
     const r = await api('/api/auth/register', 'POST', { username, email, password }, false);
     if (r.success) {
-      TOKEN = r.token;
-      currentUser = r.user;
+      TOKEN = r.token; currentUser = r.user;
       localStorage.setItem('cic_token', TOKEN);
       showPanel();
     } else {
       showAlert('loginAlert', r.error || 'Error al registrarse', 'err');
     }
-  } catch(e) {
-    showAlert('loginAlert', e.message, 'err');
-  }
+  } catch(e) { showAlert('loginAlert', e.message, 'err'); }
 }
 
 async function doLogout() {
   try { await api('/api/auth/logout', 'POST'); } catch {}
   TOKEN = ''; localStorage.removeItem('cic_token');
-  location.reload();
+  window.location.href = '/';
 }
 
 function showSetup() {
@@ -625,8 +611,8 @@ function showPanel() {
   document.getElementById('loginScreen').style.display = 'none';
   document.getElementById('panel').style.display = 'flex';
   document.getElementById('sidebarUser').textContent = currentUser?.username || '—';
-  // Para usuarios normales, mostrar solo sección de chat
-  if (!currentUser?.is_developer) {
+  // Usuarios normales van directamente al chat
+  if (currentUser && !currentUser.is_developer) {
     showSection('chat');
   } else {
     loadDashboard();
@@ -1047,25 +1033,17 @@ function renderPagination(containerId, totalPages, currentPage, loadFn) {
 // ============ INIT ============
 
 window.addEventListener('load', async () => {
-  // Verificar si hay dev configurado — mostrar/ocultar link de setup
-  try {
-    const s = await fetch('/api/dev/setup-status');
-    if (s.ok) {
-      const sData = await s.json();
-      document.getElementById('setupLinkWrap').style.display = sData.has_developer ? 'none' : 'block';
-    }
-  } catch {}
-
   if (TOKEN) {
     try {
       const r = await api('/api/auth/verify', 'GET');
       if (r.success) {
         currentUser = r.user;
         if (r.user.is_developer) {
-          // Dev autenticado en index → redirigir al panel dev
-          window.location.href = `/developer?token=${TOKEN}`;
+          // Dev autenticado en / → redirigir al panel dev
+          window.location.href = '/developer?token=' + TOKEN;
           return;
         }
+        // Usuario normal → mostrar panel de chat
         showPanel();
         return;
       }
