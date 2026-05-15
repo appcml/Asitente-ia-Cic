@@ -213,7 +213,7 @@ def run_migration():
                 ('ai_provider',                   'groq',                                                                                                   'string'),
                 ('ai_model',                      'claude-haiku-4-5-20251001',                                                                              'string'),
                 ('system_prompt',                 'Eres Cic_IA, un asistente inteligente en español. Responde de forma clara, útil y amigable.',             'string'),
-                ('max_tokens',                    '1000',                                                                                                    'int'),
+                ('max_tokens',                    '8000',                                                                                                    'int'),
                 ('auto_learning_enabled',         'true',                                                                                                    'bool'),
                 ('auto_learning_interval_hours',  '2',                                                                                                       'int'),
                 ('max_memory_results',            '5',                                                                                                       'int'),
@@ -388,7 +388,7 @@ class LLMEngine:
         self.openai_key    = OPENAI_API_KEY
         self.groq_key      = os.environ.get('GROQ_API_KEY', '')
         self.ollama_url    = os.environ.get('OLLAMA_URL', '')   # ej: https://xxxx.ngrok.io
-        self.groq_model    = os.environ.get('GROQ_MODEL',   'llama-3.1-8b-instant')
+        self.groq_model    = os.environ.get('GROQ_MODEL',   'llama-3.3-70b-versatile')
         self.ollama_model  = os.environ.get('OLLAMA_MODEL', 'llama3.2')
 
     def _build_context(self, user_message: str, memories: list, manual_knowledge: list) -> str:
@@ -448,21 +448,20 @@ class LLMEngine:
         except Exception as e:
             return {'success': False, 'error': str(e)}
 
-    # ── GROQ (Llama 3 gratis — prioridad 1) ────────────────────────────────
+    # ── GROQ (prioridad 1) ──────────────────────────────────────────────────
     def _call_groq(self, user_message: str, system: str,
-                   history: list = None, max_tokens: int = 1000) -> dict:
+                   history: list = None, max_tokens: int = 8000) -> dict:
         if not self.groq_key:
             return {'success': False, 'error': 'Sin GROQ_API_KEY'}
 
-        # Lista de modelos en orden de preferencia (2025)
+        # Modelos en orden de preferencia (2025) — fallback automático
         groq_models = [
             self.groq_model,            # Configurado en entorno/BD
-            'llama-3.3-70b-versatile',  # Mejor calidad, 128k contexto
-            'llama3-8b-8192',           # Rápido y estable
+            'llama-3.3-70b-versatile',  # 128k contexto, 32k output — ideal para código
+            'llama3-8b-8192',           # Rápido, contexto 8k
             'gemma2-9b-it',             # Alternativa Google
-            'mixtral-8x7b-32768',       # 32k contexto — bueno para textos largos
+            'mixtral-8x7b-32768',       # 32k contexto
         ]
-        # Eliminar duplicados manteniendo orden
         seen = set()
         groq_models = [m for m in groq_models if m not in seen and not seen.add(m)]
 
@@ -477,48 +476,40 @@ class LLMEngine:
             try:
                 resp = requests.post(
                     'https://api.groq.com/openai/v1/chat/completions',
-                    headers={
-                        'Authorization': f'Bearer {self.groq_key}',
-                        'Content-Type':  'application/json'
-                    },
-                    json={
-                        'model':       model,
-                        'messages':    messages,
-                        'max_tokens':  max_tokens,
-                        'temperature': 0.7
-                    },
-                    timeout=30
+                    headers={'Authorization': f'Bearer {self.groq_key}', 'Content-Type': 'application/json'},
+                    json={'model': model, 'messages': messages, 'max_tokens': max_tokens, 'temperature': 0.7},
+                    timeout=120  # 2 minutos — código largo puede tardar
                 )
                 if resp.status_code == 200:
                     data   = resp.json()
                     text   = data['choices'][0]['message']['content']
                     tokens = data.get('usage', {}).get('completion_tokens', 0)
-                    logger.info(f"✅ Groq OK con modelo: {model}")
-                    return {'success': True, 'response': text, 'tokens': tokens,
-                            'provider': 'groq', 'model': model}
-                else:
-                    err_data   = resp.json() if resp.content else {}
-                    last_error = err_data.get('error', {}).get('message', f'HTTP {resp.status_code}')
-                    logger.warning(f"⚠️ Groq modelo {model} falló ({resp.status_code}): {last_error}")
-                    if resp.status_code in (401, 403):
-                        return {'success': False, 'error': f'Groq auth: {last_error}'}
-                    # Para errores de contexto, intentar truncar historial y reintentar el mismo modelo
-                    if resp.status_code == 400 and 'context' in last_error.lower():
-                        messages_short = [messages[0], messages[-1]]  # solo system + msg actual
-                        resp2 = requests.post(
-                            'https://api.groq.com/openai/v1/chat/completions',
-                            headers={'Authorization': f'Bearer {self.groq_key}', 'Content-Type': 'application/json'},
-                            json={'model': model, 'messages': messages_short, 'max_tokens': max_tokens, 'temperature': 0.7},
-                            timeout=30
-                        )
-                        if resp2.status_code == 200:
-                            text = resp2.json()['choices'][0]['message']['content']
-                            return {'success': True, 'response': text,
-                                    'tokens': resp2.json().get('usage', {}).get('completion_tokens', 0),
-                                    'provider': 'groq', 'model': model}
+                    logger.info(f"✅ Groq OK: {model} · {tokens} tokens")
+                    return {'success': True, 'response': text, 'tokens': tokens, 'provider': 'groq', 'model': model}
+
+                err_data   = resp.json() if resp.content else {}
+                last_error = err_data.get('error', {}).get('message', f'HTTP {resp.status_code}')
+                logger.warning(f"⚠️ Groq {model} falló ({resp.status_code}): {last_error}")
+
+                if resp.status_code in (401, 403):
+                    return {'success': False, 'error': f'Groq auth: {last_error}'}
+
+                # Error de contexto → reintentar solo con el mensaje actual
+                if resp.status_code == 400 and ('context' in last_error.lower() or 'length' in last_error.lower()):
+                    resp2 = requests.post(
+                        'https://api.groq.com/openai/v1/chat/completions',
+                        headers={'Authorization': f'Bearer {self.groq_key}', 'Content-Type': 'application/json'},
+                        json={'model': model, 'messages': [messages[0], messages[-1]], 'max_tokens': max_tokens, 'temperature': 0.7},
+                        timeout=120
+                    )
+                    if resp2.status_code == 200:
+                        text = resp2.json()['choices'][0]['message']['content']
+                        return {'success': True, 'response': text,
+                                'tokens': resp2.json().get('usage', {}).get('completion_tokens', 0),
+                                'provider': 'groq', 'model': model}
             except Exception as e:
                 last_error = str(e)
-                logger.warning(f"⚠️ Groq modelo {model} excepción: {e}")
+                logger.warning(f"⚠️ Groq {model} excepción: {e}")
                 continue
 
         return {'success': False, 'error': f'Todos los modelos Groq fallaron. Último: {last_error}'}
@@ -618,7 +609,7 @@ class LLMEngine:
     def _fallback_response(self, user_message: str) -> dict:
         msg_lower = user_message.lower()
         if any(w in msg_lower for w in ['hola', 'buenas', 'hey', 'saludos']):
-            r = "¡Hola! Soy Cic_IA. En este momento estoy teniendo problemas para conectarme al motor de IA. Por favor intenta de nuevo en unos minutos."
+            r = "¡Hola! Soy Cic_IA. En este momento estoy teniendo dificultades para conectarme. Por favor intenta en unos minutos."
         elif any(w in msg_lower for w in ['qué hora', 'qué día', 'fecha', 'hoy']):
             now   = datetime.now()
             dias  = ['lunes','martes','miércoles','jueves','viernes','sábado','domingo']
@@ -626,7 +617,7 @@ class LLMEngine:
                      'septiembre','octubre','noviembre','diciembre']
             r = f"Hoy es {dias[now.weekday()]}, {now.day} de {meses[now.month-1]} de {now.year} — {now.strftime('%H:%M')}"
         else:
-            r = "Lo siento, en este momento no puedo procesar tu solicitud. El motor de IA no está disponible temporalmente. Por favor intenta de nuevo en unos minutos."
+            r = "Lo siento, en este momento no puedo procesar tu solicitud. El servicio está teniendo dificultades temporales. Por favor intenta de nuevo en unos minutos."
         return {'success': False, 'response': r, 'provider': 'fallback', 'tokens': 0, 'model': 'none'}
 
 
@@ -952,25 +943,21 @@ Luego responde directamente sin mostrar este proceso al usuario.""")
         db_history = self._get_user_conversation_history(user_id, limit=8)
 
         # ── Gestión inteligente de contexto ─────────────────────────────
-        # Estimamos ~4 chars = 1 token. Groq llama3-8b: 8192 tokens max.
-        # Reservamos: 2000 para system prompt, 1200 para respuesta, resto para historial.
-        CHAR_LIMIT_HISTORY = 8000   # ~2000 tokens de historial máximo
-        CHAR_LIMIT_MSG     = 12000  # Truncar mensajes muy largos del usuario
+        # llama-3.3-70b tiene 128k de contexto — podemos ser más generosos
+        CHAR_LIMIT_MSG     = 40000  # Código largo bienvenido
+        CHAR_LIMIT_HISTORY = 12000  # Historial amplio
 
-        # Truncar mensaje si es demasiado largo (evita context_length_exceeded)
         if len(user_message) > CHAR_LIMIT_MSG:
-            user_message = user_message[:CHAR_LIMIT_MSG] + "\n\n[... texto truncado por longitud ...]"
-            logger.info(f"Mensaje truncado a {CHAR_LIMIT_MSG} chars para evitar overflow")
+            user_message = user_message[:CHAR_LIMIT_MSG] + "\n[... texto truncado ...]"
 
         if conversation_history:
-            # Sesión actual — tomar los más recientes y truncar cada mensaje
-            raw_history = conversation_history[-12:]
+            raw = conversation_history[-16:]  # hasta 8 intercambios
             combined_history = []
-            total_chars = 0
-            for msg in reversed(raw_history):
-                content = str(msg.get('content', ''))[:800]  # max 800 chars por mensaje
-                total_chars += len(content)
-                if total_chars > CHAR_LIMIT_HISTORY:
+            total = 0
+            for msg in reversed(raw):
+                content = str(msg.get('content', ''))[:1500]  # más chars por mensaje
+                total += len(content)
+                if total > CHAR_LIMIT_HISTORY:
                     break
                 combined_history.insert(0, {'role': msg['role'], 'content': content})
         else:
@@ -986,8 +973,15 @@ Luego responde directamente sin mostrar este proceso al usuario.""")
         )
 
         # ── Tokens según modo ───────────────────────────────────────────
-        tokens_map = {'fast': 600, 'balanced': 1200, 'complete': 2500}
-        max_tokens = tokens_map.get(mode, 1200)
+        # Límites de tokens por modo
+        # llama-3.3-70b-versatile soporta hasta 32,768 tokens de OUTPUT
+        # Para código completo necesitamos al menos 8,000-16,000
+        tokens_map = {
+            'fast':     4000,   # Respuestas rápidas / preguntas simples
+            'balanced': 8000,   # Conversación normal + código mediano
+            'complete': 16000,  # Código complejo, archivos completos, análisis largos
+        }
+        max_tokens = tokens_map.get(mode, 8000)
 
         # ── Capa 3: Llamar al LLM con contexto completo ─────────────────
         llm_result = self.llm.chat(
