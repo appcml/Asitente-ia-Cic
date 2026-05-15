@@ -26,11 +26,12 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(
   display:flex;flex-direction:column;
   border-right:1px solid #2d3561;flex-shrink:0;
   transition:transform .3s;z-index:50;
+  overflow:hidden;
 }
-.logo{padding:16px 20px;border-bottom:1px solid #2d3561;display:flex;align-items:center;gap:10px;}
+.logo{padding:16px 20px;border-bottom:1px solid #2d3561;display:flex;align-items:center;gap:10px;flex-shrink:0;}
 .logo h1{font-size:1.1rem;color:var(--accent);}
 .logo span{font-size:.7rem;color:var(--text2);}
-.nav{flex:1;overflow-y:auto;padding:8px 0;}
+.nav{flex:1;overflow-y:auto;padding:8px 0;min-height:0;}
 .nav-item{
   display:flex;align-items:center;gap:10px;
   padding:11px 20px;cursor:pointer;color:var(--text2);
@@ -39,9 +40,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(
 }
 .nav-item:hover,.nav-item.active{color:var(--text);background:rgba(108,99,255,.1);border-left-color:var(--accent);}
 .nav-item .icon{font-size:1rem;width:20px;text-align:center;flex-shrink:0;}
-.sidebar-foot{padding:12px 16px;border-top:1px solid #2d3561;flex-shrink:0;}
-/* Asegurar que sidebar siempre muestre el footer */
-.sidebar{overflow:visible;}
+.sidebar-foot{padding:10px 14px;border-top:1px solid #2d3561;flex-shrink:0;}
 
 /* ── MAIN CONTENT ── */
 .main-wrap{flex:1;display:flex;overflow:hidden;}
@@ -302,26 +301,21 @@ tr:hover td{background:rgba(108,99,255,.04);}
       <div class="nav-item" onclick="showSection('config',this)"><span class="icon">⚙️</span><span>Configuración</span></div>
       <div class="nav-item" onclick="showSection('chat',this)"><span class="icon">💬</span><span>Test Chat</span></div>
       <div class="nav-item" onclick="showSection('users',this)"><span class="icon">👥</span><span>Usuarios</span></div>
+      <!-- Separador -->
+      <div style="border-top:1px solid #2d3561;margin:8px 0"></div>
+      <!-- Botón logout dentro del nav — siempre visible -->
+      <div class="nav-item" onclick="doLogout()" style="color:var(--red);border-left-color:transparent" onmouseover="this.style.background='rgba(255,107,107,.12)';this.style.borderLeftColor='var(--red)'" onmouseout="this.style.background='';this.style.borderLeftColor='transparent'">
+        <span class="icon">🚪</span><span>Cerrar Sesión</span>
+      </div>
     </nav>
-    <div class="sidebar-foot">
-      <!-- Usuario actual -->
-      <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:rgba(108,99,255,.08);border-radius:8px;border:1px solid #2d3561;margin-bottom:8px;overflow:hidden">
-        <span style="font-size:1.1rem;flex-shrink:0">👤</span>
-        <div style="overflow:hidden">
-          <div style="font-size:.8rem;color:var(--text);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" id="sidebarUser">—</div>
-          <div style="font-size:.65rem;color:var(--accent)">🔴 Dev</div>
+    <div class="sidebar-foot" style="padding:10px 14px;border-top:1px solid #2d3561">
+      <div style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:rgba(108,99,255,.08);border-radius:8px;border:1px solid #2d3561;overflow:hidden">
+        <span style="font-size:1rem;flex-shrink:0">👤</span>
+        <div style="overflow:hidden;min-width:0">
+          <div style="font-size:.78rem;color:var(--text);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" id="sidebarUser">—</div>
+          <div style="font-size:.65rem;color:var(--accent)">🔴 Desarrollador</div>
         </div>
       </div>
-      <!-- Botón cerrar sesión — siempre visible -->
-      <button onclick="doLogout()" style="
-        width:100%;display:flex;align-items:center;justify-content:center;gap:8px;
-        padding:9px 12px;background:rgba(255,107,107,.15);border:1px solid var(--red);
-        border-radius:8px;color:var(--red);font-size:.82rem;font-weight:600;
-        cursor:pointer;transition:all .2s;
-      " onmouseover="this.style.background='rgba(255,107,107,.3)'" onmouseout="this.style.background='rgba(255,107,107,.15)'">
-        <span style="font-size:1rem">🚪</span>
-        <span class="logout-label">Cerrar Sesión</span>
-      </button>
     </div>
   </aside>
 
@@ -566,12 +560,12 @@ tr:hover td{background:rgba(108,99,255,.04);}
           </div>
           <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
             <button class="btn btn-primary" onclick="createNormalUser()">✅ Crear usuario</button>
-            <span style="font-size:.75rem;color:var(--text2)">⚠️ Estos usuarios solo acceden al chat. Nunca son desarrolladores.</span>
+            <span style="font-size:.75rem;color:var(--text2)">⚠️ Solo acceden al chat. Nunca son desarrolladores.</span>
           </div>
           <div id="newUserAlert" style="margin-top:10px"></div>
         </div>
 
-        <!-- Lista de usuarios -->
+        <!-- Lista -->
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
           <h3 style="font-size:.9rem">Lista de usuarios</h3>
           <button class="btn btn-outline btn-sm" onclick="loadUsers()">🔄 Actualizar</button>
