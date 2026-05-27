@@ -2354,25 +2354,39 @@ async function analyzeDoc() {
 window.addEventListener('load', async () => {
   if (!TOKEN) return;
   try {
-    const r = await apiCall('/api/auth/verify', 'GET');
-    if (r.success && r.user) {
-      currentUser = r.user;
-      if (r.user.is_developer) {
-        window.location.href = '/developer?token=' + TOKEN;
+    // Usar fetch directo para tener control total del status code
+    const resp = await fetch('/api/auth/verify', {
+      method: 'GET',
+      headers: { 'Authorization': 'Bearer ' + TOKEN, 'Content-Type': 'application/json' }
+    });
+
+    if (resp.status === 200) {
+      const r = await resp.json();
+      if (r.success && r.user) {
+        currentUser = r.user;
+        if (r.user.is_developer) {
+          window.location.href = '/developer?token=' + TOKEN;
+          return;
+        }
+        initApp();
         return;
       }
-      initApp();
-    } else {
-      // Token inválido — limpiar sin borrar si fue error de red
+    }
+
+    if (resp.status === 401) {
+      // Token expirado en servidor — limpiar y mostrar login
       TOKEN = '';
       localStorage.removeItem('cic_token');
+      return;
     }
+
+    // Cualquier otro error (500, red caída, Render dormido) — NO borrar token
+    // El usuario verá el login pero si recarga cuando el server esté up, entrará
+    console.warn('[CicIA] Verify status:', resp.status, '— manteniendo token');
+
   } catch (e) {
-    // Solo limpiar si es error de auth (401), no de red
-    if (e.message && (e.message.includes('401') || e.message.includes('Token'))) {
-      TOKEN = '';
-      localStorage.removeItem('cic_token');
-    }
+    // Error de red (Render frío, sin internet) — NO borrar token
+    console.warn('[CicIA] Verify error de red:', e.message, '— manteniendo token');
   }
 });
 
