@@ -1646,6 +1646,8 @@ window.addEventListener('load',async()=>{
 });
 // ── MÓDULOS DEV ──
 
+// ── MÓDULOS DEV — usan req() que es la función API de developer.html ────────
+
 // Buscar en historial (vista usuario)
 let devSearchTimeout;
 function devSearch(query) {
@@ -1657,13 +1659,13 @@ function devSearch(query) {
   }
   devSearchTimeout = setTimeout(async () => {
     try {
-      const r = await api('/api/history/search?q=' + encodeURIComponent(query));
+      const r = await req('/api/history/search?q=' + encodeURIComponent(query));
       if (!r.results?.length) {
         res.innerHTML = '<div style="color:var(--text2);text-align:center;padding:20px;font-size:.875rem">Sin resultados para "' + esc(query) + '"</div>';
         return;
       }
       res.innerHTML = r.results.map(item => `
-        <div style="background:var(--bg3);border:1px solid #2d3561;border-radius:8px;padding:12px;margin-bottom:8px;cursor:pointer" onclick="loadChatInTest('${item.id}')">
+        <div style="background:var(--bg3);border:1px solid #2d3561;border-radius:8px;padding:12px;margin-bottom:8px;cursor:pointer">
           <div style="font-weight:600;font-size:.85rem">${esc(item.title||'Chat')}</div>
           <div style="color:var(--text2);font-size:.8rem;margin-top:3px">${esc(item.preview||'')}</div>
           <div style="color:var(--text2);font-size:.72rem;margin-top:5px">${new Date(item.date).toLocaleDateString()}</div>
@@ -1679,25 +1681,32 @@ async function devTestImage() {
   const prompt = document.getElementById('dev-img-prompt').value.trim();
   if (!prompt) return showAlert('devImgAlert','Escribe un prompt','warn');
   showAlert('devImgAlert','⏳ Probando módulo...','info');
+  document.getElementById('devImgResult').innerHTML = '';
   try {
-    const r = await api('/api/tools/image/generate','POST',{
+    const r = await req('/api/tools/image/generate','POST',{
       prompt,
       style: document.getElementById('dev-img-style').value,
-      size: document.getElementById('dev-img-size').value,
+      size:  document.getElementById('dev-img-size').value,
       count: 1
     });
-    document.getElementById('devImgResult').innerHTML = '<pre style="font-size:.75rem">' + JSON.stringify(r, null, 2) + '</pre>';
+    document.getElementById('devImgResult').innerHTML =
+      '<pre style="font-size:.72rem;max-height:120px;overflow:auto">' + JSON.stringify(r, null, 2) + '</pre>';
     if (r.success) {
-      showAlert('devImgAlert','✅ Módulo respondió correctamente','ok');
+      showAlert('devImgAlert','✅ Módulo respondió correctamente — provider: ' + (r.provider||'?'),'ok');
       if (r.images?.[0]?.url) {
-        document.getElementById('devImgResult').innerHTML += '<img src="'+r.images[0].url+'" style="max-width:100%;border-radius:8px;margin-top:10px"/>';
+        document.getElementById('devImgResult').innerHTML +=
+          '<img src="'+r.images[0].url+'" style="max-width:100%;border-radius:8px;margin-top:10px"/>';
       }
+      // Actualizar estado del módulo a verde
+      document.getElementById('devImgStatus').innerHTML =
+        '<div class="alert alert-ok">✅ Módulo activo · ' + (r.provider||'') + '</div>';
     } else {
       showAlert('devImgAlert','⚠️ ' + (r.message||r.error||'Sin respuesta esperada'),'warn');
     }
   } catch(e) {
-    showAlert('devImgAlert','❌ Módulo no disponible: ' + e.message,'err');
-    document.getElementById('devImgStatus').innerHTML = '<div class="alert alert-err">Endpoint /api/tools/image/generate no existe aún. Crea el módulo primero.</div>';
+    showAlert('devImgAlert','❌ Error: ' + e.message,'err');
+    document.getElementById('devImgStatus').innerHTML =
+      '<div class="alert alert-err">❌ ' + e.message + '</div>';
   }
 }
 
@@ -1706,7 +1715,8 @@ let devDocFile = null;
 function devHandleDoc(files) {
   if (!files[0]) return;
   devDocFile = files[0];
-  document.getElementById('devDocInfo').innerHTML = '📎 <strong>' + devDocFile.name + '</strong> · ' + (devDocFile.size/1024).toFixed(1) + ' KB';
+  document.getElementById('devDocInfo').innerHTML =
+    '📎 <strong>' + devDocFile.name + '</strong> · ' + (devDocFile.size/1024).toFixed(1) + ' KB';
 }
 async function devTestDoc() {
   if (!devDocFile) return showAlert('devDocAlert','Carga un archivo primero','warn');
@@ -1718,15 +1728,18 @@ async function devTestDoc() {
     const formData = new FormData();
     formData.append('file', devDocFile);
     formData.append('question', question);
+    // developer.html usa TOKEN directamente
     const headers = TOKEN ? {'Authorization':'Bearer '+TOKEN} : {};
     const r = await fetch(API + '/api/tools/docs/analyze', {method:'POST',headers,body:formData});
     const data = await r.json();
-    document.getElementById('devDocResult').innerHTML = '<pre style="font-size:.8rem;white-space:pre-wrap">' + JSON.stringify(data,null,2) + '</pre>';
+    document.getElementById('devDocResult').innerHTML =
+      '<pre style="font-size:.8rem;white-space:pre-wrap">' + JSON.stringify(data,null,2) + '</pre>';
     if (data.success) showAlert('devDocAlert','✅ Módulo OK','ok');
     else showAlert('devDocAlert','⚠️ ' + (data.message||data.error),'warn');
   } catch(e) {
     showAlert('devDocAlert','❌ Módulo no disponible: '+e.message,'err');
-    document.getElementById('devDocResult').innerHTML = '<div style="color:var(--red);font-size:.85rem">Crea modules/doc_analyzer/main.py primero</div>';
+    document.getElementById('devDocResult').innerHTML =
+      '<div style="color:var(--red);font-size:.85rem">Crea modules/doc_analyzer/main.py primero</div>';
   }
   document.getElementById('devDocBtn').disabled = false;
 }
@@ -1738,13 +1751,16 @@ async function devTestCode() {
   if (!code) return showAlert('devCodeAlert','Escribe código para ejecutar','warn');
   showAlert('devCodeAlert','⏳ Ejecutando...','info');
   try {
-    const r = await api('/api/tools/code/execute','POST',{code, language: lang});
-    document.getElementById('devCodeOutput').textContent = r.output || r.result || JSON.stringify(r,null,2);
+    const r = await req('/api/tools/code/execute','POST',{code, language: lang});
+    document.getElementById('devCodeOutput').textContent =
+      r.output || r.result || JSON.stringify(r,null,2);
     if (r.success) showAlert('devCodeAlert','✅ Ejecutado OK','ok');
     else showAlert('devCodeAlert','⚠️ ' + (r.error||'Error en ejecución'),'warn');
   } catch(e) {
     showAlert('devCodeAlert','❌ Módulo no disponible: '+e.message,'err');
-    document.getElementById('devCodeOutput').textContent = 'Módulo no disponible aún.\nCrea: modules/code_executor/main.py';
+    document.getElementById('devCodeOutput').textContent =
+      'Módulo no disponible aún.
+Crea: modules/code_executor/main.py';
   }
 }
 
