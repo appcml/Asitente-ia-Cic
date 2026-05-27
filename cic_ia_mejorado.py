@@ -1926,6 +1926,94 @@ def dev_setup():
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
 
+
+# ═══════════════════════════════════════════════════════════════════════════
+# MÓDULOS INDEPENDIENTES — RUTAS
+# Cada módulo vive en su carpeta y se carga dinámicamente.
+# Si el módulo no existe, el bot no crashea — retorna 503 con mensaje claro.
+# ═══════════════════════════════════════════════════════════════════════════
+
+@app.route('/api/tools/image/generate', methods=['POST'])
+@token_required
+def tools_image_generate(current_user):
+    try:
+        from modules.image_generator.main import generar
+    except ImportError as e:
+        return jsonify({'success': False, 'message': f'Módulo image_generator no disponible: {e}'}), 503
+    data   = request.get_json() or {}
+    prompt = data.get('prompt', '').strip()
+    style  = data.get('style', 'realistic')
+    size   = data.get('size', '512x512')
+    count  = int(data.get('count', 1))
+    if not prompt:
+        return jsonify({'success': False, 'error': 'El prompt es requerido'}), 400
+    try:
+        return jsonify(generar(prompt=prompt, style=style, size=size, count=count))
+    except Exception as e:
+        logger.error(f"[tools/image] {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/tools/docs/analyze', methods=['POST'])
+@token_required
+def tools_docs_analyze(current_user):
+    try:
+        from modules.doc_analyzer.main import analizar
+    except ImportError as e:
+        return jsonify({'success': False, 'message': f'Módulo doc_analyzer no disponible: {e}'}), 503
+    if 'file' not in request.files:
+        return jsonify({'success': False, 'error': 'No se envió archivo'}), 400
+    archivo  = request.files['file']
+    pregunta = request.form.get('question', 'Resume el contenido del documento')
+    if archivo.filename == '':
+        return jsonify({'success': False, 'error': 'Archivo sin nombre'}), 400
+    try:
+        return jsonify(analizar(archivo=archivo, pregunta=pregunta))
+    except Exception as e:
+        logger.error(f"[tools/docs] {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/tools/code/execute', methods=['POST'])
+@token_required
+def tools_code_execute(current_user):
+    try:
+        from modules.code_executor.main import ejecutar
+    except ImportError as e:
+        return jsonify({'success': False, 'message': f'Módulo code_executor no disponible: {e}'}), 503
+    data     = request.get_json() or {}
+    code     = data.get('code', '').strip()
+    language = data.get('language', 'python')
+    if not code:
+        return jsonify({'success': False, 'error': 'No se envió código'}), 400
+    try:
+        return jsonify(ejecutar(code=code, language=language))
+    except Exception as e:
+        logger.error(f"[tools/code] {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/tools/status', methods=['GET'])
+@token_required
+def tools_status(current_user):
+    modulos = {
+        'image_generator': 'modules/image_generator/main.py',
+        'doc_analyzer':    'modules/doc_analyzer/main.py',
+        'code_executor':   'modules/code_executor/main.py',
+        'video_generator': 'modules/video_generator/main.py',
+        'tts':             'modules/tts/main.py',
+    }
+    estado = {}
+    for nombre, ruta in modulos.items():
+        existe = os.path.exists(ruta)
+        estado[nombre] = {
+            'disponible': existe,
+            'ruta':       ruta,
+            'mensaje':    'Activo' if existe else f'Pendiente: crea {ruta}'
+        }
+    return jsonify({'success': True, 'modulos': estado})
+
+
 # ========== MANEJO DE ERRORES ==========
 
 @app.errorhandler(404)
