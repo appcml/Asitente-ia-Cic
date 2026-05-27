@@ -617,28 +617,126 @@ textarea { resize: vertical; min-height: 90px; }
 /* Image generator */
 .image-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 14px;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 16px;
   margin-top: 16px;
 }
 .image-card {
   background: var(--bg3);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: 12px;
   overflow: hidden;
   aspect-ratio: 1;
   display: flex;
   align-items: center;
   justify-content: center;
   position: relative;
-  transition: all .2s;
+  transition: all .25s;
+  cursor: pointer;
+  group: true;
 }
-.image-card:hover { border-color: rgba(124,109,250,0.4); transform: translateY(-2px); }
-.image-card img { width: 100%; height: 100%; object-fit: cover; }
-.image-card .img-placeholder {
-  color: var(--text2);
-  font-size: 2rem;
+.image-card:hover { border-color: rgba(124,109,250,0.5); transform: translateY(-3px); box-shadow: 0 8px 32px rgba(124,109,250,0.2); }
+.image-card img { width: 100%; height: 100%; object-fit: cover; transition: transform .3s; }
+.image-card:hover img { transform: scale(1.03); }
+.image-card .img-placeholder { color: var(--text2); font-size: 2rem; text-align: center; }
+
+/* Overlay de acciones sobre la imagen */
+.image-card .img-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, rgba(0,0,0,0.75) 0%, transparent 50%);
+  opacity: 0;
+  transition: opacity .2s;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding: 10px;
+  gap: 6px;
+}
+.image-card:hover .img-overlay { opacity: 1; }
+.img-actions {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+}
+.img-action-btn {
+  background: rgba(255,255,255,0.15);
+  backdrop-filter: blur(6px);
+  border: 1px solid rgba(255,255,255,0.2);
+  border-radius: 8px;
+  color: #fff;
+  font-size: 0.75rem;
+  padding: 6px 10px;
+  cursor: pointer;
+  transition: background .15s;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+.img-action-btn:hover { background: rgba(255,255,255,0.28); }
+.img-name-label {
+  font-size: 0.65rem;
+  color: rgba(255,255,255,0.6);
   text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Lightbox visor */
+.lightbox {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.92);
+  backdrop-filter: blur(8px);
+  z-index: 2000;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 16px;
+  padding: 20px;
+}
+.lightbox.open { display: flex; }
+.lightbox img {
+  max-width: 90vw;
+  max-height: 80vh;
+  border-radius: 12px;
+  box-shadow: 0 24px 80px rgba(0,0,0,0.6);
+  object-fit: contain;
+}
+.lightbox-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+.lightbox-close {
+  position: absolute;
+  top: 20px;
+  right: 24px;
+  background: rgba(255,255,255,0.1);
+  border: 1px solid rgba(255,255,255,0.2);
+  border-radius: 8px;
+  color: #fff;
+  font-size: 1.2rem;
+  width: 38px;
+  height: 38px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background .15s;
+}
+.lightbox-close:hover { background: rgba(255,255,255,0.2); }
+.lightbox-filename {
+  font-size: 0.78rem;
+  color: rgba(255,255,255,0.5);
+  text-align: center;
+  max-width: 600px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* Projects */
@@ -1635,36 +1733,78 @@ function createProject() {
 // ============================================================
 //  GENERADOR DE IMÁGENES (llama al módulo independiente)
 // ============================================================
+
+// Contador global para numeración SEO de archivos
+let imgCounter = parseInt(localStorage.getItem('cic_img_counter') || '0');
+
+function generarNombreSEO(prompt, index) {
+  // Formato: Cic_IA_Image_01_27-may-2026_04-23-15-pm.png
+  const now   = new Date();
+  const pad   = n => String(n).padStart(2,'0');
+  const meses = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+  const dia   = pad(now.getDate());
+  const mes   = meses[now.getMonth()];
+  const anio  = now.getFullYear();
+  const hh    = pad(now.getHours() > 12 ? now.getHours() - 12 : now.getHours() || 12);
+  const mm    = pad(now.getMinutes());
+  const ss    = pad(now.getSeconds());
+  const ampm  = now.getHours() >= 12 ? 'pm' : 'am';
+  const num   = pad(imgCounter + index + 1);
+  return `Cic_IA_Image_${num}_${dia}-${mes}-${anio}_${hh}-${mm}-${ss}-${ampm}.png`;
+}
+
+function buildImageCard(srcUrl, filename, prompt) {
+  const card = document.createElement('div');
+  card.className = 'image-card';
+  card.dataset.src      = srcUrl;
+  card.dataset.filename = filename;
+
+  card.innerHTML = `
+    <img src="${srcUrl}" alt="${esc(prompt)}" loading="lazy"/>
+    <div class="img-overlay">
+      <div class="img-actions">
+        <button class="img-action-btn" onclick="openLightbox(event, '${srcUrl.replace(/'/g,"\'")}', '${filename.replace(/'/g,"\'")}')">
+          🔍 Ver
+        </button>
+        <button class="img-action-btn" onclick="downloadImage(event, '${srcUrl.replace(/'/g,"\'")}', '${filename.replace(/'/g,"\'")}')">
+          ⬇ Descargar
+        </button>
+      </div>
+      <div class="img-name-label">${filename}</div>
+    </div>`;
+
+  return card;
+}
+
 async function generateImage() {
   const prompt = document.getElementById('imagePrompt').value.trim();
   if (!prompt) return showAlert('imageAlert','Escribe un prompt para la imagen','warn');
 
   const btn = document.getElementById('genImgBtn');
   btn.disabled = true;
-  btn.textContent = '⏳ Generando...';
+  btn.innerHTML = '⏳ Generando...';
   showAlert('imageAlert','','');
 
   try {
-    // Llamada al módulo independiente de generación de imágenes
     const r = await apiCall('/api/tools/image/generate', 'POST', {
       prompt,
       style: document.getElementById('imageStyle').value,
-      size: document.getElementById('imageSize').value,
+      size:  document.getElementById('imageSize').value,
       count: parseInt(document.getElementById('imageCount').value)
     });
 
     if (r.success && r.images) {
       const grid = document.getElementById('imageGrid');
-      r.images.forEach(img => {
-        const card = document.createElement('div');
-        card.className = 'image-card';
-        if (img.url) {
-          card.innerHTML = `<img src="${img.url}" alt="${esc(prompt)}" loading="lazy"/>`;
-        } else if (img.base64) {
-          card.innerHTML = `<img src="data:image/png;base64,${img.base64}" alt="${esc(prompt)}" loading="lazy"/>`;
-        }
+      r.images.forEach((img, i) => {
+        const srcUrl   = img.url || (img.base64 ? `data:image/png;base64,${img.base64}` : '');
+        const filename = generarNombreSEO(prompt, i);
+        if (!srcUrl) return;
+        const card = buildImageCard(srcUrl, filename, prompt);
         grid.insertBefore(card, grid.firstChild);
       });
+      // Actualizar contador global
+      imgCounter += r.images.length;
+      localStorage.setItem('cic_img_counter', imgCounter);
       showAlert('imageAlert', '✅ ' + r.images.length + ' imagen(es) generada(s)', 'ok');
     } else {
       showAlert('imageAlert', r.message || '⚠️ El módulo de imágenes no está activo aún', 'warn');
@@ -1672,7 +1812,7 @@ async function generateImage() {
   } catch(e) {
     const msg = e.message || '';
     if (msg.includes('404') || msg.includes('encontrado')) {
-      showAlert('imageAlert', '⚠️ El endpoint aún no está en Render. Verifica que cic_ia_mejorado.py fue subido con las rutas nuevas y que Render terminó el deploy.', 'warn');
+      showAlert('imageAlert', '⚠️ Endpoint no encontrado. Verifica que cic_ia_mejorado.py tiene las rutas nuevas y que Render terminó el deploy.', 'warn');
     } else if (msg.includes('401')) {
       showAlert('imageAlert', '⚠️ Sesión expirada. Recarga la página.', 'warn');
     } else {
@@ -1681,8 +1821,51 @@ async function generateImage() {
   }
 
   btn.disabled = false;
-  btn.textContent = '✨ Generar imagen';
+  btn.innerHTML = '✨ Generar imagen';
 }
+
+// ── Lightbox ───────────────────────────────────────────────
+let lightboxCurrentSrc  = '';
+let lightboxCurrentName = '';
+
+function openLightbox(e, src, filename) {
+  if (e) e.stopPropagation();
+  lightboxCurrentSrc  = src;
+  lightboxCurrentName = filename;
+  document.getElementById('lightboxImg').src          = src;
+  document.getElementById('lightboxFilename').textContent = filename;
+  document.getElementById('lightbox').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeLightbox(e) {
+  // Cerrar solo si click en el fondo o en botón cerrar
+  if (e && e.target !== document.getElementById('lightbox') && !e.target.classList.contains('lightbox-close')) return;
+  document.getElementById('lightbox').classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+function downloadFromLightbox() {
+  downloadImage(null, lightboxCurrentSrc, lightboxCurrentName);
+}
+
+function downloadImage(e, src, filename) {
+  if (e) e.stopPropagation();
+  const a = document.createElement('a');
+  a.href     = src;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
+
+// Cerrar lightbox con Escape
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    document.getElementById('lightbox').classList.remove('open');
+    document.body.style.overflow = '';
+  }
+});
 
 // ============================================================
 //  ANÁLISIS DE DOCUMENTOS (llama al módulo independiente)
@@ -1786,5 +1969,21 @@ window.addEventListener('load', async () => {
 // Render proyectos al cargar
 renderProjects();
 </script>
+
+<!-- ============ LIGHTBOX VISOR ============ -->
+<div class="lightbox" id="lightbox" onclick="closeLightbox(event)">
+  <button class="lightbox-close" onclick="closeLightbox()">✕</button>
+  <img id="lightboxImg" src="" alt=""/>
+  <div class="lightbox-filename" id="lightboxFilename"></div>
+  <div class="lightbox-actions">
+    <button class="btn btn-primary btn-sm" onclick="downloadFromLightbox()">
+      ⬇ Descargar
+    </button>
+    <button class="btn btn-ghost btn-sm" onclick="closeLightbox()">
+      Cerrar
+    </button>
+  </div>
+</div>
+
 </body>
 </html>
