@@ -1927,6 +1927,138 @@ def dev_setup():
         return jsonify({'error': str(e)}), 500
 
 
+
+# ═══════════════════════════════════════════════════════════════════════════
+# HISTORIAL DE CHAT — rutas para el frontend del usuario
+# ═══════════════════════════════════════════════════════════════════════════
+
+@app.route('/api/history', methods=['GET'])
+@token_required
+def history_list(current_user):
+    """
+    Retorna conversaciones agrupadas por sesión (ventana de 30 min).
+    Cada sesión = lista de mensajes consecutivos del mismo usuario.
+    """
+    limit = min(request.args.get('limit', 20, type=int), 100)
+
+    convs = Conversation.query.filter_by(
+        user_id=current_user.id
+    ).order_by(Conversation.timestamp.desc()).limit(200).all()
+
+    # Agrupar por sesión: mensajes separados < 30 min = misma sesión
+    sessions = []
+    current_session = []
+    GAP = 30 * 60  # 30 minutos en segundos
+
+    for c in reversed(convs):
+        if not current_session:
+            current_session.append(c)
+        else:
+            last = current_session[-1]
+            diff = abs((c.timestamp - last.timestamp).total_seconds())
+            if diff <= GAP:
+                current_session.append(c)
+            else:
+                sessions.append(current_session)
+                current_session = [c]
+    if current_session:
+        sessions.append(current_session)
+
+    sessions.reverse()  # más recientes primero
+
+    result = []
+    for sess in sessions[:limit]:
+        first_msg = sess[0]
+        last_msg  = sess[-1]
+        preview   = first_msg.user_message[:80]
+        result.append({
+            'id':         f"sess_{first_msg.id}_{last_msg.id}",
+            'first_id':   first_msg.id,
+            'last_id':    last_msg.id,
+            'preview':    preview,
+            'title':      preview[:50] + ('...' if len(preview) > 50 else ''),
+            'count':      len(sess),
+            'date':       last_msg.timestamp.isoformat(),
+            'mode':       first_msg.mode_used or 'chat'
+        })
+
+    return jsonify({'success': True, 'history': result, 'total': len(result)})
+
+
+@app.route('/api/history/<string:session_id>', methods=['GET'])
+@token_required
+def history_session(current_user, session_id):
+    """
+    Retorna todos los mensajes de una sesión específica.
+    session_id formato: sess_{first_id}_{last_id}
+    """
+    try:
+        parts    = session_id.split('_')
+        first_id = int(parts[1])
+        last_id  = int(parts[2])
+    except (IndexError, ValueError):
+        return jsonify({'error': 'ID de sesión inválido'}), 400
+
+    convs = Conversation.query.filter(
+        Conversation.user_id == current_user.id,
+        Conversation.id >= first_id,
+        Conversation.id <= last_id
+    ).order_by(Conversation.timestamp.asc()).all()
+
+    if not convs:
+        return jsonify({'error': 'Sesión no encontrada'}), 404
+
+    messages = []
+    for c in convs:
+        messages.append({'role': 'user',      'content': c.user_message, 'time': c.timestamp.isoformat()})
+        messages.append({'role': 'assistant', 'content': c.bot_response,  'time': c.timestamp.isoformat()})
+
+    title = convs[0].user_message[:60] + ('...' if len(convs[0].user_message) > 60 else '')
+
+    return jsonify({
+        'success':  True,
+        'session_id': session_id,
+        'title':    title,
+        'messages': messages,
+        'count':    len(convs),
+        'date':     convs[-1].timestamp.isoformat()
+    })
+
+
+@app.route('/api/history/search', methods=['GET'])
+@token_required
+def history_search(current_user):
+    """Busca en el historial de conversaciones del usuario."""
+    q = request.args.get('q', '').strip()
+    if not q or len(q) < 2:
+        return jsonify({'success': True, 'results': []})
+
+    convs = Conversation.query.filter(
+        Conversation.user_id == current_user.id,
+        db.or_(
+            Conversation.user_message.ilike(f'%{q}%'),
+            Conversation.bot_response.ilike(f'%{q}%')
+        )
+    ).order_by(Conversation.timestamp.desc()).limit(30).all()
+
+    results = []
+    seen_previews = set()
+    for c in convs:
+        preview = c.user_message[:100]
+        if preview in seen_previews:
+            continue
+        seen_previews.add(preview)
+        results.append({
+            'id':      f"sess_{c.id}_{c.id}",
+            'title':   c.user_message[:60],
+            'preview': c.user_message[:120],
+            'date':    c.timestamp.isoformat(),
+            'mode':    c.mode_used or 'chat'
+        })
+
+    return jsonify({'success': True, 'results': results, 'query': q})
+
+
 # ═══════════════════════════════════════════════════════════════════════════
 # MÓDULOS INDEPENDIENTES — RUTAS
 # Cada módulo vive en su carpeta y se carga dinámicamente.
