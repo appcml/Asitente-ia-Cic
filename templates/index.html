@@ -1522,8 +1522,11 @@ async function apiCall(path, method='GET', body=null, auth=true) {
   const opts = { method, headers };
   if (body) opts.body = JSON.stringify(body);
   const r = await fetch(API + path, opts);
-  const data = await r.json();
-  if (!r.ok && data.error) throw new Error(data.error);
+  // Siempre intentar parsear el JSON — el llamador decide qué hacer con r.success
+  let data;
+  try { data = await r.json(); } catch { data = {}; }
+  // Solo lanzar error en fallos de servidor (500+) o si no hay info útil
+  if (r.status >= 500) throw new Error(data.error || `Error del servidor (${r.status})`);
   return data;
 }
 
@@ -1553,10 +1556,16 @@ async function doLogin() {
   const pass = document.getElementById('loginPass').value;
   showAlert('loginAlert','','');
   if (!user || !pass) return showAlert('loginAlert','Completa todos los campos','err');
+
+  const btn = document.querySelector('#formLogin .btn-primary');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Ingresando...'; }
+
   try {
     const r = await apiCall('/api/auth/login','POST',{username:user,password:pass},false);
-    if (r.success) {
-      TOKEN = r.token; currentUser = r.user;
+
+    if (r.success && r.token) {
+      TOKEN = r.token;
+      currentUser = r.user;
       localStorage.setItem('cic_token', TOKEN);
       if (r.user.is_developer) {
         window.location.href = '/developer?token=' + TOKEN;
@@ -1564,9 +1573,15 @@ async function doLogin() {
       }
       initApp();
     } else {
-      showAlert('loginAlert', r.error || 'Credenciales inválidas','err');
+      // Mostrar el error real del servidor
+      const msg = r.error || r.message || 'Credenciales inválidas';
+      showAlert('loginAlert', '❌ ' + msg, 'err');
     }
-  } catch(e) { showAlert('loginAlert','Error de conexión: '+e.message,'err'); }
+  } catch(e) {
+    showAlert('loginAlert', '⚠️ Sin conexión con el servidor. Intenta nuevamente.', 'warn');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Iniciar sesión'; }
+  }
 }
 async function doRegister() {
   const username = document.getElementById('regUser').value.trim();
