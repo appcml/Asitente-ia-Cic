@@ -899,6 +899,77 @@ textarea { resize: vertical; min-height: 90px; }
   .message-row { padding: 5px 12px; }
   .suggestions { grid-template-columns: 1fr; }
 }
+
+/* Tabs historial y módulo imagen */
+.hist-tab, .img-tab {
+  padding: 9px 18px;
+  cursor: pointer;
+  color: var(--text2);
+  font-size: 0.85rem;
+  border-bottom: 2px solid transparent;
+  transition: all .15s;
+  white-space: nowrap;
+}
+.hist-tab:hover, .img-tab:hover { color: var(--text); }
+.hist-tab.active, .img-tab.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+/* Tarjeta de sesión de historial */
+.history-session-card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px 16px;
+  margin-bottom: 8px;
+  cursor: pointer;
+  transition: all .15s;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+.history-session-card:hover {
+  background: var(--bg3);
+  border-color: rgba(124,109,250,0.35);
+  transform: translateX(3px);
+}
+.history-session-card.active {
+  border-color: rgba(124,109,250,0.5);
+  background: rgba(124,109,250,0.06);
+}
+.hsc-icon {
+  font-size: 1.2rem;
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  background: var(--bg3);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.hsc-body { flex: 1; min-width: 0; }
+.hsc-title {
+  font-size: 0.875rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text);
+  margin-bottom: 3px;
+}
+.hsc-meta {
+  font-size: 0.72rem;
+  color: var(--text2);
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.hsc-action {
+  flex-shrink: 0;
+}
 </style>
 </head>
 <body>
@@ -1035,7 +1106,10 @@ textarea { resize: vertical; min-height: 90px; }
     </div>
 
     <!-- Historial reciente -->
-    <div class="recent-label">Recientes</div>
+    <div class="recent-label">
+      Recientes
+      <a onclick="showPage('search', document.getElementById('nav-search'))">Ver todo</a>
+    </div>
     <div id="recentList">
       <!-- Se carga dinámicamente -->
     </div>
@@ -1110,23 +1184,42 @@ textarea { resize: vertical; min-height: 90px; }
       </div>
     </div>
 
-    <!-- PAGE: BUSCAR -->
+    <!-- PAGE: BUSCAR / HISTORIAL -->
     <div class="page" id="page-search">
       <div class="page-header">
-        <div class="page-title">🔍 Buscar</div>
-        <div class="page-sub">Busca entre tus conversaciones anteriores</div>
+        <div class="page-title">🔍 Historial y búsqueda</div>
+        <div class="page-sub">Todas tus conversaciones · Retoma cualquier chat anterior</div>
       </div>
       <div class="page-body">
+        <!-- Barra de búsqueda -->
         <div class="search-input-wrap">
           <span class="search-icon">🔍</span>
           <input type="text" id="searchInput" placeholder="Buscar en conversaciones..."
             oninput="doSearch(this.value)"/>
         </div>
-        <div id="searchResults">
-          <div style="color:var(--text2);text-align:center;padding:40px;font-size:0.9rem">
-            Escribe para buscar en tu historial
+
+        <!-- Tabs: Todo / Por fecha -->
+        <div style="display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:16px">
+          <div class="hist-tab active" id="htab-all" onclick="switchHistTab('all',this)">
+            Todas las conversaciones
+          </div>
+          <div class="hist-tab" id="htab-search" onclick="switchHistTab('search',this)" style="display:none">
+            Resultados de búsqueda
           </div>
         </div>
+
+        <!-- Lista historial completo -->
+        <div id="historyAllList">
+          <div style="color:var(--text2);text-align:center;padding:40px;font-size:.9rem">
+            ⏳ Cargando historial...
+          </div>
+        </div>
+
+        <!-- Resultados búsqueda -->
+        <div id="searchResults" style="display:none"></div>
+
+        <!-- Paginación -->
+        <div id="historyPagination" style="display:flex;gap:8px;justify-content:center;margin-top:20px;flex-wrap:wrap"></div>
       </div>
     </div>
 
@@ -1173,42 +1266,121 @@ textarea { resize: vertical; min-height: 90px; }
       <div class="page-body">
         <div class="card" style="margin-bottom:16px">
           <div class="card-title">🎨 Describe tu imagen</div>
-          <div class="form-group">
-            <label>Prompt (descripción)</label>
-            <textarea id="imagePrompt" placeholder="Ej: Un paisaje montañoso al atardecer, estilo fotorrealista, luz dorada..." rows="3"></textarea>
+
+          <!-- Tabs: Crear nueva / Editar con referencia -->
+          <div style="display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:16px">
+            <div class="img-tab active" id="itab-create" onclick="switchImgTab('create',this)">✨ Crear nueva</div>
+            <div class="img-tab" id="itab-edit" onclick="switchImgTab('edit',this)">🖼️ Usar imagen de referencia</div>
           </div>
-          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:14px">
-            <div class="form-group" style="margin:0">
-              <label>Estilo</label>
-              <select id="imageStyle">
-                <option value="realistic">Fotorrealista</option>
-                <option value="artistic">Artístico</option>
-                <option value="cartoon">Cartoon</option>
-                <option value="abstract">Abstracto</option>
-                <option value="minimalist">Minimalista</option>
-              </select>
+
+          <!-- TAB: CREAR NUEVA -->
+          <div id="imgTabCreate">
+            <div class="form-group">
+              <label>Prompt (descripción)</label>
+              <textarea id="imagePrompt" placeholder="Ej: Un paisaje montañoso al atardecer, estilo fotorrealista, luz dorada..." rows="3"></textarea>
             </div>
-            <div class="form-group" style="margin:0">
-              <label>Tamaño</label>
-              <select id="imageSize">
-                <option value="512x512">512×512</option>
-                <option value="768x768">768×768</option>
-                <option value="1024x1024">1024×1024</option>
-                <option value="1024x576">1024×576 (16:9)</option>
-              </select>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:14px">
+              <div class="form-group" style="margin:0">
+                <label>Estilo</label>
+                <select id="imageStyle">
+                  <option value="realistic">Fotorrealista</option>
+                  <option value="artistic">Artístico</option>
+                  <option value="cartoon">Cartoon</option>
+                  <option value="abstract">Abstracto</option>
+                  <option value="minimalist">Minimalista</option>
+                </select>
+              </div>
+              <div class="form-group" style="margin:0">
+                <label>Tamaño</label>
+                <select id="imageSize">
+                  <option value="512x512">512×512</option>
+                  <option value="768x768">768×768</option>
+                  <option value="1024x1024">1024×1024</option>
+                  <option value="1024x576">1024×576 (16:9)</option>
+                </select>
+              </div>
+              <div class="form-group" style="margin:0">
+                <label>Cantidad</label>
+                <select id="imageCount">
+                  <option value="1">1 imagen</option>
+                  <option value="2">2 imágenes</option>
+                  <option value="4">4 imágenes</option>
+                </select>
+              </div>
             </div>
-            <div class="form-group" style="margin:0">
-              <label>Cantidad</label>
-              <select id="imageCount">
-                <option value="1">1 imagen</option>
-                <option value="2">2 imágenes</option>
-                <option value="4">4 imágenes</option>
-              </select>
-            </div>
+            <button class="btn btn-primary" onclick="generateImage()" id="genImgBtn">
+              ✨ Generar imagen
+            </button>
           </div>
-          <button class="btn btn-primary" onclick="generateImage()" id="genImgBtn">
-            ✨ Generar imagen
-          </button>
+
+          <!-- TAB: IMAGEN DE REFERENCIA -->
+          <div id="imgTabEdit" style="display:none">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:14px">
+
+              <!-- Zona carga imagen referencia -->
+              <div>
+                <label style="display:block;font-size:.8rem;color:var(--text2);margin-bottom:6px;font-weight:500">Imagen de referencia</label>
+                <div id="refImgZone"
+                  style="border:2px dashed var(--border);border-radius:10px;padding:24px;text-align:center;cursor:pointer;transition:all .2s;min-height:120px;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:8px"
+                  onclick="document.getElementById('refImgInput').click()"
+                  ondragover="this.style.borderColor='rgba(124,109,250,.5)';event.preventDefault()"
+                  ondragleave="this.style.borderColor=''"
+                  ondrop="handleRefImgDrop(event)">
+                  <input type="file" id="refImgInput" style="display:none" accept="image/*" onchange="handleRefImgSelect(this.files)"/>
+                  <div id="refImgPreview" style="display:none;width:100%;position:relative">
+                    <img id="refImgThumb" style="max-width:100%;max-height:140px;border-radius:8px;object-fit:contain"/>
+                    <button onclick="clearRefImg(event)" style="position:absolute;top:-6px;right:-6px;background:var(--accent3);border:none;border-radius:50%;width:22px;height:22px;color:#fff;cursor:pointer;font-size:.75rem;display:flex;align-items:center;justify-content:center">✕</button>
+                  </div>
+                  <div id="refImgPlaceholder">
+                    <div style="font-size:1.8rem">🖼️</div>
+                    <div style="font-size:.8rem;color:var(--text2)">Arrastra o haz clic</div>
+                    <div style="font-size:.72rem;color:var(--text2)">JPG · PNG · WEBP</div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Instrucciones de edición -->
+              <div>
+                <div class="form-group">
+                  <label>¿Qué quieres hacer con la imagen?</label>
+                  <select id="refImgMode" style="margin-bottom:10px" onchange="updateRefPlaceholder()">
+                    <option value="style_transfer">Aplicar estilo artístico</option>
+                    <option value="edit">Editar / modificar elementos</option>
+                    <option value="variation">Crear variación similar</option>
+                    <option value="enhance">Mejorar calidad y detalle</option>
+                    <option value="background">Cambiar fondo</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label>Instrucciones</label>
+                  <textarea id="refImgPrompt" rows="4" id="refImgPrompt"
+                    placeholder="Ej: Convierte esta imagen a estilo acuarela, con colores cálidos..."></textarea>
+                </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+                  <div class="form-group" style="margin:0">
+                    <label>Estilo</label>
+                    <select id="refImageStyle">
+                      <option value="realistic">Fotorrealista</option>
+                      <option value="artistic">Artístico</option>
+                      <option value="cartoon">Cartoon</option>
+                      <option value="abstract">Abstracto</option>
+                    </select>
+                  </div>
+                  <div class="form-group" style="margin:0">
+                    <label>Tamaño salida</label>
+                    <select id="refImageSize">
+                      <option value="512x512">512×512</option>
+                      <option value="768x768">768×768</option>
+                      <option value="1024x1024">1024×1024</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <button class="btn btn-primary" onclick="generateWithReference()" id="genRefImgBtn">
+              🖼️ Generar con referencia
+            </button>
+          </div>
         </div>
 
         <div id="imageAlert"></div>
@@ -1451,6 +1623,103 @@ function initApp() {
   loadRecentChats();
 }
 
+// ── Tabs del módulo imagen ─────────────────────────────────────────────────
+function switchImgTab(tab, el) {
+  document.querySelectorAll('.img-tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('imgTabCreate').style.display = tab === 'create' ? 'block' : 'none';
+  document.getElementById('imgTabEdit').style.display   = tab === 'edit'   ? 'block' : 'none';
+}
+
+// ── Imagen de referencia ───────────────────────────────────────────────────
+let refImageFile = null;
+let refImageB64  = null;
+
+function handleRefImgSelect(files) {
+  if (!files[0]) return;
+  loadRefImage(files[0]);
+}
+
+function handleRefImgDrop(e) {
+  e.preventDefault();
+  const file = e.dataTransfer.files[0];
+  if (file && file.type.startsWith('image/')) loadRefImage(file);
+}
+
+function loadRefImage(file) {
+  refImageFile = file;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    refImageB64 = ev.target.result.split(',')[1];
+    document.getElementById('refImgThumb').src       = ev.target.result;
+    document.getElementById('refImgPreview').style.display     = 'block';
+    document.getElementById('refImgPlaceholder').style.display = 'none';
+  };
+  reader.readAsDataURL(file);
+}
+
+function clearRefImg(e) {
+  e.stopPropagation();
+  refImageFile = null;
+  refImageB64  = null;
+  document.getElementById('refImgPreview').style.display     = 'none';
+  document.getElementById('refImgPlaceholder').style.display = 'flex';
+  document.getElementById('refImgInput').value = '';
+}
+
+function updateRefPlaceholder() {
+  const mode = document.getElementById('refImgMode').value;
+  const placeholders = {
+    style_transfer: 'Ej: Convierte a estilo acuarela con colores cálidos y trazos visibles...',
+    edit:           'Ej: Cambia el color de la camisa a rojo, agrega nubes en el cielo...',
+    variation:      'Ej: Crea una versión similar pero con más contraste y colores saturados...',
+    enhance:        'Ej: Mejora la nitidez, aumenta el detalle en las sombras...',
+    background:     'Ej: Cambia el fondo por un bosque de otoño con luz suave...',
+  };
+  document.getElementById('refImgPrompt').placeholder = placeholders[mode] || '';
+}
+
+async function generateWithReference() {
+  if (!refImageB64) return showAlert('imageAlert','Primero carga una imagen de referencia','warn');
+  const prompt = document.getElementById('refImgPrompt').value.trim();
+  if (!prompt) return showAlert('imageAlert','Escribe las instrucciones de edición','warn');
+
+  const btn = document.getElementById('genRefImgBtn');
+  btn.disabled = true;
+  btn.innerHTML = '⏳ Procesando...';
+  showAlert('imageAlert','','');
+
+  try {
+    const r = await apiCall('/api/tools/image/generate', 'POST', {
+      prompt,
+      style:         document.getElementById('refImageStyle').value,
+      size:          document.getElementById('refImageSize').value,
+      count:         1,
+      reference_b64: refImageB64,
+      mode:          document.getElementById('refImgMode').value
+    });
+
+    if (r.success && r.images) {
+      const grid = document.getElementById('imageGrid');
+      r.images.forEach((img, i) => {
+        const srcUrl   = img.url || '';
+        const filename = generarNombreSEO(prompt, i);
+        if (!srcUrl) return;
+        grid.insertBefore(buildImageCard(srcUrl, filename, prompt), grid.firstChild);
+      });
+      imgCounter += r.images.length;
+      localStorage.setItem('cic_img_counter', imgCounter);
+      showAlert('imageAlert','✅ Imagen generada con referencia','ok');
+    } else {
+      showAlert('imageAlert', r.message || '⚠️ Error generando imagen','warn');
+    }
+  } catch(e) {
+    showAlert('imageAlert','⚠️ Error: ' + e.message,'warn');
+  }
+  btn.disabled = false;
+  btn.innerHTML = '🖼️ Generar con referencia';
+}
+
 // ============================================================
 //  NAVEGACIÓN
 // ============================================================
@@ -1460,6 +1729,11 @@ function showPage(name, navEl) {
   const pg = document.getElementById('page-' + name);
   if (pg) pg.classList.add('active');
   if (navEl) navEl.classList.add('active');
+  // Cargar datos al entrar a cada sección
+  if (name === 'search') {
+    loadHistoryPage(1);
+    document.getElementById('searchInput').focus();
+  }
 }
 
 // ============================================================
@@ -1602,33 +1876,169 @@ async function sendMessage() {
 // ============================================================
 //  HISTORIAL RECIENTE
 // ============================================================
+// ── Historial en sidebar ─────────────────────────────────────────────────
+let historyPage = 1;
+let historyAllData = [];
+let activeSessionId = null;
+
 async function loadRecentChats() {
   try {
     const r = await apiCall('/api/history?limit=8');
     const list = document.getElementById('recentList');
-    if (!r.history?.length) { list.innerHTML = ''; return; }
-    list.innerHTML = r.history.map(h => `
-      <div class="recent-item" onclick="loadChat('${h.id}')">
-        ${esc(h.preview || 'Chat anterior')}
-      </div>`).join('');
+    if (!r.history?.length) {
+      list.innerHTML = '<div style="padding:8px 16px;font-size:.75rem;color:var(--text2)">Sin conversaciones aún</div>';
+      return;
+    }
+    list.innerHTML = r.history.map(h => {
+      const icon = h.mode === 'image' ? '🖼️' : h.mode === 'doc' ? '📄' : '💬';
+      const date = new Date(h.date).toLocaleDateString('es-CL', {day:'numeric',month:'short'});
+      return `<div class="recent-item${h.id===activeSessionId?' active':''}" onclick="loadChatSession('${h.id}','${esc(h.title)}')">
+        <span class="ri-icon">${icon}</span>
+        <div class="ri-text">
+          <div class="ri-title">${esc(h.title)}</div>
+          <div class="ri-meta">${date} · ${h.count} msg</div>
+        </div>
+      </div>`;
+    }).join('');
   } catch {}
 }
 
-async function loadChat(id) {
-  // Carga un chat anterior por ID
+// ── Cargar historial completo en página Buscar ────────────────────────────
+async function loadHistoryPage(page = 1) {
   try {
-    const r = await apiCall('/api/history/' + id);
-    if (r.messages) {
-      chatHistory = [];
-      newChat();
-      r.messages.forEach(m => {
-        appendMessage(m.role === 'user' ? 'user' : 'bot', m.content);
-        chatHistory.push({ role: m.role, content: m.content });
-      });
-      document.getElementById('chatTitle').textContent = r.title || 'Chat';
-      currentChatId = id;
+    const r = await apiCall(`/api/history?limit=30`);
+    historyAllData = r.history || [];
+    renderHistoryList(historyAllData);
+  } catch(e) {
+    document.getElementById('historyAllList').innerHTML =
+      `<div style="color:var(--accent3);padding:20px;text-align:center">Error cargando historial: ${e.message}</div>`;
+  }
+}
+
+function renderHistoryList(sessions) {
+  const container = document.getElementById('historyAllList');
+  if (!sessions.length) {
+    container.innerHTML = '<div style="color:var(--text2);text-align:center;padding:48px;font-size:.9rem">Sin conversaciones aún. ¡Empieza a chatear!</div>';
+    return;
+  }
+  // Agrupar por fecha
+  const byDate = {};
+  sessions.forEach(s => {
+    const d = new Date(s.date).toLocaleDateString('es-CL', {weekday:'long',day:'numeric',month:'long',year:'numeric'});
+    if (!byDate[d]) byDate[d] = [];
+    byDate[d].push(s);
+  });
+
+  let html = '';
+  for (const [date, items] of Object.entries(byDate)) {
+    html += `<div style="font-size:.72rem;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text2);padding:12px 0 6px">${date}</div>`;
+    items.forEach(s => {
+      const icon = s.mode === 'image' ? '🖼️' : s.mode === 'doc' ? '📄' : '💬';
+      html += `
+        <div class="history-session-card${s.id===activeSessionId?' active':''}" onclick="loadChatSession('${s.id}','${esc(s.title)}')">
+          <div class="hsc-icon">${icon}</div>
+          <div class="hsc-body">
+            <div class="hsc-title">${esc(s.title)}</div>
+            <div class="hsc-meta">
+              <span>💬 ${s.count} mensajes</span>
+              <span>${new Date(s.date).toLocaleTimeString('es-CL',{hour:'2-digit',minute:'2-digit'})}</span>
+            </div>
+          </div>
+          <div class="hsc-action">
+            <button class="btn btn-ghost btn-sm" onclick="loadChatSession('${s.id}','${esc(s.title)}',true)">
+              Abrir →
+            </button>
+          </div>
+        </div>`;
+    });
+  }
+  container.innerHTML = html;
+}
+
+async function loadChatSession(sessionId, title, navigateToChat = true) {
+  activeSessionId = sessionId;
+  try {
+    const r = await apiCall('/api/history/' + sessionId);
+    if (!r.messages?.length) return;
+
+    chatHistory = [];
+    // Limpiar mensajes actuales
+    const msgs = document.getElementById('chatMessages');
+    msgs.innerHTML = '';
+    const empty = document.getElementById('chatEmpty');
+    if (empty) empty.remove();
+
+    r.messages.forEach(m => {
+      const role = m.role === 'user' ? 'user' : 'bot';
+      appendMessage(role, m.content);
+      chatHistory.push({ role: m.role === 'user' ? 'user' : 'assistant', content: m.content });
+    });
+
+    document.getElementById('chatTitle').textContent = r.title || title || 'Chat';
+    currentChatId = sessionId;
+
+    // Actualizar estado activo en sidebar
+    document.querySelectorAll('.recent-item').forEach(el => el.classList.remove('active'));
+
+    if (navigateToChat) {
+      showPage('chat', document.getElementById('nav-chat'));
     }
-  } catch {}
+    loadRecentChats();
+  } catch(e) {
+    console.error('Error cargando sesión:', e);
+  }
+}
+
+function switchHistTab(tab, el) {
+  document.querySelectorAll('.hist-tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('historyAllList').style.display  = tab === 'all'    ? 'block' : 'none';
+  document.getElementById('searchResults').style.display   = tab === 'search' ? 'block' : 'none';
+}
+
+// ── Búsqueda ──────────────────────────────────────────────────────────────
+let searchTimeout;
+function doSearch(query) {
+  clearTimeout(searchTimeout);
+  const htabSearch = document.getElementById('htab-search');
+  const res = document.getElementById('searchResults');
+
+  if (!query.trim()) {
+    htabSearch.style.display = 'none';
+    switchHistTab('all', document.getElementById('htab-all'));
+    return;
+  }
+
+  // Mostrar tab búsqueda
+  htabSearch.style.display = 'block';
+  htabSearch.textContent = `Resultados: "${query}"`;
+  switchHistTab('search', htabSearch);
+  res.innerHTML = '<div style="color:var(--text2);padding:20px;text-align:center">⏳ Buscando...</div>';
+
+  searchTimeout = setTimeout(async () => {
+    try {
+      const r = await apiCall('/api/history/search?q=' + encodeURIComponent(query));
+      if (!r.results?.length) {
+        res.innerHTML = `<div style="color:var(--text2);text-align:center;padding:40px;font-size:.9rem">Sin resultados para "<strong>${esc(query)}</strong>"</div>`;
+        return;
+      }
+      res.innerHTML = r.results.map(item => `
+        <div class="history-session-card" onclick="loadChatSession('${item.id}','${esc(item.title)}',true)">
+          <div class="hsc-icon">💬</div>
+          <div class="hsc-body">
+            <div class="hsc-title">${esc(item.title || 'Chat')}</div>
+            <div class="hsc-meta">
+              <span>${new Date(item.date).toLocaleDateString('es-CL',{day:'numeric',month:'short',year:'numeric'})}</span>
+            </div>
+          </div>
+          <div class="hsc-action">
+            <button class="btn btn-ghost btn-sm" onclick="loadChatSession('${item.id}','${esc(item.title)}',true)">Abrir →</button>
+          </div>
+        </div>`).join('');
+    } catch(e) {
+      res.innerHTML = `<div style="color:var(--accent3);padding:20px;text-align:center">Error: ${e.message}</div>`;
+    }
+  }, 400);
 }
 
 // ============================================================
