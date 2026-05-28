@@ -1427,6 +1427,67 @@ async function triggerUserImgPaste(){
   }
 }
 
+/* ═══ GLOBAL PASTE LISTENER ═══
+   Captura Ctrl+V en CUALQUIER parte de la página.
+   Si hay una imagen en el portapapeles y el usuario está logueado,
+   la carga automáticamente y enfoca el textarea para que escriba su pregunta.
+   Funciona igual que ChatGPT, WhatsApp Web, Claude, etc.
+══════════════════════════════════ */
+document.addEventListener('paste', function(e){
+  if(!currentUser) return; // no logueado, ignorar
+
+  const items = e.clipboardData?.items;
+  if(!items) return;
+
+  for(const item of items){
+    if(item.type.startsWith('image/')){
+      // Si el foco está en un input/textarea normal de texto, no interferir
+      const active = document.activeElement;
+      const isTextInput = active && (
+        (active.tagName==='INPUT' && active.type!=='file') ||
+        (active.tagName==='TEXTAREA' && active.id !== 'userInput' && active.id !== 'devInput')
+      );
+      if(isTextInput) return;
+
+      e.preventDefault();
+      const blob = item.getAsFile();
+      const r = new FileReader();
+      r.onload = ev => {
+        const dataUrl = ev.target.result;
+        const b64 = dataUrl.split(',')[1];
+        const mime = item.type;
+
+        if(currentUser.is_developer){
+          // Dev: cargar en el chat de prueba dev
+          setDevImg(b64, mime, dataUrl);
+          document.getElementById('devInput')?.focus();
+          showGlobalPasteToast('dev');
+        } else {
+          // Usuario normal: cargar en el chat de usuario
+          setUserImg(b64, mime, dataUrl);
+          document.getElementById('userInput')?.focus();
+          showImgPasteToast();
+        }
+      };
+      r.readAsDataURL(blob);
+      return;
+    }
+  }
+});
+
+function showGlobalPasteToast(role){
+  let t = document.getElementById('imgPasteToast');
+  if(!t){
+    t = document.createElement('div');
+    t.id = 'imgPasteToast';
+    t.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#22d3a0;color:#0a1a12;padding:7px 16px;border-radius:20px;font-size:.78rem;font-weight:700;z-index:9999;pointer-events:none;transition:opacity .3s;white-space:nowrap;box-shadow:0 4px 14px rgba(0,0,0,.4)';
+    document.body.appendChild(t);
+  }
+  t.textContent = '🖼️ Imagen lista — escribe tu pregunta y pulsa Enter';
+  t.style.opacity = '1';
+  setTimeout(()=>{ t.style.opacity='0'; }, 3000);
+}
+
 /* ═══ INIT ═══ */
 window.addEventListener('load',async()=>{
   if(TOKEN){
