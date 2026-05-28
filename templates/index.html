@@ -1167,6 +1167,9 @@ function renderHistModal(items){
   el.innerHTML=items.map(c=>`<div onclick="loadDevConv(${c.id});closeHistModal()" style="padding:11px 18px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .12s" onmouseover="this.style.background='rgba(91,141,238,.06)'" onmouseout="this.style.background=''">
     <div style="font-size:.83rem">👤 ${esc(c.user_message.substring(0,80))}</div>
     <div style="font-size:.79rem;color:var(--text2);margin-top:2px">🤖 ${esc(c.bot_response.substring(0,80))}</div>
+    <div style="font-size:.68rem;color:var(--text3);margin-top:3px">${new Date(c.timestamp).toLocaleString()} · ${c.tokens_used||0} tokens</div>
+  </div>`).join('');
+}
 
 /* ═══ RECENT STRIP COLAPSABLE ═══ */
 function toggleRecentStrip(){
