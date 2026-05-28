@@ -1274,97 +1274,147 @@ def read_github(current_user):
 @app.route('/api/chat/analyze-image', methods=['POST'])
 @token_required
 def analyze_image(current_user):
-    """Analiza una imagen — usa Groq Vision (gratis) o Anthropic como fallback"""
+    """
+    Analiza una imagen con contexto conversacional completo.
+    Soporta:
+    - Groq Vision (llama-3.2-11b-vision-preview) — prioridad 1, gratis
+    - Anthropic Claude Vision — fallback
+    - history: lista de mensajes previos para mantener contexto tras la imagen
+    - follow_up: si es True, es un mensaje de seguimiento sobre la misma imagen
+    """
     try:
-        data      = request.json or {}
-        image_b64 = data.get('image_b64', '')
-        message   = data.get('message', 'Describe esta imagen en detalle en español')
-        mime_type = data.get('mime_type', 'image/jpeg')
+        data        = request.json or {}
+        image_b64   = data.get('image_b64', '')
+        message     = data.get('message', 'Describe esta imagen en detalle en español').strip()
+        mime_type   = data.get('mime_type', 'image/jpeg')
+        history     = data.get('history', [])   # historial previo del frontend
+        follow_up   = data.get('follow_up', False)  # True si es pregunta de seguimiento
 
-        if not image_b64:
+        if not image_b64 and not follow_up:
             return jsonify({'error': 'imagen requerida'}), 400
 
         groq_key = os.environ.get('GROQ_API_KEY', '')
         system   = get_config('system_prompt', 'Eres Cic_IA, un asistente inteligente en español.')
+        system  += ("\n\nCuando analices imágenes, sé detallado y descriptivo. "
+                    "Mantén el contexto de la imagen durante toda la conversación "
+                    "para responder preguntas de seguimiento.")
 
-        # ── Groq Vision (gratis, prioridad 1) ──────────────────────────
+        def _build_groq_messages(include_image=True):
+            """Construye el array de mensajes para Groq con historial."""
+            msgs = [{'role': 'system', 'content': system}]
+            # Añadir historial previo como contexto (últimos 8 intercambios)
+            for h in history[-8:]:
+                role = h.get('role', 'user')
+                content = h.get('content', '')
+                if role in ('user', 'assistant') and content:
+                    msgs.append({'role': role, 'content': str(content)})
+            # Mensaje actual con imagen
+            if include_image and image_b64:
+                data_url = f"data:{mime_type};base64,{image_b64}"
+                msgs.append({'role': 'user', 'content': [
+                    {'type': 'image_url', 'image_url': {'url': data_url, 'detail': 'auto'}},
+                    {'type': 'text', 'text': message or 'Describe esta imagen en detalle.'}
+                ]})
+            else:
+                msgs.append({'role': 'user', 'content': message})
+            return msgs
+
+        def _build_anthropic_messages(include_image=True):
+            """Construye mensajes para Anthropic con historial."""
+            msgs = []
+            for h in history[-8:]:
+                role = h.get('role', 'user')
+                content = h.get('content', '')
+                if role in ('user', 'assistant') and content:
+                    msgs.append({'role': role, 'content': str(content)})
+            if include_image and image_b64:
+                msgs.append({'role': 'user', 'content': [
+                    {'type': 'image', 'source': {'type': 'base64', 'media_type': mime_type, 'data': image_b64}},
+                    {'type': 'text', 'text': message or 'Describe esta imagen en detalle.'}
+                ]})
+            else:
+                msgs.append({'role': 'user', 'content': message})
+            return msgs
+
+        result_text = None
+        tokens      = 0
+        provider    = 'fallback'
+        model_used  = '—'
+
+        # ── Groq Vision (prioridad 1, gratis) ──────────────────────────
         if groq_key:
             try:
-                data_url = f"data:{mime_type};base64,{image_b64}"
                 resp = requests.post(
                     'https://api.groq.com/openai/v1/chat/completions',
-                    headers={
-                        'Authorization': f'Bearer {groq_key}',
-                        'Content-Type':  'application/json'
-                    },
+                    headers={'Authorization': f'Bearer {groq_key}', 'Content-Type': 'application/json'},
                     json={
-                        'model':      'llama-3.2-11b-vision-preview',
-                        'max_tokens': 1500,
-                        'messages': [
-                            {'role': 'system', 'content': system},
-                            {'role': 'user', 'content': [
-                                {'type': 'image_url', 'image_url': {'url': data_url}},
-                                {'type': 'text', 'text': message}
-                            ]}
-                        ]
+                        'model':       'llama-3.2-11b-vision-preview',
+                        'max_tokens':  1500,
+                        'temperature': 0.7,
+                        'messages':    _build_groq_messages(include_image=bool(image_b64))
                     },
-                    timeout=30
+                    timeout=35
                 )
                 resp.raise_for_status()
-                result_text = resp.json()['choices'][0]['message']['content']
-                tokens      = resp.json().get('usage', {}).get('completion_tokens', 0)
-
-                cic_ia._save_conversation(
-                    user_msg=f'[IMAGEN] {message}',
-                    bot_resp=result_text,
-                    user_id=current_user.id,
-                    tokens=tokens,
-                    sources=['groq_vision']
-                )
-                return jsonify({'success': True, 'response': result_text, 'provider': 'groq_vision', 'model': 'llama-3.2-11b-vision-preview', 'tokens': tokens})
+                rdata      = resp.json()
+                result_text = rdata['choices'][0]['message']['content']
+                tokens      = rdata.get('usage', {}).get('completion_tokens', 0)
+                provider    = 'groq_vision'
+                model_used  = 'llama-3.2-11b-vision-preview'
             except Exception as e:
                 logger.warning(f"Groq Vision falló: {e} — intentando Anthropic")
 
         # ── Anthropic Vision (fallback) ─────────────────────────────────
-        if ANTHROPIC_API_KEY:
+        if result_text is None and ANTHROPIC_API_KEY:
             try:
                 resp = requests.post(
                     'https://api.anthropic.com/v1/messages',
                     headers={
-                        'x-api-key': ANTHROPIC_API_KEY,
+                        'x-api-key':         ANTHROPIC_API_KEY,
                         'anthropic-version': '2023-06-01',
-                        'content-type': 'application/json'
+                        'content-type':      'application/json'
                     },
                     json={
-                        'model': 'claude-haiku-4-5-20251001',
+                        'model':      'claude-haiku-4-5-20251001',
                         'max_tokens': 1500,
-                        'system': system,
-                        'messages': [{'role': 'user', 'content': [
-                            {'type': 'image', 'source': {'type': 'base64', 'media_type': mime_type, 'data': image_b64}},
-                            {'type': 'text', 'text': message}
-                        ]}]
+                        'system':     system,
+                        'messages':   _build_anthropic_messages(include_image=bool(image_b64))
                     },
-                    timeout=30
+                    timeout=35
                 )
                 resp.raise_for_status()
-                result_text = resp.json()['content'][0]['text']
-                tokens      = resp.json().get('usage', {}).get('output_tokens', 0)
-                cic_ia._save_conversation(
-                    user_msg=f'[IMAGEN] {message}',
-                    bot_resp=result_text,
-                    user_id=current_user.id,
-                    tokens=tokens,
-                    sources=['anthropic_vision']
-                )
-                return jsonify({'success': True, 'response': result_text, 'provider': 'anthropic_vision', 'tokens': tokens})
+                rdata       = resp.json()
+                result_text = rdata['content'][0]['text']
+                tokens      = rdata.get('usage', {}).get('output_tokens', 0)
+                provider    = 'anthropic_vision'
+                model_used  = 'claude-haiku'
             except Exception as e:
                 logger.error(f"Anthropic Vision falló: {e}")
 
         # ── Sin soporte de visión ───────────────────────────────────────
+        if result_text is None:
+            return jsonify({
+                'success':  False,
+                'response': '⚠️ No hay proveedor de visión disponible. Configura GROQ_API_KEY en las variables de entorno de Render.',
+                'provider': 'fallback'
+            })
+
+        # Guardar en BD con etiqueta limpia (sin HTML)
+        label = message[:80] if message else '(imagen)'
+        cic_ia._save_conversation(
+            user_msg  = f'[🖼️ IMAGEN] {label}',
+            bot_resp  = result_text,
+            user_id   = current_user.id,
+            tokens    = tokens,
+            sources   = [provider]
+        )
+
         return jsonify({
-            'success':  False,
-            'response': '⚠️ No hay proveedor de visión disponible. Configura GROQ_API_KEY en Render.',
-            'provider': 'fallback'
+            'success':  True,
+            'response': result_text,
+            'provider': provider,
+            'model':    model_used,
+            'tokens':   tokens
         })
 
     except Exception as e:
@@ -1390,9 +1440,11 @@ def list_modules():
 
 @app.route('/developer')
 def developer_panel():
-    """Redirige al index unificado — el rol dev se detecta automáticamente en el frontend"""
-    from flask import redirect, url_for
-    return redirect(url_for('index'))
+    """Panel de desarrollador — renderiza template o retorna info básica"""
+    try:
+        return render_template('developer.html')
+    except Exception:
+        return jsonify({'message': 'Panel desarrollador activo. Usa la API /api/dev/*'})
 
 # --- Estadísticas detalladas ---
 
