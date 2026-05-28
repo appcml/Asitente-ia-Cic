@@ -1554,34 +1554,24 @@ async function checkRegisterStatus() {
 async function doLogin() {
   const user = document.getElementById('loginUser').value.trim();
   const pass = document.getElementById('loginPass').value;
-  showAlert('loginAlert','','');
-  if (!user || !pass) return showAlert('loginAlert','Completa todos los campos','err');
-
-  const btn = document.querySelector('#formLogin .btn-primary');
-  if (btn) { btn.disabled = true; btn.textContent = '⏳ Ingresando...'; }
-
+  showAlert('loginAlert', '', '');
+  if (!user || !pass) return showAlert('loginAlert', 'Completa todos los campos', 'err');
   try {
-    const r = await api('/api/auth/login','POST',{username:user,password:pass},false);
-
-    if (r.success && r.token) {
+    const r = await api('/api/auth/login', 'POST', { username: user, password: pass }, false);
+    if (r.success) {
       TOKEN = r.token;
       currentUser = r.user;
       localStorage.setItem('cic_token', TOKEN);
       if (r.user.is_developer) {
-        // Token ya guardado en localStorage — developer.html lo leerá desde ahí
-        window.location.href = '/developer';
+        window.location.href = '/developer?token=' + TOKEN;
         return;
       }
       initApp();
     } else {
-      // Mostrar el error real del servidor
-      const msg = r.error || r.message || 'Credenciales inválidas';
-      showAlert('loginAlert', '❌ ' + msg, 'err');
+      showAlert('loginAlert', r.error || 'Credenciales inválidas', 'err');
     }
   } catch(e) {
-    showAlert('loginAlert', '⚠️ Sin conexión con el servidor. Intenta nuevamente.', 'warn');
-  } finally {
-    if (btn) { btn.disabled = false; btn.textContent = 'Iniciar sesión'; }
+    showAlert('loginAlert', 'Error de conexión: ' + e.message, 'err');
   }
 }
 async function doRegister() {
@@ -1638,6 +1628,8 @@ function initApp() {
   document.getElementById('userAvatar').textContent = name[0].toUpperCase();
   loadRecentChats();
 }
+// Alias para compatibilidad con código legado
+function showPanel() { initApp(); }
 
 // ── Tabs del módulo imagen ─────────────────────────────────────────────────
 function switchImgTab(tab, el) {
@@ -2343,24 +2335,20 @@ async function analyzeDoc() {
 //  INIT AUTOMÁTICO (si hay token guardado)
 // ============================================================
 window.addEventListener('load', async () => {
-  if (!TOKEN) return;
-  try {
-    // Usar fetch directo para tener control total del status code
-    const r = await api('/api/auth/verify', 'GET');
-    if (r.success && r.user) {
-      currentUser = r.user;
-      if (r.user.is_developer) {
-        window.location.href = '/developer';
+  if (TOKEN) {
+    try {
+      const r = await api('/api/auth/verify', 'GET');
+      if (r.success) {
+        currentUser = r.user;
+        if (r.user.is_developer) {
+          window.location.href = '/developer?token=' + TOKEN;
+          return;
+        }
+        initApp();
         return;
       }
-      initApp();
-    } else {
-      TOKEN = '';
-      localStorage.removeItem('cic_token');
-    }
-  } catch(e) {
-    // Error de red — no borrar token (Render puede estar frío)
-    console.warn('[CicIA] verify error:', e.message);
+    } catch {}
+    TOKEN = ''; localStorage.removeItem('cic_token');
   }
 });
 
