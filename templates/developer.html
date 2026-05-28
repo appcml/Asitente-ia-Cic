@@ -780,7 +780,15 @@ tr:hover td{background:rgba(108,99,255,.04);}
 
 <script>
 const API='';
-let TOKEN=localStorage.getItem('cic_token')||'';
+// Leer token: primero localStorage, si no existe leerlo de la URL (?token=...)
+let TOKEN=(function(){
+  const stored = localStorage.getItem('cic_token') || '';
+  if (stored) return stored;
+  const urlParams = new URLSearchParams(window.location.search);
+  const urlToken  = urlParams.get('token') || '';
+  if (urlToken) localStorage.setItem('cic_token', urlToken);
+  return urlToken;
+})();
 let currentUser=null;
 const chatHistory=[];
 let allHistory=[];
@@ -1615,18 +1623,28 @@ window.addEventListener('load',async()=>{
   if(TOKEN){
     try{
       const r=await req('/api/auth/verify','GET');
-      if(r.success&&r.user.is_developer){
-        currentUser=r.user;
-        document.getElementById('loginScreen').style.display='none';
-        document.getElementById('mainApp').style.display='flex';
-        document.getElementById('sidebarUser').textContent=r.user.username;
-        loadDashboard();return;
+      if(r.success && r.user){
+        if(r.user.is_developer){
+          currentUser=r.user;
+          document.getElementById('loginScreen').style.display='none';
+          document.getElementById('mainApp').style.display='flex';
+          document.getElementById('sidebarUser').textContent=r.user.username;
+          loadDashboard();
+          return;
+        } else {
+          // Usuario normal intentando entrar al panel dev — redirigir a /
+          TOKEN=''; localStorage.removeItem('cic_token');
+          window.location.href='/'; return;
+        }
+      } else {
+        // Token inválido
+        TOKEN=''; localStorage.removeItem('cic_token');
+        window.location.href='/'; return;
       }
-    }catch{}
-    // Token inválido o no es dev — limpiar y redirigir a inicio
-    TOKEN='';
-    localStorage.removeItem('cic_token');
-    window.location.href='/';
+    } catch(e) {
+      // Error de RED — NO borrar token, mostrar login para reintentar
+      console.warn('[DevPanel] Error verificando token:', e.message);
+    }
   }
 });
 // ── MÓDULOS DEV ──
