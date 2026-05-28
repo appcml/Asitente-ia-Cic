@@ -1277,7 +1277,7 @@ def analyze_image(current_user):
     """
     Analiza una imagen con contexto conversacional completo.
     Soporta:
-    - Groq Vision (llama-3.2-11b-vision-preview) — prioridad 1, gratis
+    - Groq Vision (meta-llama/llama-4-scout-17b-16e-instruct) — prioridad 1, gratis
     - Anthropic Claude Vision — fallback
     - history: lista de mensajes previos para mantener contexto tras la imagen
     - follow_up: si es True, es un mensaje de seguimiento sobre la misma imagen
@@ -1340,29 +1340,45 @@ def analyze_image(current_user):
         tokens      = 0
         provider    = 'fallback'
         model_used  = '—'
+        error_detail = []  # acumula errores reales para diagnóstico
 
-        # ── Groq Vision (prioridad 1, gratis) ──────────────────────────
+        # ── Groq Vision — intentar con llama-4-scout primero, luego llama-3.2 ──
+        GROQ_VISION_MODELS = [
+            'meta-llama/llama-4-scout-17b-16e-instruct',
+            'llama-3.2-11b-vision-preview',
+            'llama-3.2-90b-vision-preview',
+        ]
+
         if groq_key:
-            try:
-                resp = requests.post(
-                    'https://api.groq.com/openai/v1/chat/completions',
-                    headers={'Authorization': f'Bearer {groq_key}', 'Content-Type': 'application/json'},
-                    json={
-                        'model':       'llama-3.2-11b-vision-preview',
-                        'max_tokens':  1500,
-                        'temperature': 0.7,
-                        'messages':    _build_groq_messages(include_image=bool(image_b64))
-                    },
-                    timeout=35
-                )
-                resp.raise_for_status()
-                rdata      = resp.json()
-                result_text = rdata['choices'][0]['message']['content']
-                tokens      = rdata.get('usage', {}).get('completion_tokens', 0)
-                provider    = 'groq_vision'
-                model_used  = 'llama-3.2-11b-vision-preview'
-            except Exception as e:
-                logger.warning(f"Groq Vision falló: {e} — intentando Anthropic")
+            for vision_model in GROQ_VISION_MODELS:
+                if result_text is not None:
+                    break
+                try:
+                    resp = requests.post(
+                        'https://api.groq.com/openai/v1/chat/completions',
+                        headers={'Authorization': f'Bearer {groq_key}', 'Content-Type': 'application/json'},
+                        json={
+                            'model':       vision_model,
+                            'max_tokens':  1500,
+                            'temperature': 0.7,
+                            'messages':    _build_groq_messages(include_image=bool(image_b64))
+                        },
+                        timeout=35
+                    )
+                    if not resp.ok:
+                        err_body = resp.text[:300]
+                        error_detail.append(f"Groq {vision_model}: HTTP {resp.status_code} — {err_body}")
+                        logger.warning(f"Groq Vision {vision_model} HTTP {resp.status_code}: {err_body}")
+                        continue
+                    rdata       = resp.json()
+                    result_text = rdata['choices'][0]['message']['content']
+                    tokens      = rdata.get('usage', {}).get('completion_tokens', 0)
+                    provider    = 'groq_vision'
+                    model_used  = vision_model
+                    logger.info(f"✅ Groq Vision OK con {vision_model}")
+                except Exception as e:
+                    error_detail.append(f"Groq {vision_model}: {str(e)[:200]}")
+                    logger.warning(f"Groq Vision {vision_model} falló: {e}")
 
         # ── Anthropic Vision (fallback) ─────────────────────────────────
         if result_text is None and ANTHROPIC_API_KEY:
@@ -1382,20 +1398,25 @@ def analyze_image(current_user):
                     },
                     timeout=35
                 )
-                resp.raise_for_status()
-                rdata       = resp.json()
-                result_text = rdata['content'][0]['text']
-                tokens      = rdata.get('usage', {}).get('output_tokens', 0)
-                provider    = 'anthropic_vision'
-                model_used  = 'claude-haiku'
+                if not resp.ok:
+                    error_detail.append(f"Anthropic: HTTP {resp.status_code} — {resp.text[:200]}")
+                else:
+                    rdata       = resp.json()
+                    result_text = rdata['content'][0]['text']
+                    tokens      = rdata.get('usage', {}).get('output_tokens', 0)
+                    provider    = 'anthropic_vision'
+                    model_used  = 'claude-haiku'
             except Exception as e:
+                error_detail.append(f"Anthropic: {str(e)[:200]}")
                 logger.error(f"Anthropic Vision falló: {e}")
 
-        # ── Sin soporte de visión ───────────────────────────────────────
+        # ── Sin soporte de visión — mostrar error real ──────────────────
         if result_text is None:
+            diag = ' | '.join(error_detail) if error_detail else 'Sin GROQ_API_KEY ni ANTHROPIC_API_KEY configuradas'
+            logger.error(f"Vision fallback total. Errores: {diag}")
             return jsonify({
                 'success':  False,
-                'response': '⚠️ No hay proveedor de visión disponible. Configura GROQ_API_KEY en las variables de entorno de Render.',
+                'response': f'⚠️ No se pudo analizar la imagen.\n\nDetalle técnico: {diag}',
                 'provider': 'fallback'
             })
 
