@@ -1607,23 +1607,8 @@ async function resetUserPass(id,username){
 }
 
 /* ══ INPUT HELPERS ══ */
-function autoGrow(el){
-  el.style.height='auto';
-  el.style.height=Math.min(el.scrollHeight,200)+'px';
-  const count=document.getElementById('charCount');
-  if(count){
-    const len=el.value.length;
-    count.textContent=`${len.toLocaleString()} / 100,000`;
-    count.style.color=len>14000?'var(--red)':len>10000?'var(--yellow)':'var(--text2)';
-  }
-}
-function clearInput(){
-  const el=document.getElementById('testMsg');
-  el.value='';el.style.height='42px';
-  const count=document.getElementById('charCount');
-  if(count)count.textContent='0 / 100,000';
-  el.focus();
-}
+
+
 
 /* ══ INIT ══ */
 window.addEventListener('load',async()=>{
