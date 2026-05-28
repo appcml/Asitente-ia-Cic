@@ -894,9 +894,18 @@ function startDev(){
   const n=currentUser.username;
   document.getElementById('devUserName').textContent=n;
   document.getElementById('devAvLetter').textContent=n[0].toUpperCase();
-  // Abrir Dashboard por defecto al entrar
-  const dashItem = document.querySelector('#devSidebar .nav-item[onclick*="dashboard"]');
-  devGo('dashboard', dashItem);
+  // Ocultar TODAS las secciones primero
+  document.querySelectorAll('#devApp .section').forEach(s=>s.classList.remove('active'));
+  document.querySelectorAll('#devSidebar .nav-item').forEach(n=>n.classList.remove('active'));
+  // Mostrar solo Dashboard
+  const dashSec = document.getElementById('dev-dashboard');
+  if(dashSec) dashSec.classList.add('active');
+  // Marcar Dashboard como activo en sidebar
+  document.querySelectorAll('#devSidebar .nav-item').forEach(item=>{
+    if(item.getAttribute('onclick')&&item.getAttribute('onclick').includes('dashboard'))
+      item.classList.add('active');
+  });
+  loadDashboard();
   // Widget de resumen con delay
   setTimeout(loadAndShowSummary, 900);
 }
