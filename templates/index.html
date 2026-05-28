@@ -220,6 +220,69 @@ tr:hover td{background:rgba(91,141,238,.03);}
 .dev-preview-panel p{color:var(--text2);font-size:.86rem;line-height:1.6;}
 .dev-preview-panel .dp-note{color:var(--text3);font-size:.78rem;margin-top:8px;}
 
+/* ── RECENT STRIP COMPACTA ── */
+.recent-strip{border-top:1px solid var(--border);background:var(--bg2);flex-shrink:0;max-height:90px;transition:max-height .25s ease;}
+.recent-strip.rs-collapsed{max-height:32px;overflow:hidden;}
+.recent-strip-head{display:flex;justify-content:space-between;align-items:center;padding:5px 13px;cursor:pointer;}
+.recent-strip-head span{font-size:.68rem;color:var(--text2);font-weight:600;}
+.recent-strip-head .rs-toggle{font-size:.65rem;color:var(--text3);margin-left:4px;transition:transform .2s;}
+.recent-strip.rs-collapsed .rs-toggle{transform:rotate(180deg);}
+.recent-list{display:flex;gap:5px;padding:0 10px 7px;overflow-x:auto;scrollbar-width:thin;}
+.recent-chip{flex-shrink:0;width:140px;background:var(--bg3);border:1px solid var(--border);border-radius:7px;padding:6px 8px;cursor:pointer;transition:border-color .15s;}
+.recent-chip:hover{border-color:var(--accent);}
+.rc-user,.rc-bot{font-size:.68rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.rc-bot{color:var(--text2);margin-top:1px;}
+.rc-date{font-size:.6rem;color:var(--text3);margin-top:2px;}
+
+/* ── WIDGET RESUMEN IA ── */
+.ia-summary-widget{
+  position:fixed;top:12px;right:12px;z-index:100;
+  background:var(--bg2);border:1px solid var(--border2);
+  border-radius:14px;padding:14px 16px;width:300px;
+  box-shadow:var(--shadow);animation:fadeUp .3s ease;
+}
+.ia-summary-widget.sw-hidden{display:none;}
+.sw-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}
+.sw-head h4{font-size:.85rem;font-weight:700;color:var(--text);display:flex;align-items:center;gap:6px;}
+.sw-close{background:none;border:none;color:var(--text3);cursor:pointer;font-size:.8rem;padding:2px 5px;}
+.sw-close:hover{color:var(--text);}
+.sw-stats{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:10px;}
+.sw-stat{background:var(--bg3);border-radius:8px;padding:7px 10px;cursor:pointer;transition:background .15s;border:1px solid transparent;}
+.sw-stat:hover{background:var(--bg4);border-color:var(--accent);}
+.sw-stat .ss-val{font-size:1.2rem;font-weight:700;color:var(--accent);}
+.sw-stat .ss-lbl{font-size:.66rem;color:var(--text2);margin-top:1px;}
+.sw-stat.green .ss-val{color:var(--green);}
+.sw-stat.yellow .ss-val{color:var(--yellow);}
+.sw-stat.purple .ss-val{color:var(--accent3);}
+.sw-new-badge{display:inline-flex;align-items:center;gap:4px;background:rgba(34,211,160,.12);color:var(--green);border:1px solid rgba(34,211,160,.25);border-radius:20px;padding:2px 8px;font-size:.66rem;font-weight:700;margin-bottom:8px;}
+.sw-suggestions{margin-top:8px;border-top:1px solid var(--border);padding-top:8px;}
+.sw-suggestions h5{font-size:.7rem;color:var(--text2);font-weight:600;margin-bottom:6px;text-transform:uppercase;letter-spacing:.06em;}
+.sw-sug-item{display:flex;align-items:flex-start;gap:6px;padding:5px 7px;border-radius:7px;cursor:pointer;transition:background .12s;margin-bottom:2px;background:var(--bg3);}
+.sw-sug-item:hover{background:var(--bg4);}
+.sw-sug-item .si-icon{font-size:.85rem;flex-shrink:0;margin-top:1px;}
+.sw-sug-item .si-text{font-size:.72rem;color:var(--text2);line-height:1.4;}
+.sw-sug-item .si-prio{font-size:.6rem;font-weight:700;padding:1px 5px;border-radius:3px;flex-shrink:0;}
+.si-high{background:rgba(248,113,113,.15);color:var(--red);}
+.si-med{background:rgba(251,191,36,.15);color:var(--yellow);}
+.si-low{background:rgba(34,211,160,.15);color:var(--green);}
+
+/* ── KNOWLEDGE DETAIL DRAWER ── */
+.kd-drawer{
+  position:fixed;right:0;top:0;height:100vh;width:380px;
+  background:var(--bg2);border-left:1px solid var(--border);
+  z-index:150;transform:translateX(100%);transition:transform .25s ease;
+  display:flex;flex-direction:column;box-shadow:-8px 0 32px rgba(0,0,0,.4);
+}
+.kd-drawer.open{transform:translateX(0);}
+.kd-head{padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
+.kd-head h3{font-size:.9rem;font-weight:600;}
+.kd-body{flex:1;overflow-y:auto;padding:14px;}
+.kd-item{padding:10px 12px;background:var(--bg3);border-radius:8px;margin-bottom:8px;border:1px solid var(--border);}
+.kd-item .ki-topic{font-size:.82rem;font-weight:600;color:var(--text);margin-bottom:3px;}
+.kd-item .ki-content{font-size:.75rem;color:var(--text2);line-height:1.5;}
+.kd-item .ki-meta{font-size:.65rem;color:var(--text3);margin-top:4px;display:flex;gap:8px;}
+.kd-empty{text-align:center;color:var(--text2);padding:30px;font-size:.84rem;}
+
 /* RESPONSIVE */
 @media(max-width:768px){
   .hamburger{display:flex!important;align-items:center;}
@@ -295,6 +358,55 @@ tr:hover td{background:rgba(91,141,238,.03);}
 <!-- ═══════════════════════════════════════════
      DEVELOPER APP
 ═══════════════════════════════════════════ -->
+
+<!-- WIDGET RESUMEN IA (aparece al entrar al panel dev) -->
+<div id="iaSummaryWidget" class="ia-summary-widget sw-hidden">
+  <div class="sw-head">
+    <h4>🧠 Resumen del sistema</h4>
+    <button class="sw-close" onclick="closeSummaryWidget()">✕</button>
+  </div>
+  <div id="swNewBadge" style="display:none" class="sw-new-badge">
+    <span>✨</span><span id="swNewCount">0 nuevos</span> aprendizajes hoy
+  </div>
+  <div class="sw-stats">
+    <div class="sw-stat" onclick="devGo('memories',document.querySelector('#devSidebar .nav-item:nth-child(14)'));closeSummaryWidget()">
+      <div class="ss-val" id="sw-mem">—</div><div class="ss-lbl">Memorias</div>
+    </div>
+    <div class="sw-stat green" onclick="devGo('knowledge',document.querySelector('#devSidebar .nav-item:nth-child(13)'));closeSummaryWidget()">
+      <div class="ss-val" id="sw-kb">—</div><div class="ss-lbl">Conocimiento</div>
+    </div>
+    <div class="sw-stat yellow">
+      <div class="ss-val" id="sw-today">—</div><div class="ss-lbl">Msgs hoy</div>
+    </div>
+    <div class="sw-stat purple" onclick="openKnowledgeDrawer('memories');closeSummaryWidget()">
+      <div class="ss-val" id="sw-learned">—</div><div class="ss-lbl">Aprendido hoy</div>
+    </div>
+  </div>
+  <div class="sw-suggestions">
+    <h5>💡 Sugerencias de mejora</h5>
+    <div id="swSuggestions">
+      <div style="color:var(--text3);font-size:.74rem">Cargando sugerencias...</div>
+    </div>
+  </div>
+  <div style="margin-top:8px;display:flex;gap:6px">
+    <button class="btn btn-outline btn-sm" style="flex:1;justify-content:center;font-size:.72rem" onclick="openKnowledgeDrawer('recent');closeSummaryWidget()">📖 Ver aprendizajes</button>
+    <button class="btn btn-ghost btn-sm" style="font-size:.72rem" onclick="closeSummaryWidget()">Cerrar</button>
+  </div>
+</div>
+
+<!-- KNOWLEDGE DETAIL DRAWER -->
+<div id="kdDrawer" class="kd-drawer">
+  <div class="kd-head">
+    <h3 id="kdTitle">📖 Aprendizajes</h3>
+    <button class="btn btn-ghost btn-sm" onclick="closeKdDrawer()">✕</button>
+  </div>
+  <div style="padding:8px 14px;border-bottom:1px solid var(--border)">
+    <input type="text" id="kdSearch" placeholder="Buscar..." style="font-size:.82rem" oninput="filterKdItems(this.value)"/>
+  </div>
+  <div class="kd-body" id="kdBody">
+    <div class="kd-empty">Cargando...</div>
+  </div>
+</div>
 <div id="devApp" class="app" style="display:none">
   <aside class="sidebar" id="devSidebar">
     <div class="sb-logo">
@@ -305,7 +417,7 @@ tr:hover td{background:rgba(91,141,238,.03);}
 
       <!-- PLATAFORMA (funciones públicas que dev también ve) -->
       <div class="nav-sec-label">Plataforma</div>
-      <div class="nav-item active" onclick="devGo('chat',this)"><span class="ni">💬</span><span class="nl">Chat</span></div>
+      <div class="nav-item" onclick="devGo('chat',this)"><span class="ni">💬</span><span class="nl">Chat</span></div>
       <div class="nav-item" onclick="devGo('search',this)"><span class="ni">🔍</span><span class="nl">Buscar</span></div>
       <div class="nav-item" onclick="devGo('projects',this)"><span class="ni">📁</span><span class="nl">Proyectos</span></div>
       <div class="nav-item" onclick="devGo('artifacts',this)"><span class="ni">🗃️</span><span class="nl">Artefactos</span></div>
@@ -324,7 +436,7 @@ tr:hover td{background:rgba(91,141,238,.03);}
         <div class="nav-item" onclick="devGo('dashboard',this)"><span class="ni">📊</span><span class="nl">Dashboard</span></div>
         <div class="nav-item" onclick="devGo('knowledge',this)"><span class="ni">🧠</span><span class="nl">Conocimiento</span></div>
         <div class="nav-item" onclick="devGo('learn',this)"><span class="ni">📚</span><span class="nl">Aprendizaje</span></div>
-        <div class="nav-item" onclick="devGo('memories',this)"><span class="ni">💾</span><span class="nl">Memorias</span></div>
+        <div class="nav-item" onclick="devGo('memories',this)"><span class="ni">💾</span><span class="nl">Memorias</span><button onclick="event.stopPropagation();openKnowledgeDrawer('recent')" style="margin-left:auto;background:rgba(91,141,238,.15);border:none;color:var(--accent);border-radius:4px;padding:1px 5px;font-size:.6rem;cursor:pointer" title="Vista rápida">👁</button></div>
         <div class="nav-item" onclick="devGo('config',this)"><span class="ni">⚙️</span><span class="nl">Configuración</span></div>
         <div class="nav-item" onclick="devGo('users',this)"><span class="ni">👥</span><span class="nl">Usuarios</span></div>
       </div>
@@ -343,7 +455,7 @@ tr:hover td{background:rgba(91,141,238,.03);}
     <div class="main-pad" id="devMainPad" style="flex:1;overflow-y:auto">
 
       <!-- CHAT (test) -->
-      <div id="dev-chat" class="section active" style="height:calc(100vh - 0px);display:flex;flex-direction:column;padding:0;margin:0;overflow:hidden">
+      <div id="dev-chat" class="section" style="height:calc(100vh - 0px);display:flex;flex-direction:column;padding:0;margin:0;overflow:hidden">
         <div class="chat-topbar">
           <input type="text" id="devSysPrompt" placeholder="System prompt opcional..." style="flex:2;min-width:0;font-size:.82rem"/>
           <select id="devMode" style="width:116px;font-size:.82rem">
@@ -379,12 +491,14 @@ tr:hover td{background:rgba(91,141,238,.03);}
             <span id="devInfo" style="font-size:.68rem;color:var(--text3)"></span>
           </div>
         </div>
-        <div class="recent-strip">
-          <div class="recent-strip-head">
-            <span>📜 Conversaciones recientes</span>
-            <button class="btn btn-ghost btn-sm" onclick="openHistModal()" style="font-size:.68rem;padding:2px 7px">Ver todas</button>
+        <div class="recent-strip" id="recentStrip">
+          <div class="recent-strip-head" onclick="toggleRecentStrip()">
+            <span>📜 Recientes <span class="rs-toggle">▲</span></span>
+            <div style="display:flex;gap:4px" onclick="event.stopPropagation()">
+              <button class="btn btn-ghost btn-sm" onclick="openHistModal()" style="font-size:.65rem;padding:2px 6px">Ver todas</button>
+            </div>
           </div>
-          <div class="recent-list" id="devRecentList"><div style="color:var(--text3);font-size:.72rem;padding:8px">Cargando...</div></div>
+          <div class="recent-list" id="devRecentList"><div style="color:var(--text3);font-size:.7rem;padding:6px">Cargando...</div></div>
         </div>
       </div>
 
@@ -780,7 +894,11 @@ function startDev(){
   const n=currentUser.username;
   document.getElementById('devUserName').textContent=n;
   document.getElementById('devAvLetter').textContent=n[0].toUpperCase();
-  loadDashboard();
+  // Abrir Dashboard por defecto al entrar
+  const dashItem = document.querySelector('#devSidebar .nav-item[onclick*="dashboard"]');
+  devGo('dashboard', dashItem);
+  // Widget de resumen con delay
+  setTimeout(loadAndShowSummary, 900);
 }
 function startUser(){
   document.getElementById('userApp').style.display='flex';
@@ -1049,8 +1167,140 @@ function renderHistModal(items){
   el.innerHTML=items.map(c=>`<div onclick="loadDevConv(${c.id});closeHistModal()" style="padding:11px 18px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .12s" onmouseover="this.style.background='rgba(91,141,238,.06)'" onmouseout="this.style.background=''">
     <div style="font-size:.83rem">👤 ${esc(c.user_message.substring(0,80))}</div>
     <div style="font-size:.79rem;color:var(--text2);margin-top:2px">🤖 ${esc(c.bot_response.substring(0,80))}</div>
-    <div style="font-size:.68rem;color:var(--text3);margin-top:3px">${new Date(c.timestamp).toLocaleString()} · ${c.tokens_used||0} tokens</div>
-  </div>`).join('');
+
+/* ═══ RECENT STRIP COLAPSABLE ═══ */
+function toggleRecentStrip(){
+  document.getElementById('recentStrip')?.classList.toggle('rs-collapsed');
+}
+
+/* ═══ WIDGET RESUMEN IA ═══ */
+let summaryLoaded = false;
+async function loadAndShowSummary(){
+  const widget = document.getElementById('iaSummaryWidget');
+  if(!widget) return;
+  widget.classList.remove('sw-hidden');
+  if(summaryLoaded) return;
+  try{
+    const d = await req('/api/dev/stats');
+    // Stats
+    document.getElementById('sw-mem').textContent   = (d.system?.total_memories||0).toLocaleString();
+    document.getElementById('sw-kb').textContent    = (d.system?.manual_knowledge||0).toLocaleString();
+    document.getElementById('sw-today').textContent = d.today?.conversations||0;
+    const learnedToday = d.today?.auto_learned||0;
+    document.getElementById('sw-learned').textContent = learnedToday;
+    // Badge si hay aprendizajes nuevos
+    if(learnedToday > 0){
+      document.getElementById('swNewCount').textContent = learnedToday+' nuevos';
+      document.getElementById('swNewBadge').style.display = 'inline-flex';
+    }
+    // Sugerencias inteligentes basadas en datos reales
+    renderSuggestions(d);
+    summaryLoaded = true;
+  }catch(e){
+    document.getElementById('swSuggestions').innerHTML=`<div style="color:var(--text3);font-size:.72rem">Error al cargar</div>`;
+  }
+}
+function closeSummaryWidget(){
+  document.getElementById('iaSummaryWidget')?.classList.add('sw-hidden');
+}
+function renderSuggestions(stats){
+  const sug = [];
+  const mem    = stats.system?.total_memories||0;
+  const kb     = stats.system?.manual_knowledge||0;
+  const convs  = stats.system?.total_conversations||0;
+  const learned= stats.today?.auto_learned||0;
+  const prov   = stats.ai_config?.provider||'';
+  const hasGroq= stats.ai_config?.has_groq;
+  const hasAnt = stats.ai_config?.has_anthropic;
+
+  // Lógica de sugerencias basada en estado real del sistema
+  if(kb === 0)
+    sug.push({icon:'🧠',text:'Agrega conocimiento manual para que el bot responda mejor sobre tu negocio',prio:'high',action:"devGo('knowledge',null);closeSummaryWidget()"});
+  if(mem < 20)
+    sug.push({icon:'📚',text:'El bot tiene pocas memorias. Inicia aprendizaje forzado sobre temas clave',prio:'high',action:"devGo('learn',null);closeSummaryWidget()"});
+  if(!hasGroq && !hasAnt)
+    sug.push({icon:'⚡',text:'Sin API Key de IA activa. Configura GROQ_API_KEY en Render para activar el bot',prio:'high',action:"devGo('config',null);closeSummaryWidget()"});
+  if(prov==='groq' && !hasAnt)
+    sug.push({icon:'🔄',text:'Considera agregar ANTHROPIC_API_KEY como fallback para mayor disponibilidad',prio:'med',action:"devGo('config',null);closeSummaryWidget()"});
+  if(convs > 50 && kb < 5)
+    sug.push({icon:'💡',text:`${convs} conversaciones sin conocimiento base. Revisa las frecuentes y agrégalas`,prio:'med',action:"devGo('knowledge',null);closeSummaryWidget()"});
+  if(learned > 10)
+    sug.push({icon:'✅',text:`Excelente — ${learned} memorias aprendidas hoy. Revísalas para verificar calidad`,prio:'low',action:"openKnowledgeDrawer('memories');closeSummaryWidget()"});
+  if(mem > 100)
+    sug.push({icon:'🗑️',text:'Considera limpiar memorias de baja calidad para mejorar la precisión del bot',prio:'low',action:"devGo('memories',null);closeSummaryWidget()"});
+  // Sugerencias de módulos
+  sug.push({icon:'🖼️',text:'Módulo de imágenes activo. Considera integrar DALL-E o Flux para generación',prio:'low',action:"devGo('img-gen',null);closeSummaryWidget()"});
+
+  if(!sug.length){
+    document.getElementById('swSuggestions').innerHTML='<div style="color:var(--green);font-size:.74rem">✅ Sistema en buen estado</div>';
+    return;
+  }
+  const prioLabel={'high':'URGENTE','med':'MEDIA','low':'BAJA'};
+  document.getElementById('swSuggestions').innerHTML = sug.slice(0,4).map(s=>`
+    <div class="sw-sug-item" onclick="${s.action}">
+      <span class="si-icon">${s.icon}</span>
+      <span class="si-text">${s.text}</span>
+      <span class="si-prio si-${s.prio}">${prioLabel[s.prio]}</span>
+    </div>`).join('');
+}
+
+/* ═══ KNOWLEDGE DETAIL DRAWER ═══ */
+let kdCurrentType = 'memories';
+let kdAllItems    = [];
+async function openKnowledgeDrawer(type='memories'){
+  kdCurrentType = type;
+  const drawer = document.getElementById('kdDrawer');
+  const title  = document.getElementById('kdTitle');
+  drawer.classList.add('open');
+  document.getElementById('kdSearch').value = '';
+  if(type==='memories'){
+    title.textContent = '💾 Memorias aprendidas';
+    document.getElementById('kdBody').innerHTML = '<div class="kd-empty">Cargando...</div>';
+    try{
+      const d = await req('/api/dev/memories?per_page=50&sort=recent');
+      kdAllItems = d.memories||[];
+      renderKdItems(kdAllItems);
+    }catch(e){ document.getElementById('kdBody').innerHTML=`<div class="kd-empty" style="color:var(--red)">${e.message}</div>`; }
+  } else if(type==='recent'){
+    title.textContent = '📖 Aprendizajes recientes';
+    document.getElementById('kdBody').innerHTML = '<div class="kd-empty">Cargando...</div>';
+    try{
+      const d = await req('/api/dev/memories?per_page=30&sort=recent&source=auto_learning');
+      kdAllItems = d.memories||[];
+      renderKdItems(kdAllItems);
+    }catch(e){ document.getElementById('kdBody').innerHTML=`<div class="kd-empty" style="color:var(--red)">${e.message}</div>`; }
+  } else if(type==='knowledge'){
+    title.textContent = '🧠 Conocimiento manual';
+    document.getElementById('kdBody').innerHTML = '<div class="kd-empty">Cargando...</div>';
+    try{
+      const d = await req('/api/dev/knowledge?per_page=50');
+      kdAllItems = (d.knowledge||[]).map(k=>({topic:k.title,content:k.content,source:'manual_dev',created:k.created,score:1}));
+      renderKdItems(kdAllItems);
+    }catch(e){ document.getElementById('kdBody').innerHTML=`<div class="kd-empty" style="color:var(--red)">${e.message}</div>`; }
+  }
+}
+function closeKdDrawer(){
+  document.getElementById('kdDrawer').classList.remove('open');
+}
+function renderKdItems(items){
+  const el = document.getElementById('kdBody');
+  if(!items.length){ el.innerHTML='<div class="kd-empty">Sin elementos</div>'; return; }
+  const srcColor={'auto_learning':'badge-green','manual_dev':'badge-blue','web_search':'badge-yellow'};
+  el.innerHTML = items.map(m=>`
+    <div class="kd-item">
+      <div class="ki-topic">${esc((m.topic||'Sin tema').substring(0,60))}</div>
+      <div class="ki-content">${esc((m.content||'').substring(0,200))}${(m.content||'').length>200?'…':''}</div>
+      <div class="ki-meta">
+        <span class="badge ${srcColor[m.source]||'badge-purple'}" style="font-size:.6rem">${m.source||'—'}</span>
+        <span>${new Date(m.created).toLocaleDateString()}</span>
+        ${m.score?`<span>⭐ ${(m.score||0).toFixed(2)}</span>`:''}
+      </div>
+    </div>`).join('');
+}
+function filterKdItems(q){
+  if(!q){ renderKdItems(kdAllItems); return; }
+  const f = kdAllItems.filter(m=>(m.topic||'').toLowerCase().includes(q.toLowerCase())||(m.content||'').toLowerCase().includes(q.toLowerCase()));
+  renderKdItems(f);
 }
 
 /* ═══ USER CHAT ═══ */
