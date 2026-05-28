@@ -39,9 +39,6 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(
   border-left:3px solid transparent;white-space:nowrap;
 }
 .nav-item:hover,.nav-item.active{color:var(--text);background:rgba(108,99,255,.1);border-left-color:var(--accent);}
-.nav-group-label{font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#3d4470;padding:6px 20px 3px;white-space:nowrap;}
-.dev-badge{font-size:.58rem;background:rgba(255,211,61,.15);color:#ffd93d;border:1px solid rgba(255,211,61,.25);padding:1px 5px;border-radius:10px;font-weight:700;margin-left:auto;flex-shrink:0;}
-.new-badge{background:rgba(29,209,161,.15)!important;color:#1dd1a1!important;border-color:rgba(29,209,161,.25)!important;}
 .nav-item .icon{font-size:1rem;width:20px;text-align:center;flex-shrink:0;}
 .sidebar-foot{padding:10px 14px;border-top:1px solid #2d3561;flex-shrink:0;}
 
@@ -297,48 +294,16 @@ tr:hover td{background:rgba(108,99,255,.04);}
       <div><h1>Cic_IA</h1><span>Panel Dev v8.0</span></div>
     </div>
     <nav class="nav">
-
-      <!-- ── SISTEMA (solo desarrollador) ── -->
-      <div class="nav-group-label">SISTEMA</div>
       <div class="nav-item active" onclick="showSection('dashboard',this)"><span class="icon">📊</span><span>Dashboard</span></div>
       <div class="nav-item" onclick="showSection('knowledge',this)"><span class="icon">🧠</span><span>Conocimiento</span></div>
       <div class="nav-item" onclick="showSection('learn',this)"><span class="icon">📚</span><span>Aprendizaje</span></div>
       <div class="nav-item" onclick="showSection('memories',this)"><span class="icon">💾</span><span>Memorias</span></div>
       <div class="nav-item" onclick="showSection('config',this)"><span class="icon">⚙️</span><span>Configuración</span></div>
+      <div class="nav-item" onclick="showSection('chat',this)"><span class="icon">💬</span><span>Test Chat</span></div>
       <div class="nav-item" onclick="showSection('users',this)"><span class="icon">👥</span><span>Usuarios</span></div>
-
-      <!-- ── VISTA USUARIO (desarrollador prueba como usuario) ── -->
-      <div class="nav-group-label" style="margin-top:6px">VISTA USUARIO</div>
-      <div class="nav-item" onclick="showSection('chat',this)"><span class="icon">💬</span><span>Chat</span></div>
-      <div class="nav-item" onclick="showSection('u-search',this)"><span class="icon">🔍</span><span>Buscar</span></div>
-      <div class="nav-item" onclick="showSection('u-projects',this)"><span class="icon">📁</span><span>Proyectos</span></div>
-      <div class="nav-item" onclick="showSection('u-artifacts',this)"><span class="icon">🗃️</span><span>Artefactos</span></div>
-
-      <!-- ── MÓDULOS (en prueba interna) ── -->
-      <div class="nav-group-label" style="margin-top:6px">MÓDULOS DEV</div>
-      <div class="nav-item" onclick="showSection('mod-image',this)">
-        <span class="icon">🖼️</span><span>Crear imagen</span>
-        <span class="dev-badge">DEV</span>
-      </div>
-      <div class="nav-item" onclick="showSection('mod-video',this)">
-        <span class="icon">🎬</span><span>Crear video</span>
-        <span class="dev-badge">DEV</span>
-      </div>
-      <div class="nav-item" onclick="showSection('mod-docs',this)">
-        <span class="icon">📄</span><span>Análisis docs</span>
-        <span class="dev-badge">DEV</span>
-      </div>
-      <div class="nav-item" onclick="showSection('mod-tts',this)">
-        <span class="icon">🔊</span><span>Voz / TTS</span>
-        <span class="dev-badge new-badge">NUEVO</span>
-      </div>
-      <div class="nav-item" onclick="showSection('mod-code',this)">
-        <span class="icon">💻</span><span>Ejecutor código</span>
-        <span class="dev-badge">DEV</span>
-      </div>
-
       <!-- Separador -->
-      <div style="border-top:1px solid #2d3561;margin:10px 0 4px"></div>
+      <div style="border-top:1px solid #2d3561;margin:8px 0"></div>
+      <!-- Botón logout dentro del nav — siempre visible -->
       <div class="nav-item" onclick="doLogout()" style="color:var(--red);border-left-color:transparent" onmouseover="this.style.background='rgba(255,107,107,.12)';this.style.borderLeftColor='var(--red)'" onmouseout="this.style.background='';this.style.borderLeftColor='transparent'">
         <span class="icon">🚪</span><span>Cerrar Sesión</span>
       </div>
@@ -612,167 +577,6 @@ tr:hover td{background:rgba(108,99,255,.04);}
           </table>
         </div>
       </section>
-      </section>
-
-      <!-- ══ VISTA USUARIO: BUSCAR ══ -->
-      <section id="sec-u-search" class="section">
-        <h2>🔍 Buscar <span style="font-size:.7rem;background:rgba(108,99,255,.2);color:var(--accent);padding:2px 8px;border-radius:10px;vertical-align:middle">Vista Usuario</span></h2>
-        <p class="subtitle">Así ve el usuario la búsqueda en historial</p>
-        <div class="panel">
-          <div style="position:relative;margin-bottom:16px">
-            <span style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--text2)">🔍</span>
-            <input type="text" id="devSearchInput" placeholder="Buscar en conversaciones..." style="padding-left:36px" oninput="devSearch(this.value)"/>
-          </div>
-          <div id="devSearchResults" style="color:var(--text2);font-size:.875rem;text-align:center;padding:30px">Escribe para buscar en el historial del bot</div>
-        </div>
-      </section>
-
-      <!-- ══ VISTA USUARIO: PROYECTOS ══ -->
-      <section id="sec-u-projects" class="section">
-        <h2>📁 Proyectos <span style="font-size:.7rem;background:rgba(108,99,255,.2);color:var(--accent);padding:2px 8px;border-radius:10px;vertical-align:middle">Vista Usuario</span></h2>
-        <p class="subtitle">Gestión de proyectos del usuario</p>
-        <div class="panel" style="text-align:center;padding:40px">
-          <div style="font-size:3rem;margin-bottom:12px">📁</div>
-          <div style="font-weight:600;margin-bottom:8px">Módulo de Proyectos</div>
-          <p style="color:var(--text2);font-size:.875rem;max-width:360px;margin:0 auto">Los proyectos permiten organizar chats y archivos por tarea. La persistencia se gestiona desde el backend.</p>
-          <div style="margin-top:16px"><span class="badge badge-yellow">Backend requerido: /api/projects</span></div>
-        </div>
-      </section>
-
-      <!-- ══ VISTA USUARIO: ARTEFACTOS ══ -->
-      <section id="sec-u-artifacts" class="section">
-        <h2>🗃️ Artefactos <span style="font-size:.7rem;background:rgba(108,99,255,.2);color:var(--accent);padding:2px 8px;border-radius:10px;vertical-align:middle">Vista Usuario</span></h2>
-        <p class="subtitle">Archivos y resultados generados por la IA</p>
-        <div class="panel" style="text-align:center;padding:40px">
-          <div style="font-size:3rem;margin-bottom:12px">🗃️</div>
-          <div style="font-weight:600;margin-bottom:8px">Módulo de Artefactos</div>
-          <p style="color:var(--text2);font-size:.875rem;max-width:360px;margin:0 auto">Guarda imágenes generadas, análisis de documentos y outputs de código en el historial del usuario.</p>
-          <div style="margin-top:16px"><span class="badge badge-yellow">Backend requerido: /api/artifacts</span></div>
-        </div>
-      </section>
-
-      <!-- ══ MÓDULO DEV: CREAR IMAGEN ══ -->
-      <section id="sec-mod-image" class="section">
-        <h2>🖼️ Módulo: Crear imagen <span style="font-size:.7rem;background:rgba(255,211,61,.15);color:#ffd93d;padding:2px 8px;border-radius:10px;vertical-align:middle">DEV INTERNO</span></h2>
-        <p class="subtitle">Prueba interna del módulo antes de publicar al usuario · Archivo: modules/image_generator/main.py</p>
-        <div class="grid2">
-          <div class="panel">
-            <h3 style="margin-bottom:12px;font-size:.9rem">🎨 Parámetros de prueba</h3>
-            <div class="form-group"><label>Prompt</label><textarea id="dev-img-prompt" rows="3" placeholder="Un paisaje montañoso al atardecer, fotorrealista..."></textarea></div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-              <div class="form-group">
-                <label>Estilo</label>
-                <select id="dev-img-style">
-                  <option value="realistic">Fotorrealista</option>
-                  <option value="artistic">Artístico</option>
-                  <option value="cartoon">Cartoon</option>
-                  <option value="abstract">Abstracto</option>
-                </select>
-              </div>
-              <div class="form-group">
-                <label>Tamaño</label>
-                <select id="dev-img-size">
-                  <option value="512x512">512×512</option>
-                  <option value="768x768">768×768</option>
-                  <option value="1024x1024">1024×1024</option>
-                </select>
-              </div>
-            </div>
-            <button class="btn btn-primary" onclick="devTestImage()">🧪 Probar módulo</button>
-            <div id="devImgAlert" style="margin-top:10px"></div>
-          </div>
-          <div class="panel">
-            <h3 style="margin-bottom:12px;font-size:.9rem">📋 Estado del módulo</h3>
-            <div id="devImgStatus">
-              <div class="alert alert-warn">⚠️ Módulo aún no implementado. Crea <code>modules/image_generator/main.py</code> con función <code>generar(prompt, style, size)</code></div>
-              <div style="font-size:.8rem;color:var(--text2);margin-top:10px">
-                <strong>Endpoint esperado:</strong><br>
-                <code>POST /api/tools/image/generate</code><br><br>
-                <strong>Respuesta esperada:</strong><br>
-                <pre style="font-size:.75rem">{"success":true,"images":[{"url":"..."}]}</pre>
-              </div>
-            </div>
-            <div id="devImgResult" style="margin-top:10px"></div>
-          </div>
-        </div>
-      </section>
-
-      <!-- ══ MÓDULO DEV: CREAR VIDEO ══ -->
-      <section id="sec-mod-video" class="section">
-        <h2>🎬 Módulo: Crear video <span style="font-size:.7rem;background:rgba(255,211,61,.15);color:#ffd93d;padding:2px 8px;border-radius:10px;vertical-align:middle">DEV INTERNO</span></h2>
-        <p class="subtitle">Prueba interna del módulo · Archivo: modules/video_generator/main.py</p>
-        <div class="panel" style="text-align:center;padding:48px">
-          <div style="font-size:3rem;margin-bottom:12px">🎬</div>
-          <div style="font-weight:600;margin-bottom:8px">En desarrollo</div>
-          <p style="color:var(--text2);font-size:.875rem;max-width:400px;margin:0 auto 16px">Crea <code>modules/video_generator/main.py</code> con la función <code>generar(prompt, duracion)</code> y el módulo aparecerá aquí para prueba.</p>
-          <span class="badge badge-yellow">Archivo requerido: modules/video_generator/main.py</span>
-        </div>
-      </section>
-
-      <!-- ══ MÓDULO DEV: ANÁLISIS DOCS ══ -->
-      <section id="sec-mod-docs" class="section">
-        <h2>📄 Módulo: Análisis de docs <span style="font-size:.7rem;background:rgba(255,211,61,.15);color:#ffd93d;padding:2px 8px;border-radius:10px;vertical-align:middle">DEV INTERNO</span></h2>
-        <p class="subtitle">Prueba interna · Archivo: modules/doc_analyzer/main.py</p>
-        <div class="grid2">
-          <div class="panel">
-            <h3 style="margin-bottom:12px;font-size:.9rem">📂 Subir documento de prueba</h3>
-            <div style="border:2px dashed #2d3561;border-radius:10px;padding:30px;text-align:center;cursor:pointer;margin-bottom:14px" onclick="document.getElementById('devDocInput').click()">
-              <input type="file" id="devDocInput" style="display:none" accept=".pdf,.doc,.docx,.txt,.csv,.xlsx" onchange="devHandleDoc(this.files)"/>
-              <div style="font-size:1.8rem;margin-bottom:8px">📂</div>
-              <div style="font-size:.85rem;color:var(--text2)">PDF · Word · Excel · TXT · CSV</div>
-            </div>
-            <div id="devDocInfo" style="font-size:.8rem;color:var(--text2);margin-bottom:10px"></div>
-            <div class="form-group"><label>Pregunta de prueba</label><textarea id="devDocQuestion" rows="2" placeholder="Resume el documento / extrae los datos..."></textarea></div>
-            <button class="btn btn-primary" id="devDocBtn" onclick="devTestDoc()">🧪 Probar análisis</button>
-            <div id="devDocAlert" style="margin-top:10px"></div>
-          </div>
-          <div class="panel">
-            <h3 style="margin-bottom:12px;font-size:.9rem">📋 Resultado del análisis</h3>
-            <div id="devDocResult" style="color:var(--text2);font-size:.875rem">Sin resultado aún</div>
-          </div>
-        </div>
-      </section>
-
-      <!-- ══ MÓDULO DEV: VOZ / TTS ══ -->
-      <section id="sec-mod-tts" class="section">
-        <h2>🔊 Módulo: Voz / TTS <span style="font-size:.7rem;background:rgba(29,209,161,.15);color:#1dd1a1;padding:2px 8px;border-radius:10px;vertical-align:middle">NUEVO</span></h2>
-        <p class="subtitle">Text-to-speech y voz en el chat · Archivo: modules/tts/main.py</p>
-        <div class="panel" style="text-align:center;padding:48px">
-          <div style="font-size:3rem;margin-bottom:12px">🔊</div>
-          <div style="font-weight:600;margin-bottom:8px">Módulo de voz</div>
-          <p style="color:var(--text2);font-size:.875rem;max-width:400px;margin:0 auto 16px">Permitirá al usuario escuchar las respuestas del bot y/o hablarle usando el micrófono. Se integrará como módulo independiente.</p>
-          <span class="badge badge-green">Próximo en desarrollar</span>
-        </div>
-      </section>
-
-      <!-- ══ MÓDULO DEV: EJECUTOR DE CÓDIGO ══ -->
-      <section id="sec-mod-code" class="section">
-        <h2>💻 Módulo: Ejecutor de código <span style="font-size:.7rem;background:rgba(255,211,61,.15);color:#ffd93d;padding:2px 8px;border-radius:10px;vertical-align:middle">DEV INTERNO</span></h2>
-        <p class="subtitle">Ejecuta snippets de código en sandbox · Archivo: modules/code_executor/main.py</p>
-        <div class="grid2">
-          <div class="panel">
-            <h3 style="margin-bottom:12px;font-size:.9rem">⚙️ Probar ejecución</h3>
-            <div class="form-group">
-              <label>Lenguaje</label>
-              <select id="devCodeLang">
-                <option value="python">Python</option>
-                <option value="javascript">JavaScript</option>
-                <option value="bash">Bash</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label>Código</label>
-              <textarea id="devCodeInput" rows="6" placeholder="print('Hola mundo')" style="font-family:monospace;font-size:.85rem"></textarea>
-            </div>
-            <button class="btn btn-primary" onclick="devTestCode()">▶ Ejecutar</button>
-            <div id="devCodeAlert" style="margin-top:10px"></div>
-          </div>
-          <div class="panel">
-            <h3 style="margin-bottom:12px;font-size:.9rem">📤 Output</h3>
-            <pre id="devCodeOutput" style="min-height:140px;color:var(--accent2);font-size:.82rem">Sin output aún</pre>
-          </div>
-        </div>
-      </section>
 
     </main>
   </div><!-- /main-wrap -->
@@ -780,14 +584,12 @@ tr:hover td{background:rgba(108,99,255,.04);}
 
 <script>
 const API='';
-// Leer token: primero localStorage, si no existe leerlo de la URL (?token=...)
 let TOKEN=(function(){
-  const stored = localStorage.getItem('cic_token') || '';
-  if (stored) return stored;
-  const urlParams = new URLSearchParams(window.location.search);
-  const urlToken  = urlParams.get('token') || '';
-  if (urlToken) localStorage.setItem('cic_token', urlToken);
-  return urlToken;
+  const t=localStorage.getItem('cic_token')||'';
+  if(t)return t;
+  const u=new URLSearchParams(window.location.search).get('token')||'';
+  if(u)localStorage.setItem('cic_token',u);
+  return u;
 })();
 let currentUser=null;
 const chatHistory=[];
@@ -1615,159 +1417,43 @@ async function resetUserPass(id,username){
 }
 
 /* ══ INPUT HELPERS ══ */
-
-
+function autoGrow(el){
+  el.style.height='auto';
+  el.style.height=Math.min(el.scrollHeight,200)+'px';
+  const count=document.getElementById('charCount');
+  if(count){
+    const len=el.value.length;
+    count.textContent=`${len.toLocaleString()} / 100,000`;
+    count.style.color=len>14000?'var(--red)':len>10000?'var(--yellow)':'var(--text2)';
+  }
+}
+function clearInput(){
+  const el=document.getElementById('testMsg');
+  el.value='';el.style.height='42px';
+  const count=document.getElementById('charCount');
+  if(count)count.textContent='0 / 100,000';
+  el.focus();
+}
 
 /* ══ INIT ══ */
 window.addEventListener('load',async()=>{
   if(TOKEN){
     try{
       const r=await req('/api/auth/verify','GET');
-      if(r.success && r.user){
-        if(r.user.is_developer){
-          currentUser=r.user;
-          document.getElementById('loginScreen').style.display='none';
-          document.getElementById('mainApp').style.display='flex';
-          document.getElementById('sidebarUser').textContent=r.user.username;
-          loadDashboard();
-          return;
-        } else {
-          // Usuario normal intentando entrar al panel dev — redirigir a /
-          TOKEN=''; localStorage.removeItem('cic_token');
-          window.location.href='/'; return;
-        }
-      } else {
-        // Token inválido
-        TOKEN=''; localStorage.removeItem('cic_token');
-        window.location.href='/'; return;
+      if(r.success&&r.user.is_developer){
+        currentUser=r.user;
+        document.getElementById('loginScreen').style.display='none';
+        document.getElementById('mainApp').style.display='flex';
+        document.getElementById('sidebarUser').textContent=r.user.username;
+        loadDashboard();return;
       }
-    } catch(e) {
-      // Error de RED — NO borrar token, mostrar login para reintentar
-      console.warn('[DevPanel] Error verificando token:', e.message);
-    }
+    }catch{}
+    // Token inválido o no es dev — limpiar y redirigir a inicio
+    TOKEN='';
+    localStorage.removeItem('cic_token');
+    window.location.href='/';
   }
 });
-// ── MÓDULOS DEV ──
-
-// ── MÓDULOS DEV — usan req() que es la función API de developer.html ────────
-
-// Buscar en historial (vista usuario)
-let devSearchTimeout;
-function devSearch(query) {
-  clearTimeout(devSearchTimeout);
-  const res = document.getElementById('devSearchResults');
-  if (!query.trim()) {
-    res.innerHTML = '<div style="color:var(--text2);font-size:.875rem;text-align:center;padding:30px">Escribe para buscar</div>';
-    return;
-  }
-  devSearchTimeout = setTimeout(async () => {
-    try {
-      const r = await req('/api/history/search?q=' + encodeURIComponent(query));
-      if (!r.results?.length) {
-        res.innerHTML = '<div style="color:var(--text2);text-align:center;padding:20px;font-size:.875rem">Sin resultados para "' + esc(query) + '"</div>';
-        return;
-      }
-      res.innerHTML = r.results.map(item => `
-        <div style="background:var(--bg3);border:1px solid #2d3561;border-radius:8px;padding:12px;margin-bottom:8px;cursor:pointer">
-          <div style="font-weight:600;font-size:.85rem">${esc(item.title||'Chat')}</div>
-          <div style="color:var(--text2);font-size:.8rem;margin-top:3px">${esc(item.preview||'')}</div>
-          <div style="color:var(--text2);font-size:.72rem;margin-top:5px">${new Date(item.date).toLocaleDateString()}</div>
-        </div>`).join('');
-    } catch(e) {
-      res.innerHTML = '<div style="color:var(--red);font-size:.875rem">Error: ' + e.message + '</div>';
-    }
-  }, 400);
-}
-
-// Test módulo imagen
-async function devTestImage() {
-  const prompt = document.getElementById('dev-img-prompt').value.trim();
-  if (!prompt) return showAlert('devImgAlert','Escribe un prompt','warn');
-  showAlert('devImgAlert','⏳ Probando módulo...','info');
-  document.getElementById('devImgResult').innerHTML = '';
-  try {
-    const r = await req('/api/tools/image/generate','POST',{
-      prompt,
-      style: document.getElementById('dev-img-style').value,
-      size:  document.getElementById('dev-img-size').value,
-      count: 1
-    });
-    document.getElementById('devImgResult').innerHTML =
-      '<pre style="font-size:.72rem;max-height:120px;overflow:auto">' + JSON.stringify(r, null, 2) + '</pre>';
-    if (r.success) {
-      showAlert('devImgAlert','✅ Módulo respondió correctamente — provider: ' + (r.provider||'?'),'ok');
-      if (r.images?.[0]?.url) {
-        document.getElementById('devImgResult').innerHTML +=
-          '<img src="'+r.images[0].url+'" style="max-width:100%;border-radius:8px;margin-top:10px"/>';
-      }
-      // Actualizar estado del módulo a verde
-      document.getElementById('devImgStatus').innerHTML =
-        '<div class="alert alert-ok">✅ Módulo activo · ' + (r.provider||'') + '</div>';
-    } else {
-      showAlert('devImgAlert','⚠️ ' + (r.message||r.error||'Sin respuesta esperada'),'warn');
-    }
-  } catch(e) {
-    showAlert('devImgAlert','❌ Error: ' + e.message,'err');
-    document.getElementById('devImgStatus').innerHTML =
-      '<div class="alert alert-err">❌ ' + e.message + '</div>';
-  }
-}
-
-// Test módulo documentos
-let devDocFile = null;
-function devHandleDoc(files) {
-  if (!files[0]) return;
-  devDocFile = files[0];
-  document.getElementById('devDocInfo').innerHTML =
-    '📎 <strong>' + devDocFile.name + '</strong> · ' + (devDocFile.size/1024).toFixed(1) + ' KB';
-}
-async function devTestDoc() {
-  if (!devDocFile) return showAlert('devDocAlert','Carga un archivo primero','warn');
-  const question = document.getElementById('devDocQuestion').value.trim();
-  if (!question) return showAlert('devDocAlert','Escribe una pregunta','warn');
-  document.getElementById('devDocBtn').disabled = true;
-  showAlert('devDocAlert','⏳ Analizando...','info');
-  try {
-    const formData = new FormData();
-    formData.append('file', devDocFile);
-    formData.append('question', question);
-    // developer.html usa TOKEN directamente
-    const headers = TOKEN ? {'Authorization':'Bearer '+TOKEN} : {};
-    const r = await fetch(API + '/api/tools/docs/analyze', {method:'POST',headers,body:formData});
-    const data = await r.json();
-    document.getElementById('devDocResult').innerHTML =
-      '<pre style="font-size:.8rem;white-space:pre-wrap">' + JSON.stringify(data,null,2) + '</pre>';
-    if (data.success) showAlert('devDocAlert','✅ Módulo OK','ok');
-    else showAlert('devDocAlert','⚠️ ' + (data.message||data.error),'warn');
-  } catch(e) {
-    showAlert('devDocAlert','❌ Módulo no disponible: '+e.message,'err');
-    document.getElementById('devDocResult').innerHTML =
-      '<div style="color:var(--red);font-size:.85rem">Crea modules/doc_analyzer/main.py primero</div>';
-  }
-  document.getElementById('devDocBtn').disabled = false;
-}
-
-// Test ejecutor de código
-async function devTestCode() {
-  const code = document.getElementById('devCodeInput').value.trim();
-  const lang = document.getElementById('devCodeLang').value;
-  if (!code) return showAlert('devCodeAlert','Escribe código para ejecutar','warn');
-  showAlert('devCodeAlert','⏳ Ejecutando...','info');
-  try {
-    const r = await req('/api/tools/code/execute','POST',{code, language: lang});
-    document.getElementById('devCodeOutput').textContent =
-      r.output || r.result || JSON.stringify(r,null,2);
-    if (r.success) showAlert('devCodeAlert','✅ Ejecutado OK','ok');
-    else showAlert('devCodeAlert','⚠️ ' + (r.error||'Error en ejecución'),'warn');
-  } catch(e) {
-    showAlert('devCodeAlert','❌ Módulo no disponible: '+e.message,'err');
-    document.getElementById('devCodeOutput').textContent =
-      'Módulo no disponible aún.
-Crea: modules/code_executor/main.py';
-  }
-}
-
-
 </script>
 </body>
 </html>
