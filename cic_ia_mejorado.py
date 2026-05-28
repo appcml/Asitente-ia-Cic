@@ -1,1939 +1,1764 @@
-"""
-Cic_IA - Asistente Inteligente EVOLUTIVO
-Archivo principal - Versión 8.0 PRODUCTION READY
-Mejoras: LLM real, seguridad, rendimiento, modo desarrollador completo
-"""
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Cic_IA</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<style>
+:root{
+  --bg:#080b12; --bg2:#0f1420; --bg3:#161c2e; --bg4:#1e2540;
+  --border:#252d47; --border2:#2e3a5e;
+  --accent:#5b8dee; --accent2:#38d9c0; --accent3:#a78bfa;
+  --green:#22d3a0; --red:#f87171; --yellow:#fbbf24; --orange:#fb923c;
+  --text:#e2e8f0; --text2:#8899bb; --text3:#4a5878;
+  --radius:10px; --radius2:14px;
+  --shadow:0 8px 32px rgba(0,0,0,.5);
+  --font:'Outfit',system-ui,sans-serif;
+  --mono:'JetBrains Mono',monospace;
+  --sidebar-w:230px; --code-panel-w:440px;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+html,body{height:100%;}
+body{font-family:var(--font);background:var(--bg);color:var(--text);font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased;}
+::selection{background:rgba(91,141,238,.3);}
+::-webkit-scrollbar{width:5px;height:5px;}
+::-webkit-scrollbar-track{background:transparent;}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px;}
 
-from flask import Flask, render_template, request, jsonify, Response, stream_with_context
-from flask_sqlalchemy import SQLAlchemy
-from werkzeug.security import generate_password_hash, check_password_hash
-from datetime import datetime, date, timedelta
-import os
-import json
-import random
-import threading
-import time
-import re
-import hashlib
-import requests
-import secrets
-import logging
-import pickle
-import numpy as np
-from functools import wraps
-from sqlalchemy import text, inspect
+/* LOGIN */
+.login-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;
+  background:radial-gradient(ellipse at 30% 20%,rgba(91,141,238,.08) 0%,transparent 60%),
+             radial-gradient(ellipse at 70% 80%,rgba(167,139,250,.06) 0%,transparent 60%),var(--bg);}
+.login-card{width:100%;max-width:400px;background:var(--bg2);border:1px solid var(--border);border-radius:20px;padding:44px 40px;box-shadow:var(--shadow);animation:fadeUp .4s ease;}
+.login-orb{width:64px;height:64px;background:linear-gradient(135deg,var(--accent),var(--accent3));border-radius:20px;margin:0 auto 14px;display:flex;align-items:center;justify-content:center;font-size:28px;box-shadow:0 0 30px rgba(91,141,238,.35);}
 
-# ========== CONFIGURACIÓN ==========
-logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(name)s: %(message)s')
-logger = logging.getLogger('cic_ia')
+/* FORMS */
+.form-group{margin-bottom:14px;}
+label{display:block;font-size:.75rem;color:var(--text2);margin-bottom:5px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;}
+input,textarea,select{width:100%;padding:10px 14px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:.9rem;font-family:var(--font);transition:border .15s,box-shadow .15s;}
+input:focus,textarea:focus,select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(91,141,238,.15);}
+textarea{resize:vertical;min-height:80px;}
 
-app = Flask(__name__)
+/* BUTTONS */
+.btn{padding:9px 18px;border-radius:8px;border:none;cursor:pointer;font-size:.88rem;font-weight:600;font-family:var(--font);transition:all .15s;display:inline-flex;align-items:center;gap:6px;}
+.btn-primary{background:var(--accent);color:#fff;}
+.btn-primary:hover{background:#4a7de0;transform:translateY(-1px);box-shadow:0 4px 14px rgba(91,141,238,.4);}
+.btn-green{background:var(--green);color:#0a1a12;}
+.btn-green:hover{background:#1bbf90;}
+.btn-red{background:var(--red);color:#fff;}
+.btn-red:hover{background:#ef4444;}
+.btn-outline{background:transparent;border:1px solid var(--border2);color:var(--text2);}
+.btn-outline:hover{border-color:var(--accent);color:var(--accent);background:rgba(91,141,238,.07);}
+.btn-ghost{background:transparent;color:var(--text2);}
+.btn-ghost:hover{background:var(--bg3);color:var(--text);}
+.btn-sm{padding:5px 10px;font-size:.76rem;}
+.btn-icon{padding:6px 8px;}
+.btn:disabled{opacity:.45;cursor:not-allowed;transform:none!important;box-shadow:none!important;}
 
-# SECRET_KEY siempre desde entorno — nunca hardcodeado
-_secret = os.environ.get('SECRET_KEY')
-if not _secret:
-    _secret = secrets.token_hex(32)
-    logger.warning("SECRET_KEY no configurada como variable de entorno. Generando aleatoria (sesiones no persistirán entre reinicios).")
-app.config['SECRET_KEY'] = _secret
+/* ALERTS */
+.alert{padding:10px 14px;border-radius:8px;margin-bottom:12px;font-size:.84rem;}
+.alert-warn{background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.3);color:var(--yellow);}
+.alert-ok{background:rgba(34,211,160,.08);border:1px solid rgba(34,211,160,.3);color:var(--green);}
+.alert-err{background:rgba(248,113,113,.08);border:1px solid rgba(248,113,113,.3);color:var(--red);}
+.alert-info{background:rgba(91,141,238,.08);border:1px solid rgba(91,141,238,.3);color:var(--accent2);}
 
-# Base de datos — con soporte SSL para Render/PostgreSQL
-database_url = os.environ.get('DATABASE_URL', '')
-if database_url.startswith('postgres://'):
-    database_url = database_url.replace('postgres://', 'postgresql://', 1)
-# Render requiere SSL
-_is_postgres = database_url and 'postgresql' in database_url
-if _is_postgres and 'sslmode' not in database_url:
-    sep = '&' if '?' in database_url else '?'
-    database_url = database_url + sep + 'sslmode=require'
-app.config['SQLALCHEMY_DATABASE_URI'] = database_url or 'sqlite:///cic_ia.db'
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-_engine_opts = {'pool_pre_ping': True, 'pool_recycle': 300}
-if _is_postgres:
-    _engine_opts['connect_args'] = {'sslmode': 'require'}
-app.config['SQLALCHEMY_ENGINE_OPTIONS'] = _engine_opts
+/* BADGES */
+.badge{display:inline-flex;align-items:center;padding:2px 7px;border-radius:20px;font-size:.68rem;font-weight:700;}
+.badge-green{background:rgba(34,211,160,.12);color:var(--green);}
+.badge-yellow{background:rgba(251,191,36,.12);color:var(--yellow);}
+.badge-red{background:rgba(248,113,113,.12);color:var(--red);}
+.badge-blue{background:rgba(56,217,192,.12);color:var(--accent2);}
+.badge-purple{background:rgba(167,139,250,.12);color:var(--accent3);}
+.badge-orange{background:rgba(251,146,60,.12);color:var(--orange);}
+.badge-dev{background:rgba(91,141,238,.15);color:var(--accent);border:1px solid rgba(91,141,238,.3);}
+.dot{width:7px;height:7px;border-radius:50%;display:inline-block;flex-shrink:0;}
+.dot-green{background:var(--green);box-shadow:0 0 6px var(--green);}
+.dot-yellow{background:var(--yellow);}
+.dot-red{background:var(--red);}
+@keyframes pulse-dot{0%,100%{opacity:1;}50%{opacity:.3;}}
+.pulse{animation:pulse-dot 2s infinite;}
 
-# API Keys (desde entorno)
-ANTHROPIC_API_KEY = os.environ.get('ANTHROPIC_API_KEY', '')
-OPENAI_API_KEY    = os.environ.get('OPENAI_API_KEY', '')
+/* LAYOUT */
+.app{display:flex;height:100vh;overflow:hidden;}
 
-# Archivos
-UPLOAD_FOLDER = 'uploads'
-ALLOWED_EXTENSIONS = {'txt','pdf','png','jpg','jpeg','gif','doc','docx','py','js','html','css','json','csv','xlsx','xls','db','sqlite','md'}
-app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-app.config['MAX_CONTENT_LENGTH'] = 32 * 1024 * 1024  # 32MB
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-os.makedirs('models', exist_ok=True)
+/* SIDEBAR */
+.sidebar{width:var(--sidebar-w);background:var(--bg2);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;transition:transform .25s ease;z-index:50;overflow:hidden;}
+.sb-logo{padding:16px 14px 12px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;}
+.sb-logo .orb{width:32px;height:32px;background:linear-gradient(135deg,var(--accent),var(--accent3));border-radius:9px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:15px;}
+.sb-logo h2{font-size:.92rem;font-weight:700;color:var(--text);letter-spacing:-.01em;}
+.sb-logo span{font-size:.65rem;color:var(--text3);}
+.sb-nav{flex:1;overflow-y:auto;padding:6px 0;}
+.nav-sec-label{padding:8px 14px 3px;font-size:.62rem;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.1em;}
+.nav-item{display:flex;align-items:center;gap:9px;padding:8px 14px;cursor:pointer;color:var(--text2);font-size:.84rem;font-weight:500;transition:all .15s;border-left:2px solid transparent;user-select:none;}
+.nav-item:hover{color:var(--text);background:rgba(91,141,238,.06);}
+.nav-item.active{color:var(--text);background:rgba(91,141,238,.1);border-left-color:var(--accent);}
+.nav-item .ni{font-size:.9rem;width:20px;text-align:center;flex-shrink:0;}
+.nav-item .nl{flex:1;}
+.nav-item .nb{font-size:.58rem;font-weight:800;padding:1px 4px;border-radius:4px;background:rgba(91,141,238,.2);color:var(--accent);letter-spacing:.04em;}
+.nav-item .nb.dev{background:rgba(167,139,250,.2);color:var(--accent3);}
+.nav-item .nl-lock{font-size:.68rem;color:var(--text3);}
+.nav-locked{opacity:.5;cursor:not-allowed!important;}
+.nav-locked:hover{color:var(--text2)!important;background:transparent!important;}
+.nav-dev .nav-item:hover{background:rgba(167,139,250,.06);}
+.nav-dev .nav-item.active{background:rgba(167,139,250,.1);border-left-color:var(--accent3);}
+.sb-foot{padding:12px 12px;border-top:1px solid var(--border);}
+.user-chip{display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--bg3);border-radius:8px;border:1px solid var(--border);margin-bottom:8px;}
+.uc-av{width:28px;height:28px;background:linear-gradient(135deg,var(--accent),var(--accent3));border-radius:8px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#fff;}
+.uc-name{font-size:.8rem;font-weight:600;color:var(--text);}
+.uc-role{font-size:.62rem;color:var(--text3);}
 
-db = SQLAlchemy(app)
+/* HAMBURGER */
+.hamburger{display:none;position:fixed;top:10px;left:10px;z-index:60;background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:7px 9px;cursor:pointer;font-size:1rem;color:var(--text2);}
+.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:40;backdrop-filter:blur(2px);}
+.overlay.show{display:block;}
 
-# ========== MODELOS ==========
+/* MAIN SECTIONS */
+.section{display:none;}.section.active{display:block;}
+.main-pad{flex:1;overflow-y:auto;padding:26px;}
+.page-hd{margin-bottom:22px;}
+.page-hd h2{font-size:1.3rem;font-weight:700;letter-spacing:-.02em;}
+.page-hd p{color:var(--text2);font-size:.84rem;margin-top:4px;}
+.panel{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius2);padding:18px;margin-bottom:14px;}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+.cards-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:18px;}
+.stat-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius2);padding:14px;}
+.stat-card .sv{font-size:1.6rem;font-weight:700;color:var(--accent);letter-spacing:-.03em;}
+.stat-card .sl{font-size:.72rem;color:var(--text2);margin-top:3px;}
+.stat-card.green .sv{color:var(--green);}
+.stat-card.yellow .sv{color:var(--yellow);}
+.stat-card.purple .sv{color:var(--accent3);}
 
-class User(db.Model):
-    __tablename__ = 'user'
-    id            = db.Column(db.Integer, primary_key=True)
-    username      = db.Column(db.String(80), unique=True, nullable=False)
-    email         = db.Column(db.String(120), unique=True, nullable=False)
-    password_hash = db.Column(db.String(256), nullable=False)
-    created_at    = db.Column(db.DateTime, default=datetime.utcnow)
-    is_active     = db.Column(db.Boolean, default=True)
-    is_developer  = db.Column(db.Boolean, default=False)
+/* TABLE */
+.table-wrap{overflow-x:auto;border-radius:var(--radius);border:1px solid var(--border);}
+table{width:100%;border-collapse:collapse;font-size:.83rem;}
+th{padding:9px 12px;text-align:left;color:var(--text2);border-bottom:1px solid var(--border);font-weight:600;font-size:.72rem;text-transform:uppercase;letter-spacing:.04em;background:var(--bg3);}
+td{padding:9px 12px;border-bottom:1px solid rgba(37,45,71,.5);}
+tr:last-child td{border-bottom:none;}
+tr:hover td{background:rgba(91,141,238,.03);}
+.pagination{margin-top:10px;display:flex;gap:5px;justify-content:center;flex-wrap:wrap;}
+.filters{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center;}
+.filters input,.filters select{flex:1;min-width:90px;max-width:180px;}
 
-    def set_password(self, password):
-        self.password_hash = generate_password_hash(password)
+/* CODE PANEL */
+.code-panel{width:0;background:var(--bg2);border-left:1px solid var(--border);overflow:hidden;transition:width .3s ease;display:flex;flex-direction:column;flex-shrink:0;}
+.code-panel.open{width:var(--code-panel-w);}
+.cp-head{padding:11px 13px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;background:var(--bg3);}
+.cp-head h3{font-size:.82rem;color:var(--text2);}
+.cp-lang-tag{font-size:.68rem;color:var(--accent2);font-family:var(--mono);margin-left:6px;}
+.cp-actions{display:flex;gap:4px;}
+.cp-body{flex:1;overflow:auto;}
+.cp-body pre{margin:0;border-radius:0;border:none;min-height:100%;}
+.cp-preview{width:100%;flex:1;border:none;background:#fff;}
 
-    def check_password(self, password):
-        return check_password_hash(self.password_hash, password)
+/* CHAT */
+.chat-wrap{display:flex;flex-direction:column;height:100%;overflow:hidden;}
+.chat-topbar{padding:10px 13px;border-bottom:1px solid var(--border);display:flex;gap:8px;align-items:center;flex-wrap:wrap;background:var(--bg2);flex-shrink:0;}
+.chat-msgs{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:11px;background:var(--bg);}
+.chat-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;flex:1;padding:40px 20px;color:var(--text2);gap:8px;}
+.chat-empty .ce-icon{font-size:2.4rem;opacity:.45;}
+.chat-empty p{font-size:.86rem;max-width:280px;line-height:1.6;}
+.chat-input-area{padding:11px 13px;border-top:1px solid var(--border);background:var(--bg2);flex-shrink:0;}
+.input-toolbar{display:flex;gap:5px;margin-bottom:7px;flex-wrap:wrap;}
+.input-row{display:flex;gap:7px;align-items:flex-end;}
+.input-row textarea{flex:1;min-height:42px;max-height:180px;resize:none;overflow-y:auto;line-height:1.5;font-family:var(--font);border-radius:10px;background:var(--bg3);}
+.char-count{font-size:.68rem;color:var(--text3);margin-top:3px;text-align:right;}
+.msg-row{display:flex;flex-direction:column;max-width:82%;}
+.msg-row.ur{align-self:flex-end;align-items:flex-end;}
+.msg-row.br{align-self:flex-start;align-items:flex-start;}
+.bubble{padding:10px 13px;border-radius:14px;font-size:.87rem;line-height:1.6;word-break:break-word;}
+.ur .bubble{background:linear-gradient(135deg,var(--accent),#4a7de0);color:#fff;border-radius:14px 14px 4px 14px;}
+.br .bubble{background:var(--bg3);color:var(--text);border:1px solid var(--border);border-radius:14px 14px 14px 4px;}
+.msg-meta{font-size:.66rem;color:var(--text3);margin-top:3px;}
+.code-block{border-radius:8px;overflow:hidden;margin:5px 0;border:1px solid var(--border);background:#0d1117;}
+.code-block-head{display:flex;align-items:center;justify-content:space-between;padding:5px 11px;background:var(--bg4);border-bottom:1px solid var(--border);}
+.cb-lang{font-size:.68rem;color:var(--accent2);font-family:var(--mono);font-weight:600;}
+.cb-actions{display:flex;gap:4px;}
+.code-block pre{margin:0;border-radius:0;border:none;}
 
-class UserSession(db.Model):
-    __tablename__ = 'user_session'
-    id          = db.Column(db.Integer, primary_key=True)
-    user_id     = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    token       = db.Column(db.String(256), unique=True, nullable=False)
-    created_at  = db.Column(db.DateTime, default=datetime.utcnow)
-    expires_at  = db.Column(db.DateTime)
-    last_access = db.Column(db.DateTime, default=datetime.utcnow)
+/* RECENT STRIP */
+.recent-strip{border-top:1px solid var(--border);background:var(--bg2);flex-shrink:0;}
+.recent-strip-head{display:flex;justify-content:space-between;align-items:center;padding:6px 13px;}
+.recent-strip-head span{font-size:.7rem;color:var(--text2);font-weight:600;}
+.recent-list{display:flex;gap:6px;padding:0 10px 8px;overflow-x:auto;}
+.recent-chip{flex-shrink:0;width:155px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:7px 9px;cursor:pointer;transition:border-color .15s;}
+.recent-chip:hover{border-color:var(--accent);}
+.rc-user,.rc-bot{font-size:.7rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.rc-bot{color:var(--text2);margin-top:2px;}
+.rc-date{font-size:.62rem;color:var(--text3);margin-top:3px;}
 
-class Memory(db.Model):
-    __tablename__   = 'memory'
-    id              = db.Column(db.Integer, primary_key=True)
-    content         = db.Column(db.Text, nullable=False)
-    source          = db.Column(db.String(50), default='local')
-    topic           = db.Column(db.String(200), index=True)
-    file_path       = db.Column(db.String(500))
-    file_type       = db.Column(db.String(50))
-    created_at      = db.Column(db.DateTime, default=datetime.utcnow, index=True)
-    access_count    = db.Column(db.Integer, default=0)
-    relevance_score = db.Column(db.Float, default=0.5)
-    tags            = db.Column(db.JSON, default=list)
+/* USER HISTORY */
+.hist-item{padding:8px 10px;border-radius:8px;cursor:pointer;transition:background .12s;border:1px solid transparent;margin-bottom:3px;}
+.hist-item:hover{background:var(--bg3);border-color:var(--border);}
+.hi-u{font-size:.76rem;color:var(--text);overflow:hidden;white-space:nowrap;text-overflow:ellipsis;}
+.hi-b{font-size:.72rem;color:var(--text2);margin-top:2px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;}
+.hi-d{font-size:.62rem;color:var(--text3);margin-top:2px;}
 
-class Conversation(db.Model):
-    __tablename__   = 'conversation'
-    id              = db.Column(db.Integer, primary_key=True)
-    user_id         = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True, index=True)
-    user_message    = db.Column(db.Text, nullable=False)
-    bot_response    = db.Column(db.Text, nullable=False)
-    has_attachment  = db.Column(db.Boolean, default=False)
-    attachment_path = db.Column(db.String(500))
-    sources_used    = db.Column(db.JSON)
-    timestamp       = db.Column(db.DateTime, default=datetime.utcnow, index=True)
-    mode_used       = db.Column(db.String(50), default='chat')
-    tokens_used     = db.Column(db.Integer, default=0)
+/* USER TOPBAR */
+.user-topbar{padding:11px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;background:var(--bg2);flex-shrink:0;}
+.user-topbar-l{display:flex;align-items:center;gap:10px;}
 
-class LearningLog(db.Model):
-    __tablename__ = 'learning_log'
-    id           = db.Column(db.Integer, primary_key=True)
-    date         = db.Column(db.Date, default=date.today, unique=True)
-    count        = db.Column(db.Integer, default=0)
-    web_searches = db.Column(db.Integer, default=0)
-    auto_learned = db.Column(db.Integer, default=0)
+/* IMG PREVIEW */
+.img-prev-wrap{position:relative;display:inline-block;margin-bottom:7px;}
+.img-prev-wrap img{max-height:75px;border-radius:8px;border:1px solid var(--border);display:block;}
+.img-rm{position:absolute;top:-6px;right:-6px;background:var(--red);color:#fff;border:none;border-radius:50%;width:19px;height:19px;cursor:pointer;font-size:.6rem;display:flex;align-items:center;justify-content:center;}
 
-class ManualKnowledge(db.Model):
-    """Conocimiento ingresado directamente por el desarrollador"""
-    __tablename__ = 'manual_knowledge'
-    id          = db.Column(db.Integer, primary_key=True)
-    title       = db.Column(db.String(200), nullable=False)
-    content     = db.Column(db.Text, nullable=False)
-    category    = db.Column(db.String(100), index=True)
-    tags        = db.Column(db.JSON, default=list)
-    priority    = db.Column(db.Integer, default=1)  # 1=normal, 2=alta, 3=crítica
-    added_by    = db.Column(db.Integer, db.ForeignKey('user.id'))
-    created_at  = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at  = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    active      = db.Column(db.Boolean, default=True)
+/* MODAL */
+.modal-ov{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:200;align-items:flex-start;justify-content:center;padding:40px 16px;overflow-y:auto;backdrop-filter:blur(4px);}
+.modal-ov.show{display:flex;}
+.modal-box{background:var(--bg2);border-radius:16px;width:100%;max-width:680px;border:1px solid var(--border);box-shadow:var(--shadow);animation:fadeUp .2s ease;}
+.modal-head{padding:14px 18px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;}
+.modal-head h3{font-size:.95rem;font-weight:600;}
+.modal-body{padding:0;max-height:65vh;overflow-y:auto;}
 
-class WebSearchCache(db.Model):
-    __tablename__ = 'web_search_cache'
-    id         = db.Column(db.Integer, primary_key=True)
-    query      = db.Column(db.String(500), unique=True, index=True)
-    results    = db.Column(db.JSON)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    expires_at = db.Column(db.DateTime)
+/* DEV PREVIEW MODULE */
+.dev-preview-panel{border:1px solid rgba(167,139,250,.25);background:rgba(167,139,250,.04);border-radius:var(--radius2);padding:30px;text-align:center;margin-top:16px;}
+.dev-preview-panel .dp-icon{font-size:2.5rem;margin-bottom:12px;}
+.dev-preview-panel p{color:var(--text2);font-size:.86rem;line-height:1.6;}
+.dev-preview-panel .dp-note{color:var(--text3);font-size:.78rem;margin-top:8px;}
 
-class SystemConfig(db.Model):
-    """Configuración dinámica del sistema editable por el dev"""
-    __tablename__ = 'system_config'
-    id         = db.Column(db.Integer, primary_key=True)
-    key        = db.Column(db.String(100), unique=True, nullable=False)
-    value      = db.Column(db.Text)
-    type       = db.Column(db.String(20), default='string')  # string, int, bool, json
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow)
+/* ── RECENT STRIP COMPACTA ── */
+.recent-strip{border-top:1px solid var(--border);background:var(--bg2);flex-shrink:0;max-height:90px;transition:max-height .25s ease;}
+.recent-strip.rs-collapsed{max-height:32px;overflow:hidden;}
+.recent-strip-head{display:flex;justify-content:space-between;align-items:center;padding:5px 13px;cursor:pointer;}
+.recent-strip-head span{font-size:.68rem;color:var(--text2);font-weight:600;}
+.recent-strip-head .rs-toggle{font-size:.65rem;color:var(--text3);margin-left:4px;transition:transform .2s;}
+.recent-strip.rs-collapsed .rs-toggle{transform:rotate(180deg);}
+.recent-list{display:flex;gap:5px;padding:0 10px 7px;overflow-x:auto;scrollbar-width:thin;}
+.recent-chip{flex-shrink:0;width:140px;background:var(--bg3);border:1px solid var(--border);border-radius:7px;padding:6px 8px;cursor:pointer;transition:border-color .15s;}
+.recent-chip:hover{border-color:var(--accent);}
+.rc-user,.rc-bot{font-size:.68rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.rc-bot{color:var(--text2);margin-top:1px;}
+.rc-date{font-size:.6rem;color:var(--text3);margin-top:2px;}
 
-# ========== MIGRACIÓN ==========
+/* ── WIDGET RESUMEN IA ── */
+.ia-summary-widget{
+  position:fixed;top:12px;right:12px;z-index:100;
+  background:var(--bg2);border:1px solid var(--border2);
+  border-radius:14px;padding:14px 16px;width:300px;
+  box-shadow:var(--shadow);animation:fadeUp .3s ease;
+}
+.ia-summary-widget.sw-hidden{display:none;}
+.sw-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}
+.sw-head h4{font-size:.85rem;font-weight:700;color:var(--text);display:flex;align-items:center;gap:6px;}
+.sw-close{background:none;border:none;color:var(--text3);cursor:pointer;font-size:.8rem;padding:2px 5px;}
+.sw-close:hover{color:var(--text);}
+.sw-stats{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:10px;}
+.sw-stat{background:var(--bg3);border-radius:8px;padding:7px 10px;cursor:pointer;transition:background .15s;border:1px solid transparent;}
+.sw-stat:hover{background:var(--bg4);border-color:var(--accent);}
+.sw-stat .ss-val{font-size:1.2rem;font-weight:700;color:var(--accent);}
+.sw-stat .ss-lbl{font-size:.66rem;color:var(--text2);margin-top:1px;}
+.sw-stat.green .ss-val{color:var(--green);}
+.sw-stat.yellow .ss-val{color:var(--yellow);}
+.sw-stat.purple .ss-val{color:var(--accent3);}
+.sw-new-badge{display:inline-flex;align-items:center;gap:4px;background:rgba(34,211,160,.12);color:var(--green);border:1px solid rgba(34,211,160,.25);border-radius:20px;padding:2px 8px;font-size:.66rem;font-weight:700;margin-bottom:8px;}
+.sw-suggestions{margin-top:8px;border-top:1px solid var(--border);padding-top:8px;}
+.sw-suggestions h5{font-size:.7rem;color:var(--text2);font-weight:600;margin-bottom:6px;text-transform:uppercase;letter-spacing:.06em;}
+.sw-sug-item{display:flex;align-items:flex-start;gap:6px;padding:5px 7px;border-radius:7px;cursor:pointer;transition:background .12s;margin-bottom:2px;background:var(--bg3);}
+.sw-sug-item:hover{background:var(--bg4);}
+.sw-sug-item .si-icon{font-size:.85rem;flex-shrink:0;margin-top:1px;}
+.sw-sug-item .si-text{font-size:.72rem;color:var(--text2);line-height:1.4;}
+.sw-sug-item .si-prio{font-size:.6rem;font-weight:700;padding:1px 5px;border-radius:3px;flex-shrink:0;}
+.si-high{background:rgba(248,113,113,.15);color:var(--red);}
+.si-med{background:rgba(251,191,36,.15);color:var(--yellow);}
+.si-low{background:rgba(34,211,160,.15);color:var(--green);}
 
-def _safe_count(model):
-    """Cuenta registros de forma segura — retorna 0 si la tabla no existe"""
-    try:
-        return model.query.count()
-    except Exception:
-        return 0
+/* ── KNOWLEDGE DETAIL DRAWER ── */
+.kd-drawer{
+  position:fixed;right:0;top:0;height:100vh;width:380px;
+  background:var(--bg2);border-left:1px solid var(--border);
+  z-index:150;transform:translateX(100%);transition:transform .25s ease;
+  display:flex;flex-direction:column;box-shadow:-8px 0 32px rgba(0,0,0,.4);
+}
+.kd-drawer.open{transform:translateX(0);}
+.kd-head{padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
+.kd-head h3{font-size:.9rem;font-weight:600;}
+.kd-body{flex:1;overflow-y:auto;padding:14px;}
+.kd-item{padding:10px 12px;background:var(--bg3);border-radius:8px;margin-bottom:8px;border:1px solid var(--border);}
+.kd-item .ki-topic{font-size:.82rem;font-weight:600;color:var(--text);margin-bottom:3px;}
+.kd-item .ki-content{font-size:.75rem;color:var(--text2);line-height:1.5;}
+.kd-item .ki-meta{font-size:.65rem;color:var(--text3);margin-top:4px;display:flex;gap:8px;}
+.kd-empty{text-align:center;color:var(--text2);padding:30px;font-size:.84rem;}
 
-def run_migration():
-    """
-    Migración segura: agrega columnas/tablas nuevas sin destruir datos existentes.
-    Compatible con bases de datos de versiones anteriores (v7.x → v8.0).
-    """
-    try:
-        with app.app_context():
-            # Crear tablas nuevas que no existan (no toca las existentes)
-            db.create_all()
+/* RESPONSIVE */
+@media(max-width:768px){
+  .hamburger{display:flex!important;align-items:center;}
+  .sidebar{position:fixed;top:0;left:0;height:100vh;transform:translateX(-100%);}
+  .sidebar.sb-open{transform:translateX(0);}
+  .main-pad{padding:14px;padding-top:50px;}
+  .grid2{grid-template-columns:1fr;}
+  .code-panel.open{width:100%;position:fixed;inset:0;z-index:80;}
+  .user-topbar{padding-top:46px;}
+  :root{--sidebar-w:240px;}
+}
+@media(min-width:769px){.hamburger{display:none!important;}}
 
-            inspector = inspect(db.engine)
-            tables    = inspector.get_table_names()
+@keyframes fadeUp{from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:translateY(0);}}
+</style>
+</head>
+<body>
 
-            def add_column_if_missing(table, column, definition):
-                """Agrega una columna solo si no existe — safe para cualquier BD."""
-                try:
-                    cols = {col['name'] for col in inspector.get_columns(table)}
-                    if column not in cols:
-                        with db.engine.connect() as conn:
-                            conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {definition}"))
-                            conn.commit()
-                        logger.info(f"Migración: columna {table}.{column} agregada")
-                except Exception as e:
-                    logger.warning(f"No se pudo agregar {table}.{column}: {e}")
+<!-- LOGIN -->
+<div id="loginScreen" class="login-wrap">
+  <div class="login-card">
+    <div style="text-align:center;margin-bottom:24px">
+      <div class="login-orb">🤖</div>
+      <h1 style="font-size:1.45rem;font-weight:700;letter-spacing:-.02em">Cic_IA</h1>
+      <p style="color:var(--text2);font-size:.84rem;margin-top:4px">Asistente Inteligente</p>
+    </div>
+    <div id="loginAlert"></div>
+    <div class="form-group"><label>Usuario</label><input type="text" id="loginUser" placeholder="tu_usuario" autocomplete="username"/></div>
+    <div class="form-group"><label>Contraseña</label><input type="password" id="loginPass" placeholder="••••••••" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()"/></div>
+    <button class="btn btn-primary" style="width:100%;justify-content:center;margin-top:4px" onclick="doLogin()" id="loginBtn">Iniciar Sesión</button>
+    <div style="text-align:center;margin-top:14px;font-size:.76rem;color:var(--text3)">
+      ¿Primera vez? <a href="#" onclick="showSetup();return false" style="color:var(--accent)">Configurar acceso</a>
+    </div>
+  </div>
+</div>
 
-            # ── Tabla: memory ──────────────────────────────────────────────
-            if 'memory' in tables:
-                add_column_if_missing('memory', 'tags', "JSON DEFAULT '[]'")
+<!-- SETUP MODAL -->
+<div id="setupModal" class="modal-ov">
+  <div class="modal-box" style="max-width:420px">
+    <div class="modal-head"><h3>⚙️ Configuración Inicial</h3><button class="btn btn-ghost btn-sm" onclick="hideSetup()">✕</button></div>
+    <div style="padding:16px 18px">
+      <div id="setupAlert"></div>
+      <div class="form-group"><label>Usuario</label><input type="text" id="setupUser"/></div>
+      <div class="form-group"><label>Contraseña (mín. 8 chars)</label><input type="password" id="setupPass"/></div>
+      <div class="form-group"><label>Setup Key</label><input type="text" id="setupKey"/></div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-primary" style="flex:1;justify-content:center" onclick="doSetup()">Crear cuenta</button>
+        <button class="btn btn-outline" onclick="hideSetup()">Cancelar</button>
+      </div>
+    </div>
+  </div>
+</div>
 
-            # ── Tabla: conversation ────────────────────────────────────────
-            if 'conversation' in tables:
-                add_column_if_missing('conversation', 'tokens_used', 'INTEGER DEFAULT 0')
-                add_column_if_missing('conversation', 'user_id',   'INTEGER')
-                add_column_if_missing('conversation', 'mode_used', "VARCHAR(50) DEFAULT 'chat'")
+<!-- HAMBURGER + OVERLAY -->
+<button class="hamburger" id="hamburger" onclick="toggleSidebar()" style="display:none">☰</button>
+<div class="overlay" id="overlay" onclick="closeSidebar()"></div>
 
-            # ── Tabla: manual_knowledge ────────────────────────────────────
-            # db.create_all() ya la creó si no existía
+<!-- CODE PANEL (solo dev) -->
+<div id="codePanel" class="code-panel" style="display:none">
+  <div class="cp-head">
+    <div style="display:flex;align-items:center"><h3 id="cpTitle">Código</h3><span class="cp-lang-tag" id="cpLang"></span></div>
+    <div class="cp-actions">
+      <button class="btn btn-ghost btn-sm btn-icon" onclick="copyPanelCode()" id="cpCopyBtn">📋</button>
+      <button class="btn btn-sm" style="background:var(--bg4);color:var(--text);font-size:.73rem" onclick="downloadPanelCode()">⬇ Guardar</button>
+      <button class="btn btn-sm btn-icon" id="cpPreviewBtn" onclick="togglePanelPreview()" style="background:var(--green);color:#0a1a12;display:none">👁</button>
+      <button class="btn btn-ghost btn-sm btn-icon" onclick="closeCodePanel()">✕</button>
+    </div>
+  </div>
+  <div class="cp-body" id="cpBody"><pre><code id="cpCode"></code></pre></div>
+  <iframe id="cpPreviewFrame" class="cp-preview" style="display:none"></iframe>
+</div>
 
-            # ── Tabla: system_config ───────────────────────────────────────
-            # db.create_all() ya la creó si no existía
+<!-- ═══════════════════════════════════════════
+     DEVELOPER APP
+═══════════════════════════════════════════ -->
 
-            # Config por defecto (solo inserta si no existe la clave)
-            defaults = [
-                ('ai_provider',                   'groq',                                                                                                   'string'),
-                ('ai_model',                      'claude-haiku-4-5-20251001',                                                                              'string'),
-                ('system_prompt',                 'Eres Cic_IA, un asistente inteligente en español. Responde de forma clara, útil y amigable.',             'string'),
-                ('max_tokens',                    '1000',                                                                                                    'int'),
-                ('auto_learning_enabled',         'true',                                                                                                    'bool'),
-                ('auto_learning_interval_hours',  '2',                                                                                                       'int'),
-                ('max_memory_results',            '5',                                                                                                       'int'),
-                ('web_search_enabled',            'true',                                                                                                    'bool'),
-            ]
-            for key, val, typ in defaults:
-                try:
-                    if not SystemConfig.query.filter_by(key=key).first():
-                        db.session.add(SystemConfig(key=key, value=val, type=typ))
-                except Exception:
-                    pass
-            db.session.commit()
-            # Forzar proveedor a groq si está en anthropic (migración de versiones anteriores)
-            try:
-                cfg = SystemConfig.query.filter_by(key='ai_provider').first()
-                if cfg and cfg.value == 'anthropic':
-                    cfg.value = 'groq'
-                    db.session.commit()
-                    logger.info("Migración: ai_provider actualizado a groq")
-            except Exception:
-                pass
-            logger.info("✅ Migración completada")
-    except Exception as e:
-        logger.error(f"Error migración: {e}")
-        import traceback
-        logger.error(traceback.format_exc())
+<!-- WIDGET RESUMEN IA (aparece al entrar al panel dev) -->
+<div id="iaSummaryWidget" class="ia-summary-widget sw-hidden">
+  <div class="sw-head">
+    <h4>🧠 Resumen del sistema</h4>
+    <button class="sw-close" onclick="closeSummaryWidget()">✕</button>
+  </div>
+  <div id="swNewBadge" style="display:none" class="sw-new-badge">
+    <span>✨</span><span id="swNewCount">0 nuevos</span> aprendizajes hoy
+  </div>
+  <div class="sw-stats">
+    <div class="sw-stat" onclick="devGo('memories',document.querySelector('#devSidebar .nav-item:nth-child(14)'));closeSummaryWidget()">
+      <div class="ss-val" id="sw-mem">—</div><div class="ss-lbl">Memorias</div>
+    </div>
+    <div class="sw-stat green" onclick="devGo('knowledge',document.querySelector('#devSidebar .nav-item:nth-child(13)'));closeSummaryWidget()">
+      <div class="ss-val" id="sw-kb">—</div><div class="ss-lbl">Conocimiento</div>
+    </div>
+    <div class="sw-stat yellow">
+      <div class="ss-val" id="sw-today">—</div><div class="ss-lbl">Msgs hoy</div>
+    </div>
+    <div class="sw-stat purple" onclick="openKnowledgeDrawer('memories');closeSummaryWidget()">
+      <div class="ss-val" id="sw-learned">—</div><div class="ss-lbl">Aprendido hoy</div>
+    </div>
+  </div>
+  <div class="sw-suggestions">
+    <h5>💡 Sugerencias de mejora</h5>
+    <div id="swSuggestions">
+      <div style="color:var(--text3);font-size:.74rem">Cargando sugerencias...</div>
+    </div>
+  </div>
+  <div style="margin-top:8px;display:flex;gap:6px">
+    <button class="btn btn-outline btn-sm" style="flex:1;justify-content:center;font-size:.72rem" onclick="openKnowledgeDrawer('recent');closeSummaryWidget()">📖 Ver aprendizajes</button>
+    <button class="btn btn-ghost btn-sm" style="font-size:.72rem" onclick="closeSummaryWidget()">Cerrar</button>
+  </div>
+</div>
 
-run_migration()
+<!-- KNOWLEDGE DETAIL DRAWER -->
+<div id="kdDrawer" class="kd-drawer">
+  <div class="kd-head">
+    <h3 id="kdTitle">📖 Aprendizajes</h3>
+    <button class="btn btn-ghost btn-sm" onclick="closeKdDrawer()">✕</button>
+  </div>
+  <div style="padding:8px 14px;border-bottom:1px solid var(--border)">
+    <input type="text" id="kdSearch" placeholder="Buscar..." style="font-size:.82rem" oninput="filterKdItems(this.value)"/>
+  </div>
+  <div class="kd-body" id="kdBody">
+    <div class="kd-empty">Cargando...</div>
+  </div>
+</div>
+<div id="devApp" class="app" style="display:none">
+  <aside class="sidebar" id="devSidebar">
+    <div class="sb-logo">
+      <div class="orb">🤖</div>
+      <div><h2>Cic_IA</h2><span>Panel Dev v8.0</span></div>
+    </div>
+    <div class="sb-nav">
 
-# ========== HELPERS DE CONFIG ==========
+      <!-- PLATAFORMA (funciones públicas que dev también ve) -->
+      <div class="nav-sec-label">Plataforma</div>
+      <div class="nav-item active" onclick="devGo('chat',this)"><span class="ni">💬</span><span class="nl">Chat</span></div>
+      <div class="nav-item" onclick="devGo('search',this)"><span class="ni">🔍</span><span class="nl">Buscar</span></div>
+      <div class="nav-item" onclick="devGo('projects',this)"><span class="ni">📁</span><span class="nl">Proyectos</span></div>
+      <div class="nav-item" onclick="devGo('artifacts',this)"><span class="ni">🗃️</span><span class="nl">Artefactos</span></div>
 
-def get_config(key, default=None):
-    try:
-        cfg = SystemConfig.query.filter_by(key=key).first()
-        if not cfg:
-            return default
-        if cfg.type == 'int':
-            return int(cfg.value)
-        if cfg.type == 'bool':
-            return cfg.value.lower() == 'true'
-        if cfg.type == 'json':
-            return json.loads(cfg.value)
-        return cfg.value
-    except Exception:
-        return default
+      <!-- MÓDULOS -->
+      <div class="nav-sec-label" style="margin-top:6px">Módulos</div>
+      <div class="nav-item" onclick="devGo('img-gen',this)"><span class="ni">🖼️</span><span class="nl">Crear imagen</span><span class="nb">LIVE</span></div>
+      <div class="nav-item" onclick="devGo('video-gen',this)"><span class="ni">🎬</span><span class="nl">Crear video</span><span class="nb dev">DEV</span></div>
+      <div class="nav-item" onclick="devGo('doc-analysis',this)"><span class="ni">📄</span><span class="nl">Análisis docs</span><span class="nb dev">DEV</span></div>
+      <div class="nav-item" onclick="devGo('tts',this)"><span class="ni">🔊</span><span class="nl">Voz / TTS</span><span class="nb dev">DEV</span></div>
+      <div class="nav-item" onclick="devGo('code-exec',this)"><span class="ni">💻</span><span class="nl">Ejecutor código</span><span class="nb dev">DEV</span></div>
 
-def set_config(key, value):
-    cfg = SystemConfig.query.filter_by(key=key).first()
-    if cfg:
-        cfg.value = str(value)
-        cfg.updated_at = datetime.utcnow()
-    else:
-        cfg = SystemConfig(key=key, value=str(value))
-        db.session.add(cfg)
-    db.session.commit()
+      <!-- DEV TOOLS (solo desarrollador) -->
+      <div class="nav-sec-label nav-dev" style="margin-top:6px;color:var(--accent3);opacity:.85">⚡ Dev Tools</div>
+      <div class="nav-dev">
+        <div class="nav-item" onclick="devGo('dashboard',this)"><span class="ni">📊</span><span class="nl">Dashboard</span></div>
+        <div class="nav-item" onclick="devGo('knowledge',this)"><span class="ni">🧠</span><span class="nl">Conocimiento</span></div>
+        <div class="nav-item" onclick="devGo('learn',this)"><span class="ni">📚</span><span class="nl">Aprendizaje</span></div>
+        <div class="nav-item" onclick="devGo('memories',this)"><span class="ni">💾</span><span class="nl">Memorias</span><button onclick="event.stopPropagation();openKnowledgeDrawer('recent')" style="margin-left:auto;background:rgba(91,141,238,.15);border:none;color:var(--accent);border-radius:4px;padding:1px 5px;font-size:.6rem;cursor:pointer" title="Vista rápida">👁</button></div>
+        <div class="nav-item" onclick="devGo('config',this)"><span class="ni">⚙️</span><span class="nl">Configuración</span></div>
+        <div class="nav-item" onclick="devGo('users',this)"><span class="ni">👥</span><span class="nl">Usuarios</span></div>
+      </div>
+    </div>
+    <div class="sb-foot">
+      <div class="user-chip">
+        <div class="uc-av" id="devAvLetter">D</div>
+        <div><div class="uc-name" id="devUserName">—</div><div class="uc-role">Desarrollador 🔧</div></div>
+      </div>
+      <button class="btn btn-outline btn-sm" style="width:100%;justify-content:center" onclick="doLogout()">Cerrar sesión</button>
+    </div>
+  </aside>
 
-# ========== DECORADORES AUTH ==========
+  <!-- Dev content + code panel side by side -->
+  <div style="flex:1;display:flex;overflow:hidden">
+    <div class="main-pad" id="devMainPad" style="flex:1;overflow-y:auto">
 
-def _get_token_from_request():
-    auth = request.headers.get('Authorization', '')
-    if auth.startswith('Bearer '):
-        return auth[7:]
-    if auth:
-        parts = auth.split()
-        if len(parts) == 2:
-            return parts[1]
-    return request.args.get('token') or request.json.get('token') if request.is_json else None
+      <!-- CHAT (test) -->
+      <div id="dev-chat" class="section active" style="height:calc(100vh - 0px);display:flex;flex-direction:column;padding:0;margin:0;overflow:hidden">
+        <div class="chat-topbar">
+          <input type="text" id="devSysPrompt" placeholder="System prompt opcional..." style="flex:2;min-width:0;font-size:.82rem"/>
+          <select id="devMode" style="width:116px;font-size:.82rem">
+            <option value="balanced">Balanceado</option>
+            <option value="fast">Rápido</option>
+            <option value="complete">Completo</option>
+          </select>
+          <button class="btn btn-outline btn-sm" onclick="devNewConv()">✏️ Nueva</button>
+          <button class="btn btn-ghost btn-sm btn-icon" onclick="devClearChat()" title="Limpiar">🗑</button>
+        </div>
+        <div class="chat-msgs" id="devMsgs">
+          <div class="chat-empty"><div class="ce-icon">💬</div><p>Chat de prueba — Escribe un mensaje o carga una conversación del historial</p></div>
+        </div>
+        <div class="chat-input-area">
+          <div class="input-toolbar">
+            <input type="text" id="devGhUrl" placeholder="🔗 URL GitHub..." style="flex:1;font-size:.75rem"/>
+            <button class="btn btn-ghost btn-sm" onclick="readGitHub()">📂 Leer</button>
+            <label class="btn btn-ghost btn-sm" style="cursor:pointer">🖼 Img<input type="file" id="devImgInput" accept="image/*" style="display:none" onchange="handleDevImg(this)"/></label>
+            <button class="btn btn-ghost btn-sm" onclick="pasteDevImg()">📋 Pegar</button>
+          </div>
+          <div id="devImgWrap" style="display:none" class="img-prev-wrap">
+            <img id="devImgPrev"/><button class="img-rm" onclick="clearDevImg()">✕</button>
+          </div>
+          <div class="input-row">
+            <textarea id="devInput" rows="1"
+              placeholder="Escribe un mensaje... (Enter = enviar, Shift+Enter = nueva línea)"
+              onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendDevMsg();}"
+              oninput="autoGrow(this,'devCC')" onpaste="devPaste(event)"></textarea>
+            <button class="btn btn-primary" onclick="sendDevMsg()" style="align-self:flex-end">↩</button>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:3px">
+            <span id="devCC" class="char-count">0 / 100,000</span>
+            <span id="devInfo" style="font-size:.68rem;color:var(--text3)"></span>
+          </div>
+        </div>
+        <div class="recent-strip" id="recentStrip">
+          <div class="recent-strip-head" onclick="toggleRecentStrip()">
+            <span>📜 Recientes <span class="rs-toggle">▲</span></span>
+            <div style="display:flex;gap:4px" onclick="event.stopPropagation()">
+              <button class="btn btn-ghost btn-sm" onclick="openHistModal()" style="font-size:.65rem;padding:2px 6px">Ver todas</button>
+            </div>
+          </div>
+          <div class="recent-list" id="devRecentList"><div style="color:var(--text3);font-size:.7rem;padding:6px">Cargando...</div></div>
+        </div>
+      </div>
 
-def token_required(f):
-    @wraps(f)
-    def decorated(*args, **kwargs):
-        token = _get_token_from_request()
-        if not token:
-            return jsonify({'error': 'Token requerido'}), 401
-        session = UserSession.query.filter_by(token=token).first()
-        if not session:
-            return jsonify({'error': 'Token inválido'}), 401
-        if session.expires_at and session.expires_at < datetime.utcnow():
-            db.session.delete(session)
-            db.session.commit()
-            return jsonify({'error': 'Token expirado, por favor inicia sesión de nuevo'}), 401
-        session.last_access = datetime.utcnow()
-        db.session.commit()
-        current_user = User.query.get(session.user_id)
-        if not current_user or not current_user.is_active:
-            return jsonify({'error': 'Usuario inactivo'}), 401
-        return f(current_user, *args, **kwargs)
-    return decorated
+      <!-- SEARCH -->
+      <div id="dev-search" class="section">
+        <div class="page-hd"><h2>🔍 Buscar</h2><p>Búsqueda en conversaciones y conocimiento</p></div>
+        <div class="panel">
+          <div style="display:flex;gap:8px">
+            <input type="text" id="devSearchQ" placeholder="Buscar en todo el sistema..." style="flex:1" onkeydown="if(event.key==='Enter')devSearch()"/>
+            <button class="btn btn-primary" onclick="devSearch()">Buscar</button>
+          </div>
+          <div id="devSearchRes" style="margin-top:14px;color:var(--text2);font-size:.84rem">Escribe algo para buscar.</div>
+        </div>
+      </div>
 
-def dev_required(f):
-    @wraps(f)
-    def decorated(*args, **kwargs):
-        token = _get_token_from_request()
-        if not token:
-            return jsonify({'error': 'No autorizado'}), 401
-        session = UserSession.query.filter_by(token=token).first()
-        if not session:
-            return jsonify({'error': 'Token inválido'}), 401
-        user = User.query.get(session.user_id)
-        if not user or not user.is_developer:
-            return jsonify({'error': 'Se requieren privilegios de desarrollador'}), 403
-        return f(*args, **kwargs)
-    return decorated
+      <!-- PROJECTS -->
+      <div id="dev-projects" class="section">
+        <div class="page-hd"><h2>📁 Proyectos</h2><p>Organiza conversaciones por proyectos</p></div>
+        <div class="dev-preview-panel"><div class="dp-icon">📁</div><p>Módulo en desarrollo</p><div class="dp-note">Organización por proyectos, etiquetas y contextos persistentes</div></div>
+      </div>
 
-# ========== MOTOR DE BÚSQUEDA WEB ==========
+      <!-- ARTIFACTS -->
+      <div id="dev-artifacts" class="section">
+        <div class="page-hd"><h2>🗃️ Artefactos</h2><p>Archivos generados por la IA</p></div>
+        <div class="dev-preview-panel"><div class="dp-icon">🗃️</div><p>Módulo en desarrollo</p><div class="dp-note">Gestión de código, documentos e imágenes generadas</div></div>
+      </div>
 
-class WebSearchEngine:
-    @staticmethod
-    def search(query: str, max_results: int = 5) -> list:
-        """Busca usando DuckDuckGo con fallback a búsqueda simple"""
-        try:
-            from duckduckgo_search import DDGS
-            with DDGS() as ddgs:
-                results = []
-                for r in ddgs.text(query, max_results=max_results):
-                    results.append({
-                        'title':   r.get('title', ''),
-                        'url':     r.get('href', ''),
-                        'snippet': r.get('body', ''),
-                        'source':  'duckduckgo'
-                    })
-                return results
-        except Exception as e:
-            logger.warning(f"DuckDuckGo falló: {e}. Intentando método alternativo.")
-            return WebSearchEngine._search_fallback(query, max_results)
+      <!-- IMG GEN -->
+      <div id="dev-img-gen" class="section">
+        <div class="page-hd"><h2>🖼️ Crear imagen</h2><p>Generación de imágenes con IA</p></div>
+        <div class="panel">
+          <div class="form-group"><label>Prompt</label><textarea id="devImgPrompt" rows="3" placeholder="Describe la imagen..."></textarea></div>
+          <button class="btn btn-primary" onclick="generateImage()">🖼️ Generar imagen</button>
+          <div id="devImgGenRes" style="margin-top:14px"></div>
+        </div>
+      </div>
 
-    @staticmethod
-    def _search_fallback(query: str, max_results: int = 3) -> list:
-        """Fallback usando urllib"""
-        try:
-            import urllib.request
-            import urllib.parse
-            encoded = urllib.parse.quote(query)
-            url = f"https://html.duckduckgo.com/html/?q={encoded}"
-            req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-            with urllib.request.urlopen(req, timeout=10) as resp:
-                html = resp.read().decode('utf-8', errors='ignore')
-            from bs4 import BeautifulSoup
-            soup = BeautifulSoup(html, 'html.parser')
-            results = []
-            for result in soup.select('.result')[:max_results]:
-                title_el   = result.select_one('.result__title')
-                snippet_el = result.select_one('.result__snippet')
-                link_el    = result.select_one('.result__url')
-                if title_el:
-                    results.append({
-                        'title':   title_el.get_text(strip=True),
-                        'url':     link_el.get_text(strip=True) if link_el else '',
-                        'snippet': snippet_el.get_text(strip=True) if snippet_el else '',
-                        'source':  'duckduckgo_html'
-                    })
-            return results
-        except Exception as e:
-            logger.error(f"Fallback búsqueda falló: {e}")
-            return []
+      <!-- VIDEO GEN (dev preview) -->
+      <div id="dev-video-gen" class="section">
+        <div class="page-hd"><h2>🎬 Crear video <span class="badge badge-dev" style="margin-left:8px;vertical-align:middle">DEV PREVIEW</span></h2><p>Módulo en desarrollo — no visible para usuarios</p></div>
+        <div class="dev-preview-panel"><div class="dp-icon">🎬</div><p>Integración de APIs de generación de video</p><div class="dp-note">RunwayML, Sora, Kling, Luma — en evaluación</div></div>
+      </div>
 
-# ========== MOTOR LLM REAL ==========
+      <!-- DOC ANALYSIS (dev preview) -->
+      <div id="dev-doc-analysis" class="section">
+        <div class="page-hd"><h2>📄 Análisis docs <span class="badge badge-dev" style="margin-left:8px;vertical-align:middle">DEV PREVIEW</span></h2><p>Lectura y análisis de documentos — en desarrollo</p></div>
+        <div class="dev-preview-panel"><div class="dp-icon">📄</div><p>Subida y análisis de PDFs, Word y Excel</p><div class="dp-note">Extracción de texto + preguntas sobre el documento</div></div>
+      </div>
 
-class LLMEngine:
-    """
-    Motor de IA multi-proveedor con fallback automático.
-    Orden de prioridad:
-      1. Groq  (Llama 3 / Mixtral — gratis, rápido, 24/7)
-      2. Ollama (modelo local en servidor propio / Colab)
-      3. Anthropic Claude (si hay API key)
-      4. OpenAI GPT (si hay API key)
-      5. Respuesta básica (sin IA externa)
-    """
+      <!-- TTS (dev preview) -->
+      <div id="dev-tts" class="section">
+        <div class="page-hd"><h2>🔊 Voz / TTS <span class="badge badge-dev" style="margin-left:8px;vertical-align:middle">DEV PREVIEW</span></h2><p>Text-to-Speech — en desarrollo</p></div>
+        <div class="dev-preview-panel"><div class="dp-icon">🔊</div><p>Conversión de texto a voz natural</p><div class="dp-note">APIs: ElevenLabs, OpenAI TTS, Google Cloud TTS</div></div>
+      </div>
 
-    def __init__(self):
-        self.anthropic_key = ANTHROPIC_API_KEY
-        self.openai_key    = OPENAI_API_KEY
-        self.groq_key      = os.environ.get('GROQ_API_KEY', '')
-        self.ollama_url    = os.environ.get('OLLAMA_URL', '')   # ej: https://xxxx.ngrok.io
-        self.groq_model    = os.environ.get('GROQ_MODEL',   'llama-3.1-8b-instant')
-        self.ollama_model  = os.environ.get('OLLAMA_MODEL', 'llama3.2')
+      <!-- CODE EXEC (dev preview) -->
+      <div id="dev-code-exec" class="section">
+        <div class="page-hd"><h2>💻 Ejecutor código <span class="badge badge-dev" style="margin-left:8px;vertical-align:middle">DEV PREVIEW</span></h2><p>Ejecución segura de código — en desarrollo</p></div>
+        <div class="dev-preview-panel"><div class="dp-icon">💻</div><p>Sandboxed Python execution</p><div class="dp-note">Docker / Pyodide — ejecución en tiempo real</div></div>
+      </div>
 
-    def _build_context(self, user_message: str, memories: list, manual_knowledge: list) -> str:
-        parts = []
-        if manual_knowledge:
-            parts.append("=== CONOCIMIENTO BASE ===")
-            for mk in manual_knowledge[:5]:
-                parts.append(f"[{mk.category or 'General'}] {mk.title}:\n{mk.content[:500]}")
-            parts.append("")
-        if memories:
-            parts.append("=== CONOCIMIENTO APRENDIDO ===")
-            for mem in memories[:3]:
-                parts.append(f"Tema: {mem.topic or 'general'}\n{mem.content[:300]}")
-            parts.append("")
-        return "\n".join(parts)
+      <!-- DASHBOARD -->
+      <div id="dev-dashboard" class="section">
+        <div class="page-hd"><h2>📊 Dashboard</h2><p>Estado del sistema en tiempo real</p></div>
+        <div id="dashAlert"></div>
+        <div class="cards-row">
+          <div class="stat-card"><div class="sv" id="d-mem">—</div><div class="sl">Memorias</div></div>
+          <div class="stat-card green"><div class="sv" id="d-conv">—</div><div class="sl">Conversaciones</div></div>
+          <div class="stat-card yellow"><div class="sv" id="d-kb">—</div><div class="sl">Conocimiento</div></div>
+          <div class="stat-card"><div class="sv" id="d-today">—</div><div class="sl">Msgs hoy</div></div>
+          <div class="stat-card purple"><div class="sv" id="d-ai" style="font-size:1rem">—</div><div class="sl">Proveedor IA</div></div>
+        </div>
+        <div class="grid2">
+          <div class="panel"><h3 style="margin-bottom:10px;font-size:.88rem">Últimas conversaciones</h3><div id="recentConvs" style="color:var(--text2);font-size:.82rem">Cargando...</div></div>
+          <div class="panel"><h3 style="margin-bottom:10px;font-size:.88rem">Actividad (7 días)</h3><div id="weekActivity" style="color:var(--text2);font-size:.82rem">Cargando...</div></div>
+        </div>
+      </div>
 
-    def chat(self, user_message: str, system_prompt: str, context: str = "",
-             conversation_history: list = None, max_tokens: int = 1000) -> dict:
-        """Intenta cada proveedor en orden hasta obtener respuesta exitosa."""
+      <!-- KNOWLEDGE -->
+      <div id="dev-knowledge" class="section">
+        <div class="page-hd"><h2>🧠 Conocimiento Manual</h2><p>Enseña directamente a la IA</p></div>
+        <div class="panel">
+          <h3 style="margin-bottom:12px;font-size:.88rem">➕ Agregar conocimiento</h3>
+          <div class="grid2">
+            <div class="form-group"><label>Título *</label><input type="text" id="kb-title" placeholder="Ej: Horarios de atención..."/></div>
+            <div class="form-group"><label>Categoría</label><input type="text" id="kb-category" placeholder="empresa, producto..."/></div>
+          </div>
+          <div class="form-group"><label>Contenido *</label><textarea id="kb-content" rows="4"></textarea></div>
+          <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
+            <div class="form-group" style="flex:1;margin:0"><label>Tags (coma)</label><input type="text" id="kb-tags"/></div>
+            <select id="kb-prio" style="width:auto"><option value="1">Normal</option><option value="2">Alta</option><option value="3">Crítica</option></select>
+            <button class="btn btn-primary" onclick="addKnowledge()">Guardar</button>
+          </div>
+          <div id="kbAlert" style="margin-top:10px"></div>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px">
+          <h3 style="font-size:.88rem">Base de conocimiento</h3>
+          <div style="display:flex;gap:6px">
+            <input type="text" id="kb-filter" placeholder="Buscar..." style="width:140px;max-width:140px" oninput="loadKB(1)"/>
+            <select id="kb-cat-filter" style="width:140px;max-width:140px" onchange="loadKB(1)"><option value="">Todas las categorías</option></select>
+            <button class="btn btn-outline btn-sm" onclick="loadKB(1)">🔄</button>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table><thead><tr><th>Título</th><th>Cat.</th><th>Prior.</th><th>Preview</th><th>Fecha</th><th></th></tr></thead>
+          <tbody id="kbTable"><tr><td colspan="6" style="text-align:center;color:var(--text2);padding:18px">Cargando...</td></tr></tbody></table>
+        </div>
+        <div id="kbPag" class="pagination"></div>
+      </div>
 
-        full_system = system_prompt
-        if context:
-            full_system += f"\n\n{context}"
+      <!-- LEARN -->
+      <div id="dev-learn" class="section">
+        <div class="page-hd"><h2>📚 Aprendizaje Forzado</h2><p>Fuerza a la IA a aprender temas</p></div>
+        <div class="grid2">
+          <div class="panel">
+            <h3 style="margin-bottom:12px;font-size:.88rem">🔍 Desde la Web</h3>
+            <div class="form-group"><label>Tema *</label><input type="text" id="learn-topic" placeholder="Ej: Python avanzado..."/></div>
+            <div class="form-group"><label>Contenido adicional (opcional)</label><textarea id="learn-content" rows="3"></textarea></div>
+            <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="forceLearning()">🚀 Iniciar aprendizaje</button>
+            <div id="learnAlert" style="margin-top:10px"></div>
+          </div>
+          <div class="panel">
+            <h3 style="margin-bottom:12px;font-size:.88rem">📋 Masivo</h3>
+            <div class="form-group"><label>Lista de temas (uno por línea)</label><textarea id="bulk-topics" rows="7" placeholder="Python&#10;IA&#10;Historia de Chile"></textarea></div>
+            <button class="btn btn-green" style="width:100%;justify-content:center" onclick="bulkLearning()">⚡ Aprender todos</button>
+            <div id="bulkAlert" style="margin-top:10px"></div>
+          </div>
+        </div>
+        <div class="panel">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+            <h3 style="font-size:.88rem">📅 Log reciente</h3>
+            <button class="btn btn-outline btn-sm" onclick="loadLearnLog()">🔄</button>
+          </div>
+          <div id="learnLog" style="color:var(--text2);font-size:.82rem">Cargando...</div>
+        </div>
+      </div>
 
-        # Orden de prioridad configurable
-        provider = get_config('ai_provider', 'auto')
+      <!-- MEMORIES -->
+      <div id="dev-memories" class="section">
+        <div class="page-hd"><h2>💾 Memorias</h2><p>Todo lo que la IA ha almacenado</p></div>
+        <div class="filters">
+          <input type="text" id="mem-search" placeholder="Buscar por tema..."/>
+          <select id="mem-source"><option value="">Todas las fuentes</option><option value="auto_learning">Auto-aprendizaje</option><option value="web_search">Búsqueda web</option><option value="manual_dev">Manual</option></select>
+          <select id="mem-sort"><option value="recent">Más recientes</option><option value="score">Mayor score</option><option value="accesses">Más accedidas</option></select>
+          <input type="date" id="mem-df"/><input type="date" id="mem-dt"/>
+          <button class="btn btn-outline btn-sm" onclick="loadMem(1)">🔍 Filtrar</button>
+          <button class="btn btn-red btn-sm" onclick="clearMemPrompt()" style="margin-left:auto">🗑 Limpiar</button>
+        </div>
+        <div style="font-size:.73rem;color:var(--text2);margin-bottom:8px" id="memCount"></div>
+        <div class="table-wrap">
+          <table><thead><tr><th>Tema</th><th>Fuente</th><th>Score</th><th>Accesos</th><th>Fecha</th><th>Preview</th><th></th></tr></thead>
+          <tbody id="memTable"><tr><td colspan="7" style="text-align:center;color:var(--text2);padding:18px">Cargando...</td></tr></tbody></table>
+        </div>
+        <div id="memPag" class="pagination"></div>
+      </div>
 
-        if provider == 'auto':
-            # Intentar en orden: Groq → Ollama → Anthropic → OpenAI → fallback
-            providers = ['groq', 'ollama', 'anthropic', 'openai']
-        else:
-            providers = [provider]
+      <!-- CONFIG -->
+      <div id="dev-config" class="section">
+        <div class="page-hd"><h2>⚙️ Configuración</h2><p>Ajusta el comportamiento de la IA</p></div>
+        <div class="grid2">
+          <div class="panel">
+            <h3 style="margin-bottom:12px;font-size:.88rem">🤖 Proveedor de IA</h3>
+            <div class="form-group"><label>Proveedor</label>
+              <select id="cfg-provider"><option value="groq">Groq (LLaMA)</option><option value="anthropic">Anthropic (Claude)</option><option value="openai">OpenAI (GPT)</option></select>
+            </div>
+            <div class="form-group"><label>Modelo</label><input type="text" id="cfg-model"/></div>
+            <div class="form-group"><label>Máximo tokens</label><input type="number" id="cfg-tokens" min="100" max="4000"/></div>
+            <button class="btn btn-primary" onclick="saveAIConfig()">Guardar</button>
+            <div id="cfgAIAlert" style="margin-top:8px"></div>
+          </div>
+          <div class="panel">
+            <h3 style="margin-bottom:12px;font-size:.88rem">🔄 Auto-aprendizaje</h3>
+            <div class="form-group"><label>Estado</label><select id="cfg-autolearn"><option value="true">✅ Activado</option><option value="false">❌ Desactivado</option></select></div>
+            <div class="form-group"><label>Intervalo (horas)</label><input type="number" id="cfg-interval" min="1" max="24"/></div>
+            <div class="form-group"><label>Búsqueda web</label><select id="cfg-websearch"><option value="true">✅ Activada</option><option value="false">❌ Desactivada</option></select></div>
+            <button class="btn btn-primary" onclick="saveLearningConfig()">Guardar</button>
+            <div id="cfgLearnAlert" style="margin-top:8px"></div>
+          </div>
+        </div>
+        <div class="panel">
+          <h3 style="margin-bottom:12px;font-size:.88rem">💬 Personalidad de la IA (System Prompt)</h3>
+          <div class="form-group"><textarea id="cfg-prompt" rows="5"></textarea></div>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-primary" onclick="savePrompt()">Guardar</button>
+            <button class="btn btn-outline" onclick="resetPrompt()">Restablecer</button>
+          </div>
+          <div id="cfgPromptAlert" style="margin-top:8px"></div>
+        </div>
+      </div>
 
-        for p in providers:
-            result = self._try_provider(p, user_message, full_system, conversation_history, max_tokens)
-            if result.get('success'):
-                logger.info(f"✅ Respuesta exitosa via {p}")
-                return result
-            else:
-                logger.warning(f"⚠️ Proveedor {p} falló: {result.get('error', 'desconocido')}")
+      <!-- USERS -->
+      <div id="dev-users" class="section">
+        <div class="page-hd"><h2>👥 Usuarios</h2><p>Gestión de usuarios del sistema</p></div>
+        <div class="table-wrap">
+          <table><thead><tr><th>ID</th><th>Usuario</th><th>Rol</th><th>Estado</th><th>Msgs</th><th>Registro</th><th></th></tr></thead>
+          <tbody id="usersTable"><tr><td colspan="7" style="text-align:center;color:var(--text2);padding:18px">Cargando...</td></tr></tbody></table>
+        </div>
+      </div>
 
-        # Si todo falla, respuesta básica
-        return self._fallback_response(user_message)
+    </div><!-- /main-pad -->
+  </div><!-- /content wrap -->
+</div><!-- /devApp -->
 
-    def _try_provider(self, provider: str, user_message: str, system: str,
-                      history: list, max_tokens: int) -> dict:
-        try:
-            if provider == 'groq':
-                return self._call_groq(user_message, system, history, max_tokens)
-            elif provider == 'ollama':
-                return self._call_ollama(user_message, system, history, max_tokens)
-            elif provider == 'anthropic':
-                return self._call_anthropic(user_message, system, history, max_tokens)
-            elif provider == 'openai':
-                return self._call_openai(user_message, system, history, max_tokens)
-            return {'success': False, 'error': f'Proveedor {provider} desconocido'}
-        except Exception as e:
-            return {'success': False, 'error': str(e)}
+<!-- HISTORY MODAL -->
+<div id="histModal" class="modal-ov">
+  <div class="modal-box">
+    <div class="modal-head"><h3>📜 Historial completo</h3><button class="btn btn-ghost btn-sm" onclick="closeHistModal()">✕</button></div>
+    <div style="padding:10px 18px;border-bottom:1px solid var(--border)"><input type="text" id="histSearch" placeholder="Buscar..." oninput="filterHist(this.value)"/></div>
+    <div id="histList" class="modal-body"></div>
+  </div>
+</div>
 
-    # ── GROQ (Llama 3 gratis — prioridad 1) ────────────────────────────────
-    def _call_groq(self, user_message: str, system: str,
-                   history: list = None, max_tokens: int = 1000) -> dict:
-        if not self.groq_key:
-            return {'success': False, 'error': 'Sin GROQ_API_KEY'}
+<!-- ═══════════════════════════════════════════
+     USER APP
+═══════════════════════════════════════════ -->
+<div id="userApp" class="app" style="display:none">
+  <aside class="sidebar" id="userSidebar">
+    <div class="sb-logo">
+      <div class="orb">🤖</div>
+      <div><h2>Cic_IA</h2><span>Asistente IA</span></div>
+    </div>
+    <div class="sb-nav">
 
-        messages = [{'role': 'system', 'content': system}]
-        if history:
-            for h in history[-10:]:
-                messages.append({'role': h['role'], 'content': h['content']})
-        messages.append({'role': 'user', 'content': user_message})
+      <!-- MÓDULOS ACTIVOS -->
+      <div class="nav-sec-label">Módulos</div>
+      <div class="nav-item active" onclick="userGo('chat',this)"><span class="ni">💬</span><span class="nl">Chat</span></div>
+      <div class="nav-item" onclick="userGo('search',this)"><span class="ni">🔍</span><span class="nl">Buscar</span></div>
+      <div class="nav-item" onclick="userGo('projects',this)"><span class="ni">📁</span><span class="nl">Proyectos</span></div>
+      <div class="nav-item" onclick="userGo('artifacts',this)"><span class="ni">🗃️</span><span class="nl">Artefactos</span></div>
+      <div class="nav-item" onclick="userGo('img-gen',this)"><span class="ni">🖼️</span><span class="nl">Crear imagen</span></div>
 
-        resp = requests.post(
-            'https://api.groq.com/openai/v1/chat/completions',
-            headers={
-                'Authorization': f'Bearer {self.groq_key}',
-                'Content-Type':  'application/json'
-            },
-            json={
-                'model':       self.groq_model,
-                'messages':    messages,
-                'max_tokens':  max_tokens,
-                'temperature': 0.7
-            },
-            timeout=30
-        )
-        resp.raise_for_status()
-        data   = resp.json()
-        text   = data['choices'][0]['message']['content']
-        tokens = data.get('usage', {}).get('completion_tokens', 0)
-        return {
-            'success':  True,
-            'response': text,
-            'tokens':   tokens,
-            'provider': 'groq',
-            'model':    self.groq_model
+      <!-- MÓDULOS BLOQUEADOS (visibles con candado = próximamente) -->
+      <div class="nav-item nav-locked" title="Próximamente"><span class="ni">🎬</span><span class="nl">Crear video</span><span class="nl-lock">🔒</span></div>
+      <div class="nav-item nav-locked" title="Próximamente"><span class="ni">📄</span><span class="nl">Análisis docs</span><span class="nl-lock">🔒</span></div>
+      <div class="nav-item nav-locked" title="Próximamente"><span class="ni">🔊</span><span class="nl">Voz / TTS</span><span class="nl-lock">🔒</span></div>
+      <div class="nav-item nav-locked" title="Próximamente"><span class="ni">💻</span><span class="nl">Ejecutor código</span><span class="nl-lock">🔒</span></div>
+
+      <!-- HISTORIAL -->
+      <div class="nav-sec-label" style="margin-top:6px">Historial</div>
+      <div id="userHistNav" style="padding:0 6px">
+        <div style="color:var(--text3);font-size:.74rem;padding:7px 6px">Sin conversaciones aún</div>
+      </div>
+    </div>
+    <div class="sb-foot">
+      <div class="user-chip">
+        <div class="uc-av" id="userAvLetter">U</div>
+        <div><div class="uc-name" id="userSbName">—</div><div class="uc-role">Usuario</div></div>
+      </div>
+      <button class="btn btn-outline btn-sm" style="width:100%;justify-content:center" onclick="doLogout()">Cerrar sesión</button>
+    </div>
+  </aside>
+
+  <!-- User main -->
+  <div style="flex:1;display:flex;flex-direction:column;overflow:hidden">
+
+    <!-- CHAT VIEW -->
+    <div id="userChatView" style="flex:1;display:flex;flex-direction:column;overflow:hidden">
+      <div class="user-topbar">
+        <div class="user-topbar-l">
+          <button class="hamburger" id="userHamburger" onclick="toggleSidebar()" style="position:static;display:none;padding:6px 9px;margin-right:4px">☰</button>
+          <div><div style="font-size:.92rem;font-weight:700">🤖 Cic_IA</div><div style="font-size:.7rem;color:var(--text2)">Asistente Inteligente</div></div>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <span style="font-size:.76rem;color:var(--text2)" id="userTopName">—</span>
+          <button class="btn btn-outline btn-sm" onclick="userNewConv()">✏️ Nueva</button>
+        </div>
+      </div>
+      <div class="chat-msgs" id="userMsgs">
+        <div class="chat-empty">
+          <div class="ce-icon">🤖</div>
+          <h3 style="font-size:.98rem;color:var(--text);margin-bottom:5px">¡Hola! Soy Cic_IA</h3>
+          <p>Tu asistente inteligente. Puedo responder preguntas, generar código, analizar información y mucho más.</p>
+        </div>
+      </div>
+      <div class="chat-input-area">
+        <div id="userImgWrap" style="display:none" class="img-prev-wrap">
+          <img id="userImgPrev"/><button class="img-rm" onclick="clearUserImg()">✕</button>
+        </div>
+        <div class="input-toolbar">
+          <label class="btn btn-ghost btn-sm" style="cursor:pointer;font-size:.76rem" title="Seleccionar imagen desde tu dispositivo">🖼 Imagen
+            <input type="file" id="userImgInput" accept="image/*" style="display:none" onchange="handleUserImg(this)"/>
+          </label>
+          <button class="btn btn-ghost btn-sm" onclick="triggerUserImgPaste()" title="También puedes pegar con Ctrl+V directamente" style="font-size:.76rem">📋 Pegar img</button>
+          <select id="userMode" style="width:120px;font-size:.78rem">
+            <option value="balanced">Balanceado</option>
+            <option value="fast">Rápido</option>
+            <option value="complete">Completo</option>
+          </select>
+        </div>
+        <div class="input-row">
+          <textarea id="userInput" rows="1"
+            placeholder="Escribe tu mensaje... · Pega imagen con Ctrl+V (Enter = enviar)"
+            onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendUserMsg();}"
+            oninput="autoGrow(this,null)" onpaste="userPaste(event)"></textarea>
+          <button class="btn btn-primary" onclick="sendUserMsg()" style="align-self:flex-end">↩</button>
+        </div>
+        <div id="userInfo" style="font-size:.68rem;color:var(--text3);margin-top:3px;height:13px"></div>
+      </div>
+    </div>
+
+    <!-- MODULE VIEW (para búsqueda, proyectos, etc.) -->
+    <div id="userModView" style="flex:1;overflow-y:auto;padding:26px;display:none">
+      <div id="userModContent"></div>
+    </div>
+
+  </div>
+</div><!-- /userApp -->
+<script>
+'use strict';
+/* ═══ STATE ═══ */
+const API='';
+let TOKEN=localStorage.getItem('cic_token')||'';
+let currentUser=null;
+const devH=[],userH=[];
+let devPendImg=null,userPendImg=null;
+let devAllH=[],userAllH=[];
+let currentCode='',currentLang='';
+let kbPage=1,memPage=1;
+const kbCats=new Set();
+
+// Migrar token viejo
+if(!TOKEN){const old=localStorage.getItem('dev_token');if(old){TOKEN=old;localStorage.setItem('cic_token',old);localStorage.removeItem('dev_token');}}
+
+/* ═══ API ═══ */
+async function req(path,method='GET',body=null,auth=true){
+  const h={'Content-Type':'application/json'};
+  if(auth&&TOKEN)h['Authorization']='Bearer '+TOKEN;
+  const o={method,headers:h};if(body)o.body=JSON.stringify(body);
+  const r=await fetch(API+path,o);
+  if(r.status===204)return{};
+  const d=await r.json();
+  if(!r.ok&&d.error)throw new Error(d.error);
+  return d;
+}
+function showAlert(id,msg,type){
+  const el=document.getElementById(id);if(!el)return;
+  if(!msg){el.innerHTML='';return;}
+  el.innerHTML=`<div class="alert alert-${type||'info'}">${msg}</div>`;
+}
+function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function renderPag(id,total,cur,fn){
+  const el=document.getElementById(id);if(!el||total<=1){if(el)el.innerHTML='';return;}
+  let h='';for(let i=1;i<=Math.min(total,10);i++)h+=`<button class="btn btn-sm ${i===cur?'btn-primary':'btn-outline'}" onclick="${fn.name}(${i})">${i}</button>`;
+  el.innerHTML=h;
+}
+
+/* ═══ AUTH ═══ */
+async function doLogin(){
+  const user=document.getElementById('loginUser').value.trim();
+  const pass=document.getElementById('loginPass').value;
+  showAlert('loginAlert','','');
+  if(!user||!pass)return showAlert('loginAlert','Completa todos los campos','err');
+  const btn=document.getElementById('loginBtn');btn.disabled=true;btn.textContent='Iniciando...';
+  try{
+    const r=await req('/api/auth/login','POST',{username:user,password:pass},false);
+    if(r.success){
+      TOKEN=r.token;currentUser=r.user;localStorage.setItem('cic_token',TOKEN);
+      document.getElementById('loginScreen').style.display='none';
+      r.user.is_developer?startDev():startUser();
+    }else showAlert('loginAlert',r.error||'Credenciales inválidas','err');
+  }catch(e){showAlert('loginAlert','Error: '+e.message,'err');}
+  finally{btn.disabled=false;btn.textContent='Iniciar Sesión';}
+}
+async function doLogout(){
+  try{await req('/api/auth/logout','POST');}catch{}
+  TOKEN='';currentUser=null;localStorage.removeItem('cic_token');
+  document.getElementById('devApp').style.display='none';
+  document.getElementById('userApp').style.display='none';
+  document.getElementById('hamburger').style.display='none';
+  document.getElementById('loginScreen').style.display='flex';
+  document.getElementById('loginUser').value='';
+  document.getElementById('loginPass').value='';
+  showAlert('loginAlert','','');
+}
+function showSetup(){document.getElementById('setupModal').classList.add('show');}
+function hideSetup(){document.getElementById('setupModal').classList.remove('show');}
+async function doSetup(){
+  const user=document.getElementById('setupUser').value.trim();
+  const pass=document.getElementById('setupPass').value;
+  const key=document.getElementById('setupKey').value.trim();
+  try{
+    const r=await req('/api/dev/setup','POST',{username:user,password:pass,setup_key:key},false);
+    if(r.success){showAlert('setupAlert','✅ '+r.message,'ok');setTimeout(hideSetup,2000);}
+    else showAlert('setupAlert',r.error||'Error','err');
+  }catch(e){showAlert('setupAlert',e.message,'err');}
+}
+
+/* ═══ START APPS ═══ */
+function startDev(){
+  document.getElementById('devApp').style.display='flex';
+  document.getElementById('hamburger').style.display='flex';
+  document.getElementById('codePanel').style.display='flex';
+  const n=currentUser.username;
+  document.getElementById('devUserName').textContent=n;
+  document.getElementById('devAvLetter').textContent=n[0].toUpperCase();
+  loadDashboard();
+  // Mostrar widget de resumen con delay para que el panel cargue
+  setTimeout(loadAndShowSummary, 800);
+}
+function startUser(){
+  document.getElementById('userApp').style.display='flex';
+  const n=currentUser.username;
+  document.getElementById('userSbName').textContent=n;
+  document.getElementById('userTopName').textContent=n;
+  document.getElementById('userAvLetter').textContent=n[0].toUpperCase();
+  // Show hamburger for user on mobile
+  if(window.innerWidth<=768)document.getElementById('userHamburger').style.display='flex';
+  loadUserHistory();
+}
+
+/* ═══ SIDEBAR ═══ */
+function toggleSidebar(){
+  const sb=document.getElementById(currentUser?.is_developer?'devSidebar':'userSidebar');
+  sb.classList.toggle('sb-open');
+  document.getElementById('overlay').classList.toggle('show');
+}
+function closeSidebar(){
+  document.getElementById('devSidebar')?.classList.remove('sb-open');
+  document.getElementById('userSidebar')?.classList.remove('sb-open');
+  document.getElementById('overlay').classList.remove('show');
+}
+
+/* ═══ DEV NAVIGATION ═══ */
+function devGo(name,el){
+  document.querySelectorAll('#devApp .section').forEach(s=>s.classList.remove('active'));
+  document.querySelectorAll('#devSidebar .nav-item').forEach(n=>n.classList.remove('active'));
+  const sec=document.getElementById('dev-'+name);
+  if(sec)sec.classList.add('active');
+  if(el)el.classList.add('active');
+  closeSidebar();
+  if(name==='dashboard')loadDashboard();
+  if(name==='knowledge')loadKB(1);
+  if(name==='memories')loadMem(1);
+  if(name==='config')loadConfig();
+  if(name==='users')loadUsers();
+  if(name==='learn')loadLearnLog();
+  if(name==='chat'){devNewConv();loadDevRecent();}
+  if(name==='search')document.getElementById('devSearchQ')?.focus();
+}
+
+/* ═══ USER NAVIGATION ═══ */
+function userGo(name,el){
+  document.querySelectorAll('#userSidebar .nav-item').forEach(n=>n.classList.remove('active'));
+  if(el)el.classList.add('active');
+  closeSidebar();
+  const cv=document.getElementById('userChatView');
+  const mv=document.getElementById('userModView');
+  if(name==='chat'){cv.style.display='flex';mv.style.display='none';}
+  else{cv.style.display='none';mv.style.display='block';renderUserMod(name);}
+}
+function renderUserMod(name){
+  const el=document.getElementById('userModContent');
+  if(name==='search'){
+    el.innerHTML=`<div class="page-hd"><h2>🔍 Buscar</h2><p>Busca en tus conversaciones</p></div>
+      <div class="panel"><div style="display:flex;gap:8px">
+        <input type="text" id="uSearchQ" placeholder="Buscar en conversaciones..." style="flex:1" onkeydown="if(event.key==='Enter')userSearch()"/>
+        <button class="btn btn-primary" onclick="userSearch()">Buscar</button>
+      </div><div id="uSearchRes" style="margin-top:14px;color:var(--text2);font-size:.84rem">Escribe algo para buscar.</div></div>`;
+    return;
+  }
+  if(name==='img-gen'){
+    el.innerHTML=`<div class="page-hd"><h2>🖼️ Crear imagen</h2><p>Generación de imágenes con IA</p></div>
+      <div class="panel"><div class="form-group"><label>Describe la imagen</label><textarea id="uImgPrompt" rows="3" placeholder="Un paisaje montañoso al amanecer..."></textarea></div>
+      <button class="btn btn-primary" onclick="alert('Módulo disponible próximamente')">🖼️ Generar imagen</button></div>`;
+    return;
+  }
+  const coming={'projects':'📁 Proyectos','artifacts':'🗃️ Artefactos'};
+  if(coming[name]){
+    el.innerHTML=`<div class="page-hd"><h2>${coming[name]}</h2></div>
+      <div style="text-align:center;padding:40px;background:var(--bg2);border:1px solid var(--border);border-radius:14px">
+        <div style="font-size:2.5rem;margin-bottom:12px">${coming[name][0]}</div>
+        <p style="color:var(--text2);margin-bottom:14px">Este módulo estará disponible próximamente</p>
+        <span class="badge badge-orange">PRÓXIMAMENTE</span>
+      </div>`;
+    return;
+  }
+  el.innerHTML=`<div class="page-hd"><h2>${name}</h2></div><div class="panel"><p style="color:var(--text2)">En construcción.</p></div>`;
+}
+async function userSearch(){
+  const q=document.getElementById('uSearchQ')?.value.trim();if(!q)return;
+  const el=document.getElementById('uSearchRes');el.textContent='Buscando...';
+  try{
+    const d=await req('/api/chat/history?per_page=50');
+    const items=(d.conversations||[]).filter(c=>c.user_message.toLowerCase().includes(q.toLowerCase())||c.bot_response.toLowerCase().includes(q.toLowerCase()));
+    if(!items.length){el.textContent='Sin resultados para "'+q+'"';return;}
+    el.innerHTML=items.map(c=>`<div style="padding:9px 0;border-bottom:1px solid var(--border)">
+      <div style="font-size:.83rem">👤 ${esc(c.user_message.substring(0,80))}</div>
+      <div style="font-size:.79rem;color:var(--text2);margin-top:2px">🤖 ${esc(c.bot_response.substring(0,80))}</div>
+      <div style="font-size:.68rem;color:var(--text3);margin-top:3px">${new Date(c.timestamp).toLocaleString()}</div>
+    </div>`).join('');
+  }catch(e){el.textContent='Error: '+e.message;}
+}
+async function devSearch(){
+  const q=document.getElementById('devSearchQ')?.value.trim();if(!q)return;
+  const el=document.getElementById('devSearchRes');el.textContent='Buscando...';
+  try{
+    const d=await req('/api/chat/history?per_page=100');
+    const items=(d.conversations||[]).filter(c=>c.user_message.toLowerCase().includes(q.toLowerCase())||c.bot_response.toLowerCase().includes(q.toLowerCase()));
+    if(!items.length){el.textContent='Sin resultados para "'+q+'"';return;}
+    el.innerHTML=items.map(c=>`<div style="padding:9px 0;border-bottom:1px solid var(--border)">
+      <div style="font-size:.83rem">👤 ${esc(c.user_message.substring(0,100))}</div>
+      <div style="font-size:.79rem;color:var(--text2);margin-top:2px">🤖 ${esc(c.bot_response.substring(0,100))}</div>
+      <div style="font-size:.68rem;color:var(--text3);margin-top:3px">${new Date(c.timestamp).toLocaleString()} · ${c.tokens_used} tokens</div>
+    </div>`).join('');
+  }catch(e){el.textContent='Error: '+e.message;}
+}
+
+/* ═══ CODE PANEL ═══ */
+function openCodePanel(code,lang,title){
+  currentCode=code;currentLang=lang;
+  document.getElementById('cpTitle').textContent=title||'Código';
+  document.getElementById('cpLang').textContent=lang;
+  const el=document.getElementById('cpCode');el.className='language-'+lang;el.textContent=code;hljs.highlightElement(el);
+  const h=lang==='html'||lang==='HTML';
+  document.getElementById('cpPreviewBtn').style.display=h?'':'none';
+  document.getElementById('cpPreviewFrame').style.display='none';
+  document.getElementById('codePanel').classList.add('open');
+}
+function closeCodePanel(){document.getElementById('codePanel').classList.remove('open');document.getElementById('cpPreviewFrame').style.display='none';}
+function copyPanelCode(){navigator.clipboard.writeText(currentCode).then(()=>{const b=document.getElementById('cpCopyBtn');b.textContent='✅';setTimeout(()=>b.textContent='📋',1500);});}
+function downloadPanelCode(){
+  const ext={html:'html',python:'py',py:'py',javascript:'js',js:'js',css:'css',json:'json',bash:'sh',sql:'sql'}[currentLang.toLowerCase()]||'txt';
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([currentCode],{type:'text/plain'}));a.download='codigo.'+ext;a.click();
+}
+function togglePanelPreview(){
+  const f=document.getElementById('cpPreviewFrame'),b=document.getElementById('cpBody');
+  if(f.style.display==='none'){f.srcdoc=currentCode;f.style.display='block';b.style.display='none';document.getElementById('cpPreviewBtn').textContent='📝';}
+  else{f.style.display='none';b.style.display='block';document.getElementById('cpPreviewBtn').textContent='👁';}
+}
+
+/* ═══ RENDER MESSAGE ═══ */
+function renderMsg(text){
+  const parts=[],re=/```(\w+)?\n?([\s\S]*?)```/g;let last=0,m;
+  while((m=re.exec(text))!==null){
+    if(m.index>last)parts.push({t:'txt',c:text.slice(last,m.index)});
+    parts.push({t:'code',l:m[1]||'plaintext',c:m[2].trim()});last=m.index+m[0].length;
+  }
+  if(last<text.length)parts.push({t:'txt',c:text.slice(last)});
+  return parts.map(p=>{
+    if(p.t==='txt')return`<span style="white-space:pre-wrap">${esc(p.c)}</span>`;
+    const id='cb_'+Math.random().toString(36).slice(2),isH=p.l==='html'||p.l==='HTML';
+    return`<div class="code-block"><div class="code-block-head"><span class="cb-lang">${p.l}</span>
+      <div class="cb-actions">
+        <button class="btn btn-icon btn-ghost btn-sm" onclick="navigator.clipboard.writeText(document.getElementById('${id}').textContent)">📋</button>
+        <button class="btn btn-icon btn-sm" style="background:var(--accent);color:#fff" onclick='openCodePanel(document.getElementById("${id}").textContent,"${p.l}")'>⬡</button>
+        ${isH?`<button class="btn btn-icon btn-sm" style="background:var(--green);color:#0a1a12" onclick='openCodePanel(document.getElementById("${id}").textContent,"html");togglePanelPreview()'>👁</button>`:''}
+      </div></div><pre><code id="${id}" class="language-${p.l}">${esc(p.c)}</code></pre></div>`;
+  }).join('');
+}
+
+/* ═══ AUTO GROW ═══ */
+function autoGrow(el,countId){
+  el.style.height='auto';el.style.height=Math.min(el.scrollHeight,180)+'px';
+  if(countId){const c=document.getElementById(countId);if(c){const l=el.value.length;c.textContent=l.toLocaleString()+' / 100,000';c.style.color=l>90000?'var(--red)':l>60000?'var(--yellow)':'var(--text3)';}}
+}
+
+/* ═══ DEV CHAT ═══ */
+function devNewConv(){
+  devH.length=0;devPendImg=null;clearDevImgUI();
+  document.getElementById('devMsgs').innerHTML='<div class="chat-empty"><div class="ce-icon">✏️</div><p>Nueva conversación</p></div>';
+  document.getElementById('devInfo').textContent='';
+  const el=document.getElementById('devInput');if(el){el.value='';el.style.height='42px';}
+  document.getElementById('devCC').textContent='0 / 100,000';
+}
+function devClearChat(){devNewConv();closeCodePanel();}
+function handleDevImg(i){const f=i.files[0];if(!f)return;const r=new FileReader();r.onload=e=>{const d=e.target.result;setDevImg(d.split(',')[1],f.type,d);};r.readAsDataURL(f);}
+function devPaste(e){const items=e.clipboardData?.items;if(!items)return;for(const i of items){if(i.type.startsWith('image/')){e.preventDefault();const b=i.getAsFile();const r=new FileReader();r.onload=ev=>{const d=ev.target.result;setDevImg(d.split(',')[1],i.type,d);};r.readAsDataURL(b);return;}}}
+async function pasteDevImg(){try{const items=await navigator.clipboard.read();for(const item of items){for(const type of item.types){if(type.startsWith('image/')){const blob=await item.getType(type);const r=new FileReader();r.onload=e=>{const d=e.target.result;setDevImg(d.split(',')[1],type,d);};r.readAsDataURL(blob);return;}}}alert('No hay imagen en el portapapeles');}catch(e){alert('Error: '+e.message);}}
+function setDevImg(b64,mime,preview){devPendImg={base64:b64,mimeType:mime};const w=document.getElementById('devImgWrap'),i=document.getElementById('devImgPrev');w.style.display='block';i.src=preview||`data:${mime};base64,${b64}`;}
+function clearDevImg(){devPendImg=null;clearDevImgUI();}
+function clearDevImgUI(){const w=document.getElementById('devImgWrap');if(w)w.style.display='none';const i=document.getElementById('devImgInput');if(i)i.value='';}
+
+async function readGitHub(){
+  const url=document.getElementById('devGhUrl').value.trim();if(!url)return;
+  document.getElementById('devInfo').textContent='⏳ Leyendo...';
+  try{
+    const r=await req('/api/chat/read-github','POST',{url});
+    if(r.success){
+      const el=document.getElementById('devInput');
+      el.value=`[GITHUB: ${url}]\n\`\`\`${r.language}\n${r.content}\n\`\`\`\n(${r.lines} líneas)\n\nInstrucciones: `;
+      autoGrow(el,'devCC');document.getElementById('devGhUrl').value='';
+      document.getElementById('devInfo').textContent=`✅ ${r.lines} líneas`;
+      el.focus();el.setSelectionRange(el.value.length,el.value.length);
+    }else document.getElementById('devInfo').textContent='❌ '+r.error;
+  }catch(e){document.getElementById('devInfo').textContent='❌ '+e.message;}
+}
+
+async function sendDevMsg(){
+  const el=document.getElementById('devInput');
+  const msg=el.value.trim();if(!msg&&!devPendImg)return;
+  el.value='';el.style.height='42px';document.getElementById('devCC').textContent='0 / 100,000';
+  const mode=document.getElementById('devMode').value;
+  const customPrompt=document.getElementById('devSysPrompt').value.trim();
+  const box=document.getElementById('devMsgs');
+  const empty=box.querySelector('.chat-empty');if(empty)empty.remove();
+
+  if(devPendImg){
+    const b=devPendImg.base64,m=devPendImg.mimeType,s=document.getElementById('devImgPrev').src;clearDevImg();
+    const ud=document.createElement('div');ud.className='msg-row ur';
+    ud.innerHTML=`<div class="bubble"><img src="${s}" style="max-width:170px;border-radius:6px;display:block;margin-bottom:4px"/>${msg?esc(msg):'Analiza la imagen'}</div>`;box.appendChild(ud);
+    const bd=document.createElement('div');bd.className='msg-row br';
+    const tid='t_'+Date.now();bd.innerHTML=`<div class="bubble" id="${tid}" style="color:var(--text2)">⏳ Analizando imagen...</div>`;box.appendChild(bd);box.scrollTop=box.scrollHeight;
+    try{
+      const r=await req('/api/chat/analyze-image','POST',{image_b64:b,mime_type:m,message:msg||'Descríbela en detalle.'});
+      const te=document.getElementById(tid);if(te){te.id='';te.style.color='';te.innerHTML=renderMsg(r.response);te.querySelectorAll('pre code').forEach(c=>hljs.highlightElement(c));}
+      const me=document.createElement('div');me.className='msg-meta';me.textContent=`${r.provider||'—'} · ${r.tokens||0} tokens`;bd.appendChild(me);
+    }catch(e){const te=document.getElementById(tid);if(te){te.style.color='var(--red)';te.textContent='Error: '+e.message;}}
+    box.scrollTop=box.scrollHeight;loadDevRecent();return;
+  }
+
+  const ud=document.createElement('div');ud.className='msg-row ur';
+  ud.innerHTML=`<div class="bubble">${esc(msg)}</div>`;box.appendChild(ud);
+  const bd=document.createElement('div');bd.className='msg-row br';
+  const tid='t_'+Date.now();bd.innerHTML=`<div class="bubble" id="${tid}" style="color:var(--text2)">⏳ Pensando...</div>`;
+  box.appendChild(bd);box.scrollTop=box.scrollHeight;
+  try{
+    const lh=devH.slice(-10);
+    let r;
+    if(customPrompt)r=await req('/api/dev/test-ai','POST',{message:msg,system_prompt:customPrompt});
+    else r=await req('/api/chat','POST',{message:msg,mode,history:lh});
+    devH.push({role:'user',content:msg});devH.push({role:'assistant',content:r.response});
+    if(devH.length>20)devH.splice(0,2);
+    const te=document.getElementById(tid);
+    if(te){te.id='';te.style.color='';te.innerHTML=renderMsg(r.response);te.querySelectorAll('pre code').forEach(c=>hljs.highlightElement(c));}
+    const me=document.createElement('div');me.className='msg-meta';
+    me.textContent=`${r.provider||'—'} · ${r.model||'—'} · ${r.tokens_used??r.tokens??0} tokens`;bd.appendChild(me);
+    document.getElementById('devInfo').textContent=`Intercambios: ${devH.length/2}`;
+  }catch(e){const te=document.getElementById(tid);if(te){te.style.color='var(--red)';te.textContent='Error: '+e.message;}}
+  box.scrollTop=box.scrollHeight;loadDevRecent();
+}
+
+async function loadDevRecent(){
+  try{
+    const d=await req('/api/chat/history?per_page=8');
+    devAllH=d.conversations||[];
+    const el=document.getElementById('devRecentList');
+    if(!devAllH.length){el.innerHTML='<div style="color:var(--text3);font-size:.7rem;padding:8px">Sin conversaciones</div>';return;}
+    el.innerHTML=devAllH.map(c=>`<div class="recent-chip" onclick="loadDevConv(${c.id})">
+      <div class="rc-user">👤 ${esc(c.user_message.substring(0,35))}</div>
+      <div class="rc-bot">🤖 ${esc(c.bot_response.substring(0,35))}</div>
+      <div class="rc-date">${new Date(c.timestamp).toLocaleDateString()}</div>
+    </div>`).join('');
+  }catch(e){document.getElementById('devRecentList').innerHTML=`<div style="color:var(--text3);font-size:.7rem;padding:8px">Error</div>`;}
+}
+function loadDevConv(id){
+  const c=devAllH.find(x=>x.id===id);if(!c)return;
+  const box=document.getElementById('devMsgs');
+  const empty=box.querySelector('.chat-empty');if(empty)empty.remove();
+  const ud=document.createElement('div');ud.className='msg-row ur';
+  ud.innerHTML=`<div class="bubble">${esc(c.user_message)}</div>`;box.appendChild(ud);
+  const bd=document.createElement('div');bd.className='msg-row br';
+  bd.innerHTML=`<div class="bubble">${renderMsg(c.bot_response)}</div><div class="msg-meta">📜 Historial · ${new Date(c.timestamp).toLocaleString()}</div>`;
+  box.appendChild(bd);bd.querySelectorAll('pre code').forEach(x=>hljs.highlightElement(x));
+  devH.push({role:'user',content:c.user_message});devH.push({role:'assistant',content:c.bot_response});
+  if(devH.length>20)devH.splice(0,2);
+  box.scrollTop=box.scrollHeight;
+}
+function openHistModal(){document.getElementById('histModal').classList.add('show');renderHistModal(devAllH);}
+function closeHistModal(){document.getElementById('histModal').classList.remove('show');}
+function filterHist(q){renderHistModal(q?devAllH.filter(c=>c.user_message.toLowerCase().includes(q.toLowerCase())||c.bot_response.toLowerCase().includes(q.toLowerCase())):devAllH);}
+function renderHistModal(items){
+  const el=document.getElementById('histList');
+  if(!items.length){el.innerHTML='<div style="padding:20px;text-align:center;color:var(--text2)">Sin resultados</div>';return;}
+  el.innerHTML=items.map(c=>`<div onclick="loadDevConv(${c.id});closeHistModal()" style="padding:11px 18px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .12s" onmouseover="this.style.background='rgba(91,141,238,.06)'" onmouseout="this.style.background=''">
+    <div style="font-size:.83rem">👤 ${esc(c.user_message.substring(0,80))}</div>
+    <div style="font-size:.79rem;color:var(--text2);margin-top:2px">🤖 ${esc(c.bot_response.substring(0,80))}</div>
+
+/* ═══ RECENT STRIP COLAPSABLE ═══ */
+function toggleRecentStrip(){
+  document.getElementById('recentStrip')?.classList.toggle('rs-collapsed');
+}
+
+/* ═══ WIDGET RESUMEN IA ═══ */
+let summaryLoaded = false;
+async function loadAndShowSummary(){
+  const widget = document.getElementById('iaSummaryWidget');
+  if(!widget) return;
+  widget.classList.remove('sw-hidden');
+  if(summaryLoaded) return;
+  try{
+    const d = await req('/api/dev/stats');
+    // Stats
+    document.getElementById('sw-mem').textContent   = (d.system?.total_memories||0).toLocaleString();
+    document.getElementById('sw-kb').textContent    = (d.system?.manual_knowledge||0).toLocaleString();
+    document.getElementById('sw-today').textContent = d.today?.conversations||0;
+    const learnedToday = d.today?.auto_learned||0;
+    document.getElementById('sw-learned').textContent = learnedToday;
+    // Badge si hay aprendizajes nuevos
+    if(learnedToday > 0){
+      document.getElementById('swNewCount').textContent = learnedToday+' nuevos';
+      document.getElementById('swNewBadge').style.display = 'inline-flex';
+    }
+    // Sugerencias inteligentes basadas en datos reales
+    renderSuggestions(d);
+    summaryLoaded = true;
+  }catch(e){
+    document.getElementById('swSuggestions').innerHTML=`<div style="color:var(--text3);font-size:.72rem">Error al cargar</div>`;
+  }
+}
+function closeSummaryWidget(){
+  document.getElementById('iaSummaryWidget')?.classList.add('sw-hidden');
+}
+function renderSuggestions(stats){
+  const sug = [];
+  const mem    = stats.system?.total_memories||0;
+  const kb     = stats.system?.manual_knowledge||0;
+  const convs  = stats.system?.total_conversations||0;
+  const learned= stats.today?.auto_learned||0;
+  const prov   = stats.ai_config?.provider||'';
+  const hasGroq= stats.ai_config?.has_groq;
+  const hasAnt = stats.ai_config?.has_anthropic;
+
+  // Lógica de sugerencias basada en estado real del sistema
+  if(kb === 0)
+    sug.push({icon:'🧠',text:'Agrega conocimiento manual para que el bot responda mejor sobre tu negocio',prio:'high',action:"devGo('knowledge',null);closeSummaryWidget()"});
+  if(mem < 20)
+    sug.push({icon:'📚',text:'El bot tiene pocas memorias. Inicia aprendizaje forzado sobre temas clave',prio:'high',action:"devGo('learn',null);closeSummaryWidget()"});
+  if(!hasGroq && !hasAnt)
+    sug.push({icon:'⚡',text:'Sin API Key de IA activa. Configura GROQ_API_KEY en Render para activar el bot',prio:'high',action:"devGo('config',null);closeSummaryWidget()"});
+  if(prov==='groq' && !hasAnt)
+    sug.push({icon:'🔄',text:'Considera agregar ANTHROPIC_API_KEY como fallback para mayor disponibilidad',prio:'med',action:"devGo('config',null);closeSummaryWidget()"});
+  if(convs > 50 && kb < 5)
+    sug.push({icon:'💡',text:`${convs} conversaciones sin conocimiento base. Revisa las frecuentes y agrégalas`,prio:'med',action:"devGo('knowledge',null);closeSummaryWidget()"});
+  if(learned > 10)
+    sug.push({icon:'✅',text:`Excelente — ${learned} memorias aprendidas hoy. Revísalas para verificar calidad`,prio:'low',action:"openKnowledgeDrawer('memories');closeSummaryWidget()"});
+  if(mem > 100)
+    sug.push({icon:'🗑️',text:'Considera limpiar memorias de baja calidad para mejorar la precisión del bot',prio:'low',action:"devGo('memories',null);closeSummaryWidget()"});
+  // Sugerencias de módulos
+  sug.push({icon:'🖼️',text:'Módulo de imágenes activo. Considera integrar DALL-E o Flux para generación',prio:'low',action:"devGo('img-gen',null);closeSummaryWidget()"});
+
+  if(!sug.length){
+    document.getElementById('swSuggestions').innerHTML='<div style="color:var(--green);font-size:.74rem">✅ Sistema en buen estado</div>';
+    return;
+  }
+  const prioLabel={'high':'URGENTE','med':'MEDIA','low':'BAJA'};
+  document.getElementById('swSuggestions').innerHTML = sug.slice(0,4).map(s=>`
+    <div class="sw-sug-item" onclick="${s.action}">
+      <span class="si-icon">${s.icon}</span>
+      <span class="si-text">${s.text}</span>
+      <span class="si-prio si-${s.prio}">${prioLabel[s.prio]}</span>
+    </div>`).join('');
+}
+
+/* ═══ KNOWLEDGE DETAIL DRAWER ═══ */
+let kdCurrentType = 'memories';
+let kdAllItems    = [];
+async function openKnowledgeDrawer(type='memories'){
+  kdCurrentType = type;
+  const drawer = document.getElementById('kdDrawer');
+  const title  = document.getElementById('kdTitle');
+  drawer.classList.add('open');
+  document.getElementById('kdSearch').value = '';
+  if(type==='memories'){
+    title.textContent = '💾 Memorias aprendidas';
+    document.getElementById('kdBody').innerHTML = '<div class="kd-empty">Cargando...</div>';
+    try{
+      const d = await req('/api/dev/memories?per_page=50&sort=recent');
+      kdAllItems = d.memories||[];
+      renderKdItems(kdAllItems);
+    }catch(e){ document.getElementById('kdBody').innerHTML=`<div class="kd-empty" style="color:var(--red)">${e.message}</div>`; }
+  } else if(type==='recent'){
+    title.textContent = '📖 Aprendizajes recientes';
+    document.getElementById('kdBody').innerHTML = '<div class="kd-empty">Cargando...</div>';
+    try{
+      const d = await req('/api/dev/memories?per_page=30&sort=recent&source=auto_learning');
+      kdAllItems = d.memories||[];
+      renderKdItems(kdAllItems);
+    }catch(e){ document.getElementById('kdBody').innerHTML=`<div class="kd-empty" style="color:var(--red)">${e.message}</div>`; }
+  } else if(type==='knowledge'){
+    title.textContent = '🧠 Conocimiento manual';
+    document.getElementById('kdBody').innerHTML = '<div class="kd-empty">Cargando...</div>';
+    try{
+      const d = await req('/api/dev/knowledge?per_page=50');
+      kdAllItems = (d.knowledge||[]).map(k=>({topic:k.title,content:k.content,source:'manual_dev',created:k.created,score:1}));
+      renderKdItems(kdAllItems);
+    }catch(e){ document.getElementById('kdBody').innerHTML=`<div class="kd-empty" style="color:var(--red)">${e.message}</div>`; }
+  }
+}
+function closeKdDrawer(){
+  document.getElementById('kdDrawer').classList.remove('open');
+}
+function renderKdItems(items){
+  const el = document.getElementById('kdBody');
+  if(!items.length){ el.innerHTML='<div class="kd-empty">Sin elementos</div>'; return; }
+  const srcColor={'auto_learning':'badge-green','manual_dev':'badge-blue','web_search':'badge-yellow'};
+  el.innerHTML = items.map(m=>`
+    <div class="kd-item">
+      <div class="ki-topic">${esc((m.topic||'Sin tema').substring(0,60))}</div>
+      <div class="ki-content">${esc((m.content||'').substring(0,200))}${(m.content||'').length>200?'…':''}</div>
+      <div class="ki-meta">
+        <span class="badge ${srcColor[m.source]||'badge-purple'}" style="font-size:.6rem">${m.source||'—'}</span>
+        <span>${new Date(m.created).toLocaleDateString()}</span>
+        ${m.score?`<span>⭐ ${(m.score||0).toFixed(2)}</span>`:''}
+      </div>
+    </div>`).join('');
+}
+function filterKdItems(q){
+  if(!q){ renderKdItems(kdAllItems); return; }
+  const f = kdAllItems.filter(m=>(m.topic||'').toLowerCase().includes(q.toLowerCase())||(m.content||'').toLowerCase().includes(q.toLowerCase()));
+  renderKdItems(f);
+}
+
+/* ═══ USER CHAT ═══ */
+// Guarda la última imagen analizada para poder hacer preguntas de seguimiento
+let userLastImg = null; // {base64, mimeType, src}
+
+function userNewConv(){
+  userH.length=0; userPendImg=null; userLastImg=null; clearUserImgUI(); closeSidebar();
+  document.getElementById('userMsgs').innerHTML='<div class="chat-empty"><div class="ce-icon">🤖</div><h3 style="font-size:.98rem;color:var(--text);margin-bottom:5px">¡Hola! Soy Cic_IA</h3><p>Tu asistente inteligente. Puedo responder preguntas, analizar imágenes, generar código y mucho más.<br><span style="font-size:.75rem;color:var(--text3);margin-top:6px;display:inline-block">💡 Pega una imagen directamente con Ctrl+V</span></p></div>';
+  const el=document.getElementById('userInput');if(el){el.value='';el.style.height='42px';}
+  document.getElementById('userInfo').textContent='';
+}
+function handleUserImg(i){
+  const f=i.files[0];if(!f)return;
+  const r=new FileReader();r.onload=e=>{const d=e.target.result;setUserImg(d.split(',')[1],f.type,d);};
+  r.readAsDataURL(f);
+}
+// Ctrl+V / paste image — igual a como funciona en WhatsApp, Claude, ChatGPT
+function userPaste(e){
+  const items=e.clipboardData?.items;if(!items)return;
+  for(const i of items){
+    if(i.type.startsWith('image/')){
+      e.preventDefault();
+      const b=i.getAsFile();
+      const r=new FileReader();
+      r.onload=ev=>{const d=ev.target.result;setUserImg(d.split(',')[1],i.type,d);showImgPasteToast();};
+      r.readAsDataURL(b);return;
+    }
+  }
+}
+function showImgPasteToast(){
+  let t=document.getElementById('imgPasteToast');
+  if(!t){t=document.createElement('div');t.id='imgPasteToast';t.style.cssText='position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#22d3a0;color:#0a1a12;padding:6px 14px;border-radius:20px;font-size:.78rem;font-weight:700;z-index:999;pointer-events:none;transition:opacity .3s';document.body.appendChild(t);}
+  t.textContent='🖼️ Imagen lista — escribe tu pregunta y pulsa Enter';t.style.opacity='1';
+  setTimeout(()=>t.style.opacity='0',2800);
+}
+function setUserImg(b64,mime,preview){
+  userPendImg={base64:b64,mimeType:mime,src:preview||`data:${mime};base64,${b64}`};
+  const w=document.getElementById('userImgWrap'),i=document.getElementById('userImgPrev');
+  w.style.display='block';i.src=userPendImg.src;
+  // Enfocar el textarea para que el usuario escriba su pregunta
+  document.getElementById('userInput')?.focus();
+}
+function clearUserImg(){userPendImg=null;clearUserImgUI();}
+function clearUserImgUI(){const w=document.getElementById('userImgWrap');if(w)w.style.display='none';const i=document.getElementById('userImgInput');if(i)i.value='';}
+
+async function sendUserMsg(){
+  const el=document.getElementById('userInput');
+  const msg=el.value.trim();
+  // Permite enviar solo imagen O solo texto O ambos
+  if(!msg && !userPendImg) return;
+  el.value='';el.style.height='42px';closeSidebar();
+  const mode=document.getElementById('userMode').value;
+  const box=document.getElementById('userMsgs');
+  const empty=box.querySelector('.chat-empty');if(empty)empty.remove();
+
+  // ── CASO 1: Hay imagen nueva pendiente ─────────────────────────────
+  if(userPendImg){
+    const {base64:b, mimeType:m, src:s} = userPendImg;
+    userLastImg = {base64:b, mimeType:m, src:s}; // guardar para contexto futuro
+    clearUserImg();
+
+    // Burbuja del usuario con imagen
+    const ud=document.createElement('div');ud.className='msg-row ur';
+    ud.innerHTML=`<div class="bubble" style="max-width:100%">
+      <img src="${s}" style="max-width:220px;max-height:160px;border-radius:8px;display:block;margin-bottom:${msg?'6px':'0'}"/>
+      ${msg?`<span>${esc(msg)}</span>`:''}
+    </div>`;
+    box.appendChild(ud);
+
+    // Burbuja de respuesta con indicador
+    const bd=document.createElement('div');bd.className='msg-row br';
+    const tid='u_'+Date.now();
+    bd.innerHTML=`<div class="bubble" id="${tid}" style="color:var(--text2)">
+      <span style="font-size:.78rem">🔍 Analizando imagen...</span>
+    </div>`;
+    box.appendChild(bd);box.scrollTop=box.scrollHeight;
+
+    try{
+      const r=await req('/api/chat/analyze-image','POST',{
+        image_b64: b, mime_type: m,
+        message:   msg || 'Describe esta imagen en detalle en español.',
+        history:   userH.slice(-8) // contexto previo
+      });
+      const te=document.getElementById(tid);
+      if(te){te.id='';te.style.color='';te.innerHTML=renderMsg(r.response);te.querySelectorAll('pre code').forEach(c=>hljs.highlightElement(c));}
+      const me=document.createElement('div');me.className='msg-meta';
+      me.textContent=`${r.provider||'—'} · ${r.model||'—'} · ${r.tokens||0} tokens 🖼️`;
+      bd.appendChild(me);
+      // Guardar en historial de contexto para seguimiento
+      const userLabel = msg||'[imagen adjunta]';
+      userH.push({role:'user', content:`[IMAGEN ADJUNTA] ${userLabel}`});
+      userH.push({role:'assistant', content:r.response});
+      if(userH.length>20)userH.splice(0,2);
+      document.getElementById('userInfo').textContent=`Intercambios: ${userH.length/2} — Puedes hacer preguntas sobre la imagen`;
+    }catch(e){
+      const te=document.getElementById(tid);
+      if(te){te.style.color='var(--red)';te.textContent='Error: '+e.message;}
+    }
+    box.scrollTop=box.scrollHeight;loadUserHistory();return;
+  }
+
+  // ── CASO 2: Texto solo (puede ser seguimiento sobre imagen anterior) ──
+  const ud=document.createElement('div');ud.className='msg-row ur';
+  ud.innerHTML=`<div class="bubble">${esc(msg)}</div>`;box.appendChild(ud);
+  const bd=document.createElement('div');bd.className='msg-row br';
+  const tid='u_'+Date.now();
+  bd.innerHTML=`<div class="bubble" id="${tid}" style="color:var(--text2)">⏳ Pensando...</div>`;
+  box.appendChild(bd);box.scrollTop=box.scrollHeight;
+
+  try{
+    const r=await req('/api/chat','POST',{message:msg, mode, history:userH.slice(-10)});
+    userH.push({role:'user',content:msg});userH.push({role:'assistant',content:r.response});
+    if(userH.length>20)userH.splice(0,2);
+    const te=document.getElementById(tid);
+    if(te){te.id='';te.style.color='';te.innerHTML=renderMsg(r.response);te.querySelectorAll('pre code').forEach(c=>hljs.highlightElement(c));}
+    const me=document.createElement('div');me.className='msg-meta';
+    me.textContent=`${r.provider||'—'} · ${r.model||'—'} · ${r.tokens_used??r.tokens??0} tokens`;
+    bd.appendChild(me);
+    document.getElementById('userInfo').textContent=`Intercambios: ${userH.length/2}`;
+  }catch(e){
+    const te=document.getElementById(tid);
+    if(te){te.style.color='var(--red)';te.textContent='Error: '+e.message;}
+  }
+  box.scrollTop=box.scrollHeight;loadUserHistory();
+}
+
+async function loadUserHistory(){
+  try{
+    const d=await req('/api/chat/history?per_page=30');
+    userAllH=d.conversations||[];
+    const el=document.getElementById('userHistNav');
+    // Filtrar conversaciones rotas o con HTML en el mensaje
+    const valid=userAllH.filter(c=>
+      c.user_message &&
+      !c.user_message.trim().startsWith('<!DOCTYPE') &&
+      !c.user_message.trim().startsWith('<html') &&
+      c.user_message.length < 500
+    );
+    if(!valid.length){el.innerHTML='<div style="color:var(--text3);font-size:.72rem;padding:7px 4px">Sin conversaciones aún</div>';return;}
+    el.innerHTML=valid.map(c=>{
+      const uMsg = c.user_message.replace(/\[🖼️ IMAGEN\]/g,'🖼️').replace(/\[IMAGEN\]/g,'🖼️');
+      return`<div class="hist-item" onclick="loadUserConv(${c.id})">
+        <div class="hi-u">${esc(uMsg.substring(0,42))}</div>
+        <div class="hi-b">🤖 ${esc(c.bot_response.substring(0,42))}</div>
+        <div class="hi-d">${new Date(c.timestamp).toLocaleDateString()}</div>
+      </div>`;
+    }).join('');
+  }catch{}
+}
+function loadUserConv(id){
+  const c=userAllH.find(x=>x.id===id);if(!c)return;
+  closeSidebar();
+  document.getElementById('userChatView').style.display='flex';
+  document.getElementById('userModView').style.display='none';
+  document.querySelectorAll('#userSidebar .nav-item').forEach(n=>n.classList.remove('active'));
+  document.querySelector('#userSidebar .nav-item')?.classList.add('active');
+  const box=document.getElementById('userMsgs');
+  const empty=box.querySelector('.chat-empty');if(empty)empty.remove();
+  const ud=document.createElement('div');ud.className='msg-row ur';
+  ud.innerHTML=`<div class="bubble">${esc(c.user_message)}</div>`;box.appendChild(ud);
+  const bd=document.createElement('div');bd.className='msg-row br';
+  bd.innerHTML=`<div class="bubble"><span style="white-space:pre-wrap">${esc(c.bot_response)}</span></div><div class="msg-meta">📜 Historial · ${new Date(c.timestamp).toLocaleString()}</div>`;
+  box.appendChild(bd);
+  userH.push({role:'user',content:c.user_message});userH.push({role:'assistant',content:c.bot_response});
+  if(userH.length>20)userH.splice(0,2);
+  box.scrollTop=box.scrollHeight;
+  document.getElementById('userInfo').textContent='Conversación del historial — puedes continuar';
+}
+
+/* ═══ DASHBOARD ═══ */
+async function loadDashboard(){
+  try{
+    const d=await req('/api/dev/stats');
+    document.getElementById('d-mem').textContent=(d.system?.total_memories||0).toLocaleString();
+    document.getElementById('d-conv').textContent=(d.system?.total_conversations||0).toLocaleString();
+    document.getElementById('d-kb').textContent=(d.system?.manual_knowledge||0).toLocaleString();
+    document.getElementById('d-today').textContent=d.today?.conversations||0;
+    const prov=d.ai_config?.provider||'—';
+    const ok=d.ai_config?.has_groq||d.ai_config?.has_anthropic||d.ai_config?.has_openai;
+    document.getElementById('d-ai').innerHTML=`<span class="dot ${ok?'dot-green pulse':'dot-red'}" style="margin-right:4px"></span>${prov}`;
+    if(!ok)showAlert('dashAlert','⚠️ No hay API Key de IA configurada.','warn');
+    const rc=document.getElementById('recentConvs');
+    if(d.recent_conversations?.length){
+      rc.innerHTML=d.recent_conversations.map(c=>`<div style="padding:7px 0;border-bottom:1px solid var(--border)">
+        <div style="font-size:.78rem;color:var(--text2)">👤 ${esc(c.user.substring(0,60))}</div>
+        <div style="font-size:.78rem;margin-top:2px">🤖 ${esc(c.bot.substring(0,60))}</div>
+        <div style="font-size:.68rem;color:var(--text3);margin-top:2px">${new Date(c.time).toLocaleString()}</div>
+      </div>`).join('');
+    }else rc.innerHTML='<div style="color:var(--text3);font-size:.8rem">Sin conversaciones aún</div>';
+    const wa=document.getElementById('weekActivity');
+    if(d.week_activity?.length){
+      wa.innerHTML='<table style="width:100%"><thead><tr><th>Fecha</th><th>Msgs</th><th>Aprendido</th></tr></thead><tbody>'+
+        d.week_activity.map(w=>`<tr><td style="font-size:.76rem">${w.date}</td><td>${w.conversations}</td><td>${w.auto_learned}</td></tr>`).join('')+'</tbody></table>';
+    }else wa.innerHTML='<div style="color:var(--text3);font-size:.8rem">Sin actividad</div>';
+  }catch(e){showAlert('dashAlert','Error: '+e.message,'err');}
+}
+
+/* ═══ KNOWLEDGE ═══ */
+async function loadKB(page=1){
+  kbPage=page;
+  const text=document.getElementById('kb-filter')?.value.trim()||'';
+  const cat=document.getElementById('kb-cat-filter')?.value||'';
+  let url=`/api/dev/knowledge?page=${page}`;
+  if(text)url+=`&search=${encodeURIComponent(text)}`;
+  if(cat)url+=`&category=${encodeURIComponent(cat)}`;
+  try{
+    const d=await req(url);const items=d.knowledge||[];
+    const pl={1:'<span class="badge badge-blue">Normal</span>',2:'<span class="badge badge-yellow">Alta</span>',3:'<span class="badge badge-red">Crítica</span>'};
+    document.getElementById('kbTable').innerHTML=items.length?items.map(k=>`<tr>
+      <td><strong style="font-size:.81rem">${esc(k.title)}</strong></td>
+      <td><span class="badge badge-purple">${esc(k.category||'—')}</span></td>
+      <td>${pl[k.priority]||k.priority}</td>
+      <td style="color:var(--text2);font-size:.76rem;max-width:180px">${esc(k.content)}</td>
+      <td style="font-size:.72rem;color:var(--text3)">${new Date(k.created).toLocaleDateString()}</td>
+      <td><button class="btn btn-red btn-sm" onclick="deleteKB(${k.id})">🗑</button></td>
+    </tr>`).join(''):'<tr><td colspan="6" style="text-align:center;color:var(--text2);padding:18px">Sin resultados</td></tr>';
+    renderPag('kbPag',d.pages,kbPage,loadKB);
+    items.forEach(k=>{if(k.category)kbCats.add(k.category);});
+    const cs=document.getElementById('kb-cat-filter');if(cs){const cc=cs.value;cs.innerHTML='<option value="">Todas las categorías</option>'+[...kbCats].map(c=>`<option value="${esc(c)}" ${c===cc?'selected':''}>${esc(c)}</option>`).join('');}
+  }catch(e){document.getElementById('kbTable').innerHTML=`<tr><td colspan="6" style="color:var(--red)">${e.message}</td></tr>`;}
+}
+async function addKnowledge(){
+  const title=document.getElementById('kb-title').value.trim(),content=document.getElementById('kb-content').value.trim();
+  const category=document.getElementById('kb-category').value.trim(),tags=document.getElementById('kb-tags').value.split(',').map(t=>t.trim()).filter(Boolean);
+  const priority=parseInt(document.getElementById('kb-prio').value);
+  if(!title||!content)return showAlert('kbAlert','Título y contenido requeridos','err');
+  try{
+    showAlert('kbAlert','Guardando...','info');
+    const r=await req('/api/dev/knowledge','POST',{title,content,category,tags,priority});
+    showAlert('kbAlert','✅ '+r.message,'ok');
+    ['kb-title','kb-content','kb-category','kb-tags'].forEach(id=>document.getElementById(id).value='');
+    if(category)kbCats.add(category);loadKB(kbPage);
+  }catch(e){showAlert('kbAlert','❌ '+e.message,'err');}
+}
+async function deleteKB(id){if(!confirm('¿Desactivar?'))return;try{await req(`/api/dev/knowledge/${id}`,'DELETE');loadKB(kbPage);}catch(e){alert(e.message);}}
+
+/* ═══ LEARNING ═══ */
+async function forceLearning(){
+  const topic=document.getElementById('learn-topic').value.trim();if(!topic)return showAlert('learnAlert','El tema es requerido','err');
+  try{
+    showAlert('learnAlert','⏳ Aprendiendo...','info');
+    const content=document.getElementById('learn-content').value.trim();
+    const r=await req('/api/dev/learn','POST',{topic,content:content||undefined});
+    showAlert('learnAlert',`✅ ${r.web_learned} memorias aprendidas${r.manual_saved?' + guardado':''}`, 'ok');loadLearnLog();
+  }catch(e){showAlert('learnAlert','❌ '+e.message,'err');}
+}
+async function bulkLearning(){
+  const topics=document.getElementById('bulk-topics').value.trim().split('\n').map(t=>t.trim()).filter(Boolean);
+  if(!topics.length)return showAlert('bulkAlert','Agrega al menos un tema','err');
+  try{
+    showAlert('bulkAlert',`⏳ Procesando ${topics.length} temas...`,'info');
+    const r=await req('/api/dev/learn/bulk','POST',{items:topics.map(t=>({topic:t}))});
+    showAlert('bulkAlert',`✅ ${r.processed} temas · ${r.total_learned} memorias`,'ok');loadLearnLog();
+  }catch(e){showAlert('bulkAlert','❌ '+e.message,'err');}
+}
+async function loadLearnLog(){
+  const el=document.getElementById('learnLog');if(!el)return;
+  try{
+    const d=await req('/api/dev/stats');
+    if(d.week_activity?.length){
+      el.innerHTML=d.week_activity.map(w=>`<div style="display:flex;gap:16px;padding:6px 0;border-bottom:1px solid var(--border);font-size:.81rem">
+        <span style="width:100px;color:var(--text2)">${w.date}</span>
+        <span><strong>${w.conversations}</strong> msgs</span>
+        <span><strong style="color:var(--green)">${w.auto_learned}</strong> aprendidos</span>
+      </div>`).join('');
+    }else el.innerHTML='<div style="color:var(--text3);font-size:.8rem">Sin actividad</div>';
+  }catch(e){el.innerHTML=`<div style="color:var(--red);font-size:.8rem">Error: ${e.message}</div>`;}
+}
+
+/* ═══ MEMORIES ═══ */
+async function loadMem(page=1){
+  memPage=page;
+  const topic=document.getElementById('mem-search').value.trim();
+  const source=document.getElementById('mem-source').value;
+  const sort=document.getElementById('mem-sort')?.value||'recent';
+  const df=document.getElementById('mem-df').value,dt=document.getElementById('mem-dt').value;
+  let url=`/api/dev/memories?page=${page}&per_page=20&sort=${sort}`;
+  if(topic)url+=`&topic=${encodeURIComponent(topic)}`;if(source)url+=`&source=${source}`;
+  try{
+    const d=await req(url);let items=d.memories||[];
+    if(df)items=items.filter(m=>new Date(m.created)>=new Date(df));
+    if(dt)items=items.filter(m=>new Date(m.created)<=new Date(dt+'T23:59:59'));
+    document.getElementById('memCount').textContent=`${d.total||0} memorias totales`;
+    document.getElementById('memTable').innerHTML=items.length?items.map(m=>`<tr>
+      <td style="max-width:130px;font-size:.79rem">${esc((m.topic||'—').substring(0,42))}</td>
+      <td><span class="badge ${m.source==='manual_dev'?'badge-blue':m.source==='auto_learning'?'badge-green':'badge-yellow'}">${m.source}</span></td>
+      <td>${(m.score||0).toFixed(2)}</td><td>${m.accesses}</td>
+      <td style="font-size:.72rem;color:var(--text3)">${new Date(m.created).toLocaleDateString()}</td>
+      <td style="color:var(--text2);font-size:.75rem;max-width:160px">${esc(m.content)}</td>
+      <td><button class="btn btn-red btn-sm" onclick="deleteMem(${m.id})">🗑</button></td>
+    </tr>`).join(''):'<tr><td colspan="7" style="text-align:center;color:var(--text2);padding:18px">Sin memorias</td></tr>';
+    renderPag('memPag',d.pages,memPage,loadMem);
+  }catch(e){document.getElementById('memTable').innerHTML=`<tr><td colspan="7" style="color:var(--red)">${e.message}</td></tr>`;}
+}
+async function deleteMem(id){if(!confirm('¿Eliminar?'))return;try{await req(`/api/dev/memories/${id}`,'DELETE');loadMem(memPage);}catch(e){alert(e.message);}}
+function clearMemPrompt(){
+  const source=document.getElementById('mem-source').value;
+  if(!confirm(source?`¿Limpiar memorias de "${source}"?`:'¿Limpiar TODAS las memorias?'))return;
+  req('/api/dev/memories/clear','POST',{source:source||undefined,confirm:'CONFIRMAR'})
+    .then(r=>{alert(`✅ ${r.deleted} memorias eliminadas`);loadMem(1);}).catch(e=>alert(e.message));
+}
+
+/* ═══ CONFIG ═══ */
+async function loadConfig(){
+  try{
+    const d=await req('/api/dev/config');const c=d.config;const v=k=>c[k]?.value||'';
+    const prov=v('ai_provider')||'groq';
+    const sel=document.getElementById('cfg-provider');
+    if([...sel.options].some(o=>o.value===prov))sel.value=prov;else sel.value='groq';
+    document.getElementById('cfg-model').value=v('ai_model')||'llama-3.1-8b-instant';
+    document.getElementById('cfg-tokens').value=v('max_tokens')||'1000';
+    document.getElementById('cfg-autolearn').value=v('auto_learning_enabled')||'true';
+    document.getElementById('cfg-interval').value=v('auto_learning_interval_hours')||'1';
+    document.getElementById('cfg-websearch').value=v('web_search_enabled')||'true';
+    document.getElementById('cfg-prompt').value=v('system_prompt')||'Eres Cic_IA, un asistente inteligente en español.';
+  }catch(e){showAlert('cfgAIAlert','Error: '+e.message,'err');}
+}
+async function saveAIConfig(){
+  try{await req('/api/dev/config','PUT',{updates:{ai_provider:document.getElementById('cfg-provider').value,ai_model:document.getElementById('cfg-model').value,max_tokens:document.getElementById('cfg-tokens').value}});showAlert('cfgAIAlert','✅ Guardado','ok');}
+  catch(e){showAlert('cfgAIAlert','❌ '+e.message,'err');}
+}
+async function saveLearningConfig(){
+  try{await req('/api/dev/config','PUT',{updates:{auto_learning_enabled:document.getElementById('cfg-autolearn').value,auto_learning_interval_hours:document.getElementById('cfg-interval').value,web_search_enabled:document.getElementById('cfg-websearch').value}});showAlert('cfgLearnAlert','✅ Guardado','ok');}
+  catch(e){showAlert('cfgLearnAlert','❌ '+e.message,'err');}
+}
+async function savePrompt(){
+  const p=document.getElementById('cfg-prompt').value.trim();if(!p)return showAlert('cfgPromptAlert','No puede estar vacío','err');
+  try{await req('/api/dev/config/prompt','PUT',{prompt:p});showAlert('cfgPromptAlert','✅ Actualizado','ok');}catch(e){showAlert('cfgPromptAlert','❌ '+e.message,'err');}
+}
+function resetPrompt(){document.getElementById('cfg-prompt').value='Eres Cic_IA, un asistente inteligente en español. Responde de forma clara, útil y amigable.';}
+
+/* ═══ USERS ═══ */
+async function loadUsers(){
+  try{
+    const d=await req('/api/dev/users');
+    document.getElementById('usersTable').innerHTML=d.users.map(u=>`<tr>
+      <td>${u.id}</td><td><strong style="font-size:.81rem">${esc(u.username)}</strong></td>
+      <td>${u.is_developer?'<span class="badge badge-dev">Dev</span>':'<span class="badge badge-green">Usuario</span>'}</td>
+      <td>${u.is_active?'<span class="badge badge-green">Activo</span>':'<span class="badge badge-red">Inactivo</span>'}</td>
+      <td>${u.conversations}</td>
+      <td style="font-size:.72rem;color:var(--text3)">${new Date(u.created_at).toLocaleDateString()}</td>
+      <td><button class="btn btn-outline btn-sm" onclick="toggleDev(${u.id})">${u.is_developer?'Quitar dev':'Hacer dev'}</button></td>
+    </tr>`).join('');
+  }catch(e){document.getElementById('usersTable').innerHTML=`<tr><td colspan="7" style="color:var(--red)">Error: ${e.message}</td></tr>`;}
+}
+async function toggleDev(id){try{await req(`/api/dev/users/${id}/toggle-dev`,'POST');loadUsers();}catch(e){alert(e.message);}}
+
+/* ═══ IMG GEN ═══ */
+async function generateImage(){
+  const prompt=document.getElementById('devImgPrompt')?.value.trim();if(!prompt)return;
+  const el=document.getElementById('devImgGenRes');
+  el.innerHTML='<div style="color:var(--text2);font-size:.84rem">⏳ Integra aquí tu API de imágenes (DALL-E, Stable Diffusion, Flux, etc.)</div>';
+}
+
+/* ═══ TRIGGER PASTE IMG ═══ */
+async function triggerUserImgPaste(){
+  try{
+    const items=await navigator.clipboard.read();
+    for(const item of items){
+      for(const type of item.types){
+        if(type.startsWith('image/')){
+          const blob=await item.getType(type);
+          const r=new FileReader();
+          r.onload=e=>{const d=e.target.result;setUserImg(d.split(',')[1],type,d);showImgPasteToast();};
+          r.readAsDataURL(blob);return;
         }
+      }
+    }
+    alert('No hay imagen en el portapapeles. Usa Ctrl+C en una imagen primero, o selecciona con 🖼 Imagen.');
+  }catch(e){
+    // Si no tiene permiso de clipboard, mostrar instrucción
+    alert('💡 Puedes pegar imágenes directamente con Ctrl+V mientras escribes en el chat.');
+  }
+}
 
-    # ── OLLAMA (modelo local / Colab — prioridad 2) ─────────────────────────
-    def _call_ollama(self, user_message: str, system: str,
-                     history: list = None, max_tokens: int = 1000) -> dict:
-        if not self.ollama_url:
-            return {'success': False, 'error': 'Sin OLLAMA_URL'}
+/* ═══ GLOBAL PASTE LISTENER ═══
+   Captura Ctrl+V en CUALQUIER parte de la página.
+   Si hay una imagen en el portapapeles y el usuario está logueado,
+   la carga automáticamente y enfoca el textarea para que escriba su pregunta.
+   Funciona igual que ChatGPT, WhatsApp Web, Claude, etc.
+══════════════════════════════════ */
+document.addEventListener('paste', function(e){
+  if(!currentUser) return; // no logueado, ignorar
 
-        # Construir prompt con historial
-        messages = [{'role': 'system', 'content': system}]
-        if history:
-            for h in history[-10:]:
-                messages.append({'role': h['role'], 'content': h['content']})
-        messages.append({'role': 'user', 'content': user_message})
+  const items = e.clipboardData?.items;
+  if(!items) return;
 
-        base_url = self.ollama_url.rstrip('/')
-        resp = requests.post(
-            f'{base_url}/api/chat',
-            json={
-                'model':    self.ollama_model,
-                'messages': messages,
-                'stream':   False,
-                'options':  {'num_predict': max_tokens, 'temperature': 0.7}
-            },
-            timeout=120  # Ollama puede ser lento en Colab
-        )
-        resp.raise_for_status()
-        data = resp.json()
-        text = data.get('message', {}).get('content', '')
-        if not text:
-            return {'success': False, 'error': 'Ollama retornó respuesta vacía'}
-        return {
-            'success':  True,
-            'response': text,
-            'tokens':   data.get('eval_count', 0),
-            'provider': 'ollama',
-            'model':    self.ollama_model
+  for(const item of items){
+    if(item.type.startsWith('image/')){
+      // Si el foco está en un input/textarea normal de texto, no interferir
+      const active = document.activeElement;
+      const isTextInput = active && (
+        (active.tagName==='INPUT' && active.type!=='file') ||
+        (active.tagName==='TEXTAREA' && active.id !== 'userInput' && active.id !== 'devInput')
+      );
+      if(isTextInput) return;
+
+      e.preventDefault();
+      const blob = item.getAsFile();
+      const r = new FileReader();
+      r.onload = ev => {
+        const dataUrl = ev.target.result;
+        const b64 = dataUrl.split(',')[1];
+        const mime = item.type;
+
+        if(currentUser.is_developer){
+          // Dev: cargar en el chat de prueba dev
+          setDevImg(b64, mime, dataUrl);
+          document.getElementById('devInput')?.focus();
+          showGlobalPasteToast('dev');
+        } else {
+          // Usuario normal: cargar en el chat de usuario
+          setUserImg(b64, mime, dataUrl);
+          document.getElementById('userInput')?.focus();
+          showImgPasteToast();
         }
-
-    # ── ANTHROPIC Claude ────────────────────────────────────────────────────
-    def _call_anthropic(self, user_message: str, system: str,
-                        history: list = None, max_tokens: int = 1000) -> dict:
-        if not self.anthropic_key:
-            return {'success': False, 'error': 'Sin ANTHROPIC_API_KEY'}
-
-        model    = get_config('ai_model', 'claude-haiku-4-5-20251001')
-        messages = []
-        if history:
-            for h in history[-10:]:
-                messages.append({'role': h['role'], 'content': h['content']})
-        messages.append({'role': 'user', 'content': user_message})
-
-        resp = requests.post(
-            'https://api.anthropic.com/v1/messages',
-            headers={
-                'x-api-key':         self.anthropic_key,
-                'anthropic-version': '2023-06-01',
-                'content-type':      'application/json'
-            },
-            json={'model': model, 'max_tokens': max_tokens, 'system': system, 'messages': messages},
-            timeout=30
-        )
-        resp.raise_for_status()
-        data   = resp.json()
-        text   = data['content'][0]['text']
-        tokens = data.get('usage', {}).get('output_tokens', 0)
-        return {'success': True, 'response': text, 'tokens': tokens, 'provider': 'anthropic', 'model': model}
-
-    # ── OPENAI GPT ──────────────────────────────────────────────────────────
-    def _call_openai(self, user_message: str, system: str,
-                     history: list = None, max_tokens: int = 1000) -> dict:
-        if not self.openai_key:
-            return {'success': False, 'error': 'Sin OPENAI_API_KEY'}
-
-        model    = get_config('ai_model', 'gpt-3.5-turbo')
-        messages = [{'role': 'system', 'content': system}]
-        if history:
-            for h in history[-10:]:
-                messages.append({'role': h['role'], 'content': h['content']})
-        messages.append({'role': 'user', 'content': user_message})
-
-        resp = requests.post(
-            'https://api.openai.com/v1/chat/completions',
-            headers={'Authorization': f'Bearer {self.openai_key}', 'Content-Type': 'application/json'},
-            json={'model': model, 'messages': messages, 'max_tokens': max_tokens},
-            timeout=30
-        )
-        resp.raise_for_status()
-        data   = resp.json()
-        text   = data['choices'][0]['message']['content']
-        tokens = data.get('usage', {}).get('completion_tokens', 0)
-        return {'success': True, 'response': text, 'tokens': tokens, 'provider': 'openai', 'model': model}
-
-    # ── FALLBACK (sin motor de IA) ──────────────────────────────────────────
-    def _fallback_response(self, user_message: str) -> dict:
-        msg_lower = user_message.lower()
-        if any(w in msg_lower for w in ['hola', 'buenas', 'hey', 'saludos']):
-            r = ("¡Hola! Soy Cic_IA. Actualmente no tengo ningún motor de IA conectado. "
-                 "El desarrollador debe configurar GROQ_API_KEY (gratis) u OLLAMA_URL.")
-        elif any(w in msg_lower for w in ['qué hora', 'qué día', 'fecha', 'hoy']):
-            now   = datetime.now()
-            dias  = ['lunes','martes','miércoles','jueves','viernes','sábado','domingo']
-            meses = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto',
-                     'septiembre','octubre','noviembre','diciembre']
-            r = f"Hoy es {dias[now.weekday()]}, {now.day} de {meses[now.month-1]} de {now.year} — {now.strftime('%H:%M')}"
-        else:
-            r = (f"Recibí: '{user_message[:80]}'. "
-                 "⚠️ Sin motor de IA activo. Configura GROQ_API_KEY o OLLAMA_URL en las variables de entorno.")
-        return {'success': False, 'response': r, 'provider': 'fallback', 'tokens': 0}
-
-
-# ========== MOTOR DE BÚSQUEDA DE MEMORIAS (optimizado) ==========
-
-class MemoryEngine:
-    @staticmethod
-    def search(query: str, limit: int = 5) -> list:
-        """Búsqueda eficiente por palabras clave — sin cargar toda la BD en RAM"""
-        words = [w for w in query.lower().split() if len(w) > 3]
-        if not words:
-            return []
-
-        try:
-            # Búsqueda por topic primero (indexado)
-            results = set()
-            for word in words[:5]:
-                mems = Memory.query.filter(
-                    Memory.topic.ilike(f'%{word}%')
-                ).order_by(Memory.relevance_score.desc()).limit(10).all()
-                results.update(m.id for m in mems)
-
-            # Búsqueda en contenido si no hay suficientes resultados
-            if len(results) < 3:
-                for word in words[:3]:
-                    mems = Memory.query.filter(
-                        Memory.content.ilike(f'%{word}%')
-                    ).order_by(Memory.relevance_score.desc()).limit(10).all()
-                    results.update(m.id for m in mems)
-
-            if not results:
-                return []
-
-            memories = Memory.query.filter(Memory.id.in_(list(results))).order_by(
-                Memory.relevance_score.desc(), Memory.access_count.desc()
-            ).limit(limit).all()
-
-            # Actualizar access_count en batch (eficiente)
-            ids = [m.id for m in memories]
-            if ids:
-                Memory.query.filter(Memory.id.in_(ids)).update(
-                    {'access_count': Memory.access_count + 1},
-                    synchronize_session=False
-                )
-                db.session.commit()
-
-            return memories
-        except Exception as e:
-            logger.error(f"Error buscando memorias: {e}")
-            return []
-
-    @staticmethod
-    def search_manual_knowledge(query: str, limit: int = 5) -> list:
-        """Busca en el conocimiento manual del desarrollador"""
-        words = [w for w in query.lower().split() if len(w) > 2]
-        if not words:
-            return ManualKnowledge.query.filter_by(active=True).order_by(
-                ManualKnowledge.priority.desc()
-            ).limit(limit).all()
-
-        results = set()
-        for word in words[:5]:
-            items = ManualKnowledge.query.filter(
-                ManualKnowledge.active == True,
-                db.or_(
-                    ManualKnowledge.content.ilike(f'%{word}%'),
-                    ManualKnowledge.title.ilike(f'%{word}%'),
-                    ManualKnowledge.category.ilike(f'%{word}%')
-                )
-            ).order_by(ManualKnowledge.priority.desc()).limit(10).all()
-            results.update(m.id for m in items)
-
-        if not results:
-            return []
-
-        return ManualKnowledge.query.filter(
-            ManualKnowledge.id.in_(list(results))
-        ).order_by(ManualKnowledge.priority.desc()).limit(limit).all()
-
-# ========== CLASE PRINCIPAL CIC_IA ==========
-
-class CicIA:
-    def __init__(self):
-        self.search_engine  = WebSearchEngine()
-        self.llm            = LLMEngine()
-        self.memory_engine  = MemoryEngine()
-        self._learning_thread = None
-        self._start_auto_learning()
-
-        with app.app_context():
-            logger.info("=" * 55)
-            logger.info("🤖 CIC_IA v8.0 INICIADA")
-            logger.info(f"   Memorias: {Memory.query.count()}")
-            logger.info(f"   Conversaciones: {Conversation.query.count()}")
-            logger.info(f"   Conocimiento manual: {ManualKnowledge.query.count()}")
-            provider = get_config('ai_provider', 'groq')
-            has_key  = bool(ANTHROPIC_API_KEY or OPENAI_API_KEY)
-            logger.info(f"   Proveedor IA: {provider} ({'✅ API Key OK' if has_key else '⚠️ Sin API Key'})")
-            logger.info("=" * 55)
-
-    def _start_auto_learning(self):
-        self._learning_thread = threading.Thread(
-            target=self._auto_learning_loop, daemon=True
-        )
-        self._learning_thread.start()
-        # Iniciar keepalive para evitar que Render se duerma
-        threading.Thread(target=self._keepalive_loop, daemon=True).start()
-
-    def _keepalive_loop(self):
-        """
-        Ping cada 10 minutos al propio servidor para evitar el sleep de Render.
-        Render duerme servicios gratuitos tras 15 min de inactividad.
-        """
-        import urllib.request
-        time.sleep(30)  # Espera inicial
-        app_url = os.environ.get('RENDER_EXTERNAL_URL', '')
-        if not app_url:
-            logger.info("ℹ️ RENDER_EXTERNAL_URL no configurada — keepalive desactivado")
-            return
-        logger.info(f"💓 Keepalive activo → {app_url}/health cada 10 min")
-        while True:
-            try:
-                req = urllib.request.Request(
-                    f"{app_url}/health",
-                    headers={'User-Agent': 'CicIA-Keepalive/1.0'}
-                )
-                urllib.request.urlopen(req, timeout=10)
-                logger.info("💓 Keepalive OK")
-            except Exception as e:
-                logger.warning(f"💓 Keepalive error: {e}")
-            time.sleep(600)  # cada 10 minutos
-
-    def _auto_learning_loop(self):
-        time.sleep(60)  # Espera inicial
-        while True:
-            try:
-                with app.app_context():
-                    if get_config('auto_learning_enabled', True):
-                        self._perform_auto_learning()
-            except Exception as e:
-                logger.error(f"Error auto-learning: {e}")
-            interval = get_config('auto_learning_interval_hours', 2)
-            time.sleep(interval * 3600)
-
-    def _perform_auto_learning(self, topic: str = None) -> dict:
-        """Aprendizaje automático desde web"""
-        default_topics = [
-            'inteligencia artificial 2025', 'machine learning novedades',
-            'python avances', 'desarrollo web tendencias', 'ciencia datos'
-        ]
-        query = topic or random.choice(default_topics)
-        logger.info(f"🔍 Auto-aprendiendo: '{query}'")
-
-        results = self.search_engine.search(query, max_results=4)
-        if not results:
-            return {'learned': 0, 'topic': query, 'error': 'Sin resultados web'}
-
-        learned = 0
-        for r in results:
-            try:
-                snippet = r['snippet'][:120] if r['snippet'] else ''
-                if not snippet:
-                    continue
-                # Evitar duplicados eficientemente
-                exists = Memory.query.filter(Memory.content.ilike(f'%{snippet[:60]}%')).first()
-                if exists:
-                    continue
-                content = f"{r['title']}\n\n{r['snippet']}\n\nFuente: {r['url']}"
-                mem = Memory(
-                    content=content, source='auto_learning',
-                    topic=query, relevance_score=0.6
-                )
-                db.session.add(mem)
-                learned += 1
-            except Exception:
-                continue
-
-        if learned > 0:
-            db.session.commit()
-            today = date.today()
-            log = LearningLog.query.filter_by(date=today).first()
-            if not log:
-                log = LearningLog(date=today, count=0, web_searches=0, auto_learned=0)
-                db.session.add(log)
-            log.auto_learned += learned
-            db.session.commit()
-
-        logger.info(f"✅ Aprendidos {learned} memorias sobre '{query}'")
-        return {'learned': learned, 'topic': query}
-
-    def force_learn(self, topic: str, content: str = None, user_id: int = None) -> dict:
-        """Forzar aprendizaje sobre un tema — modo desarrollador"""
-        with app.app_context():
-            learned_items = []
-
-            # Si se provee contenido directo, guardarlo como conocimiento manual
-            if content:
-                mk = ManualKnowledge(
-                    title=topic,
-                    content=content,
-                    category='forzado',
-                    priority=2,
-                    added_by=user_id,
-                    tags=['forced_learning']
-                )
-                db.session.add(mk)
-                # También guardar como Memory para que el LLM lo use
-                mem = Memory(
-                    content=content,
-                    source='manual_dev',
-                    topic=topic,
-                    relevance_score=0.95,
-                    tags=['priority', 'manual']
-                )
-                db.session.add(mem)
-                db.session.commit()
-                learned_items.append({'type': 'manual', 'title': topic})
-
-            # Buscar en web también
-            web_result = self._perform_auto_learning(topic)
-            if web_result.get('learned', 0) > 0:
-                learned_items.append({'type': 'web', 'count': web_result['learned']})
-
-            return {
-                'success': True,
-                'topic': topic,
-                'manual_saved': bool(content),
-                'web_learned': web_result.get('learned', 0),
-                'total': len(learned_items)
-            }
-
-    def _get_user_conversation_history(self, user_id: int, limit: int = 10) -> list:
-        """
-        Recupera el historial real de conversaciones del usuario desde la BD.
-        Esto permite que la IA recuerde conversaciones ANTERIORES, no solo la actual.
-        """
-        if not user_id:
-            return []
-        try:
-            recent = Conversation.query.filter_by(user_id=user_id).order_by(
-                Conversation.timestamp.desc()
-            ).limit(limit).all()
-            history = []
-            for conv in reversed(recent):
-                history.append({'role': 'user',      'content': conv.user_message[:500]})
-                history.append({'role': 'assistant',  'content': conv.bot_response[:500]})
-            return history
-        except Exception as e:
-            logger.error(f"Error recuperando historial: {e}")
-            return []
-
-    def _build_reasoning_prompt(self, user_message: str, memories: list,
-                                 manual_knowledge: list, user_history: list) -> str:
-        """
-        Construye un system prompt enriquecido con:
-        - Instrucciones de razonamiento paso a paso (Chain of Thought)
-        - Conocimiento manual del desarrollador
-        - Memorias aprendidas relevantes
-        - Resumen del perfil del usuario basado en su historial
-        """
-        base_prompt = get_config(
-            'system_prompt',
-            'Eres Cic_IA, un asistente inteligente en español. Responde de forma clara, útil y amigable.'
-        )
-
-        parts = [base_prompt, ""]
-
-        # ── Chain of Thought: razonamiento paso a paso ──────────────────
-        parts.append("""=== INSTRUCCIONES DE RAZONAMIENTO ===
-Antes de responder, analiza internamente:
-1. ¿Qué está pidiendo exactamente el usuario?
-2. ¿Tengo información relevante en mi conocimiento?
-3. ¿El historial de conversación da contexto adicional?
-4. ¿Cuál es la respuesta más útil y precisa?
-Luego responde directamente sin mostrar este proceso al usuario.""")
-        parts.append("")
-
-        # ── Conocimiento manual (mayor prioridad) ───────────────────────
-        if manual_knowledge:
-            parts.append("=== CONOCIMIENTO BASE (usa esto como fuente prioritaria) ===")
-            for mk in manual_knowledge[:5]:
-                parts.append(f"[{mk.category or 'General'}] {mk.title}:\n{mk.content[:600]}")
-            parts.append("")
-
-        # ── Memorias aprendidas ─────────────────────────────────────────
-        if memories:
-            parts.append("=== CONOCIMIENTO APRENDIDO ===")
-            for mem in memories[:4]:
-                parts.append(f"Tema: {mem.topic or 'general'}\n{mem.content[:400]}")
-            parts.append("")
-
-        # ── Perfil del usuario basado en historial ──────────────────────
-        if user_history and len(user_history) >= 4:
-            parts.append("=== CONTEXTO DEL USUARIO ===")
-            parts.append("Has conversado antes con este usuario. Aquí hay contexto de conversaciones anteriores:")
-            # Resumir últimas 3 interacciones
-            for i in range(0, min(6, len(user_history)), 2):
-                if i+1 < len(user_history):
-                    u = user_history[i]['content'][:100]
-                    a = user_history[i+1]['content'][:100]
-                    parts.append(f"- Usuario preguntó: '{u}...' → Respondiste: '{a}...'")
-            parts.append("Usa este contexto para dar respuestas más personalizadas y coherentes.")
-            parts.append("")
-
-        return "\n".join(parts)
-
-    def chat(self, user_message: str, user_id: int = None,
-             conversation_history: list = None, mode: str = 'balanced') -> dict:
-        """
-        Procesamiento principal del chat con razonamiento mejorado.
-        
-        Capas de razonamiento:
-        1. Memoria persistente: historial real de la BD
-        2. Chain of Thought: razona antes de responder  
-        3. Contexto conversacional: historial de la sesión actual
-        """
-
-        # Validar longitud
-        if len(user_message) > 100000:
-            user_message = user_message[:100000]
-
-        # ── Capa 1: Recuperar historial persistente de la BD ────────────
-        db_history = self._get_user_conversation_history(user_id, limit=8)
-
-        # ── Combinar historial de BD con historial de sesión actual ─────
-        # Limitamos el historial para no superar el límite de tokens de Groq
-        # Groq llama-3.1-8b-instant: ~8k tokens de contexto
-        if conversation_history:
-            # Sesión actual tiene prioridad — últimos 6 intercambios (12 mensajes)
-            combined_history = conversation_history[-12:]
-        else:
-            # Sin sesión activa, usar BD pero limitado
-            combined_history = db_history[-6:]
-
-        # ── Buscar memorias y conocimiento relevante ────────────────────
-        memories         = self.memory_engine.search(user_message, limit=get_config('max_memory_results', 5))
-        manual_knowledge = self.memory_engine.search_manual_knowledge(user_message, limit=5)
-
-        # ── Capa 2: Construir prompt con Chain of Thought ───────────────
-        reasoning_prompt = self._build_reasoning_prompt(
-            user_message, memories, manual_knowledge, db_history
-        )
-
-        # ── Tokens según modo ───────────────────────────────────────────
-        tokens_map = {'fast': 600, 'balanced': 1200, 'complete': 2500}
-        max_tokens = tokens_map.get(mode, 1200)
-
-        # ── Capa 3: Llamar al LLM con contexto completo ─────────────────
-        llm_result = self.llm.chat(
-            user_message=user_message,
-            system_prompt=reasoning_prompt,
-            context="",  # ya está en el reasoning_prompt
-            conversation_history=combined_history,
-            max_tokens=max_tokens
-        )
-
-        response_text = llm_result['response']
-
-        # ── Búsqueda web si el LLM falla ────────────────────────────────
-        if not llm_result.get('success') and get_config('web_search_enabled', True):
-            web_data = self._search_and_cache(user_message)
-            if web_data:
-                response_text += f"\n\n📖 Información encontrada en la web:\n{web_data}"
-
-        # ── Guardar en BD para memoria futura ───────────────────────────
-        self._save_conversation(
-            user_msg=user_message,
-            bot_resp=response_text,
-            user_id=user_id,
-            tokens=llm_result.get('tokens', 0),
-            sources=['llm', llm_result.get('provider', 'unknown')]
-        )
-
-        return {
-            'response':        response_text,
-            'provider':        llm_result.get('provider', 'unknown'),
-            'model':           llm_result.get('model', 'unknown'),
-            'tokens_used':     llm_result.get('tokens', 0),
-            'memories_used':   len(memories),
-            'manual_kb_used':  len(manual_knowledge),
-            'history_used':    len(combined_history),
-            'success':         llm_result.get('success', False)
-        }
-
-    def _search_and_cache(self, query: str) -> str:
-        """Busca en web con caché"""
-        try:
-            cached = WebSearchCache.query.filter_by(query=query).first()
-            if cached and cached.expires_at and cached.expires_at > datetime.utcnow():
-                return cached.results.get('summary', '')
-
-            results = self.search_engine.search(query, max_results=3)
-            if not results:
-                return ''
-
-            summary = '\n'.join(
-                f"• {r['title']}: {r['snippet'][:200]}" for r in results
-            )
-
-            # Cachear
-            cache = WebSearchCache(
-                query=query,
-                results={'summary': summary},
-                expires_at=datetime.utcnow() + timedelta(hours=6)
-            )
-            db.session.merge(cache)
-            db.session.commit()
-            return summary
-        except Exception as e:
-            logger.error(f"Error web search: {e}")
-            return ''
-
-    def _save_conversation(self, user_msg: str, bot_resp: str,
-                           user_id: int = None, tokens: int = 0, sources: list = None):
-        try:
-            conv = Conversation(
-                user_id=user_id,
-                user_message=user_msg[:50000],
-                bot_response=bot_resp[:20000],
-                sources_used={'providers': sources or []},
-                tokens_used=tokens,
-                mode_used='chat'
-            )
-            db.session.add(conv)
-
-            today = date.today()
-            log = LearningLog.query.filter_by(date=today).first()
-            if not log:
-                log = LearningLog(date=today, count=1, web_searches=0, auto_learned=0)
-                db.session.add(log)
-            else:
-                log.count += 1
-            db.session.commit()
-        except Exception as e:
-            db.session.rollback()
-            logger.error(f"Error guardando conversación: {e}")
-
-    def get_stats(self) -> dict:
-        with app.app_context():
-            today = date.today()
-            log = LearningLog.query.filter_by(date=today).first()
-            return {
-                'total_memories':    Memory.query.count(),
-                'total_conversations': Conversation.query.count(),
-                'manual_knowledge':  ManualKnowledge.query.filter_by(active=True).count(),
-                'today_conversations': log.count if log else 0,
-                'today_auto_learned':  log.auto_learned if log else 0,
-                'ai_provider':       get_config('ai_provider', 'anthropic'),
-                'ai_model':          get_config('ai_model', 'claude-haiku-4-5-20251001'),
-                'has_api_key':       bool(ANTHROPIC_API_KEY or OPENAI_API_KEY),
-                'web_search_enabled': get_config('web_search_enabled', True),
-            }
-
-
-# Instancia global
-cic_ia = CicIA()
-
-# ========== RUTAS PÚBLICAS ==========
-
-@app.route('/')
-def index():
-    return render_template('index.html')
-
-@app.route('/health')
-def health():
-    stats = cic_ia.get_stats()
-    return jsonify({
-        'status':    'healthy',
-        'version':   '8.0',
-        'timestamp': datetime.utcnow().isoformat(),
-        **stats
-    })
-
-# ========== AUTENTICACIÓN ==========
-
-@app.route('/api/auth/register', methods=['POST'])
-def register():
-    try:
-        data     = request.json or {}
-        username = data.get('username', '').strip()
-        email    = data.get('email', '').strip()
-        password = data.get('password', '')
-
-        if not username or len(username) < 3:
-            return jsonify({'success': False, 'error': 'Usuario debe tener al menos 3 caracteres'}), 400
-        if not password or len(password) < 6:
-            return jsonify({'success': False, 'error': 'Contraseña debe tener al menos 6 caracteres'}), 400
-
-        if User.query.filter_by(username=username).first():
-            return jsonify({'success': False, 'error': 'Nombre de usuario ya existe'}), 409
-        if email and User.query.filter_by(email=email).first():
-            return jsonify({'success': False, 'error': 'Email ya registrado'}), 409
-
-        user = User(username=username, email=email or f"{username}@cic.local")
-        user.set_password(password)
-        db.session.add(user)
-        db.session.commit()
-
-        token   = secrets.token_urlsafe(48)
-        expires = datetime.utcnow() + timedelta(days=30)
-        sess    = UserSession(user_id=user.id, token=token, expires_at=expires)
-        db.session.add(sess)
-        db.session.commit()
-
-        return jsonify({
-            'success': True, 'token': token,
-            'user': {'id': user.id, 'username': user.username, 'is_developer': user.is_developer}
-        })
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({'success': False, 'error': str(e)}), 500
-
-@app.route('/api/auth/login', methods=['POST'])
-def login():
-    try:
-        data     = request.json or {}
-        username = data.get('username', '').strip()
-        password = data.get('password', '')
-
-        user = User.query.filter_by(username=username).first()
-        if not user or not user.check_password(password):
-            return jsonify({'success': False, 'error': 'Credenciales inválidas'}), 401
-        if not user.is_active:
-            return jsonify({'success': False, 'error': 'Cuenta desactivada'}), 403
-
-        token   = secrets.token_urlsafe(48)
-        expires = datetime.utcnow() + timedelta(days=30)
-        sess    = UserSession(user_id=user.id, token=token, expires_at=expires)
-        db.session.add(sess)
-        db.session.commit()
-
-        return jsonify({
-            'success': True, 'token': token,
-            'user': {'id': user.id, 'username': user.username, 'is_developer': user.is_developer}
-        })
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({'success': False, 'error': str(e)}), 500
-
-@app.route('/api/auth/verify', methods=['GET'])
-@token_required
-def verify_token(current_user):
-    return jsonify({
-        'success': True,
-        'user': {'id': current_user.id, 'username': current_user.username, 'is_developer': current_user.is_developer}
-    })
-
-@app.route('/api/auth/logout', methods=['POST'])
-@token_required
-def logout(current_user):
-    token = _get_token_from_request()
-    UserSession.query.filter_by(token=token).delete()
-    db.session.commit()
-    return jsonify({'success': True, 'message': 'Sesión cerrada'})
-
-# ========== CHAT ==========
-
-@app.route('/api/chat', methods=['POST'])
-@token_required
-def chat(current_user):
-    try:
-        data    = request.json or {}
-        message = data.get('message', '').strip()
-        mode    = data.get('mode', 'balanced')
-        history = data.get('history', [])  # historial del frontend
-
-        if not message:
-            return jsonify({'error': 'Mensaje vacío'}), 400
-        if len(message) > 100000:
-            return jsonify({'error': 'Mensaje demasiado largo (máx 100,000 caracteres)'}), 400
-
-        result = cic_ia.chat(
-            user_message=message,
-            user_id=current_user.id,
-            conversation_history=history,
-            mode=mode
-        )
-        return jsonify(result)
-    except Exception as e:
-        logger.error(f"Error chat: {e}")
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/api/chat/history', methods=['GET'])
-@token_required
-def chat_history(current_user):
-    page     = request.args.get('page', 1, type=int)
-    per_page = min(request.args.get('per_page', 20, type=int), 100)
-
-    pagination = Conversation.query.filter_by(
-        user_id=current_user.id
-    ).order_by(Conversation.timestamp.desc()).paginate(
-        page=page, per_page=per_page, error_out=False
-    )
-
-    return jsonify({
-        'conversations': [{
-            'id':           c.id,
-            'user_message': c.user_message,
-            'bot_response': c.bot_response,
-            'timestamp':    c.timestamp.isoformat(),
-            'tokens_used':  c.tokens_used
-        } for c in pagination.items],
-        'total': pagination.total,
-        'pages': pagination.pages,
-        'current_page': page
-    })
-
-@app.route('/api/user/stats', methods=['GET'])
-@token_required
-def user_stats(current_user):
-    conv_count   = Conversation.query.filter_by(user_id=current_user.id).count()
-    total_tokens = db.session.query(
-        db.func.sum(Conversation.tokens_used)
-    ).filter_by(user_id=current_user.id).scalar() or 0
-
-    return jsonify({
-        'success':            True,
-        'user_id':            current_user.id,
-        'username':           current_user.username,
-        'conversation_count': conv_count,
-        'total_tokens_used':  total_tokens,
-        'is_developer':       current_user.is_developer,
-        'member_since':       current_user.created_at.isoformat()
-    })
-
-@app.route('/api/status')
-def status():
-    return jsonify(cic_ia.get_stats())
-
-# ========== LECTOR DE GITHUB Y ARCHIVOS ==========
-
-@app.route('/api/chat/read-github', methods=['POST'])
-@token_required
-def read_github(current_user):
-    """Lee código desde una URL de GitHub y lo agrega al contexto del chat"""
-    try:
-        data = request.json or {}
-        url  = data.get('url', '').strip()
-        if not url:
-            return jsonify({'error': 'URL requerida'}), 400
-
-        # Convertir URL de GitHub a raw
-        raw_url = url
-        if 'github.com' in url and '/blob/' in url:
-            raw_url = url.replace('github.com', 'raw.githubusercontent.com').replace('/blob/', '/')
-        elif 'github.com' in url and '/tree/' not in url and 'raw.githubusercontent.com' not in url:
-            # Intentar construir URL raw para archivos directos
-            raw_url = url.replace('github.com', 'raw.githubusercontent.com').replace('/blob/', '/')
-
-        import urllib.request
-        req_obj = urllib.request.Request(raw_url, headers={'User-Agent': 'CicIA/1.0'})
-        with urllib.request.urlopen(req_obj, timeout=15) as resp:
-            code_content = resp.read().decode('utf-8', errors='ignore')
-
-        # Limitar tamaño
-        if len(code_content) > 80000:
-            code_content = code_content[:80000] + "\n... [truncado por tamaño]"
-
-        # Detectar extensión/lenguaje
-        lang = 'plaintext'
-        if '.py' in url: lang = 'python'
-        elif '.js' in url: lang = 'javascript'
-        elif '.html' in url: lang = 'html'
-        elif '.css' in url: lang = 'css'
-        elif '.json' in url: lang = 'json'
-        elif '.ts' in url: lang = 'typescript'
-        elif '.md' in url: lang = 'markdown'
-
-        return jsonify({
-            'success':  True,
-            'content':  code_content,
-            'language': lang,
-            'url':      raw_url,
-            'lines':    code_content.count('\n') + 1,
-            'chars':    len(code_content)
-        })
-    except Exception as e:
-        return jsonify({'error': f'No se pudo leer el archivo: {str(e)}'}), 400
-
-@app.route('/api/chat/analyze-image', methods=['POST'])
-@token_required
-def analyze_image(current_user):
-    """
-    Analiza una imagen con contexto conversacional completo.
-    Soporta:
-    - Groq Vision (meta-llama/llama-4-scout-17b-16e-instruct) — prioridad 1, gratis
-    - Anthropic Claude Vision — fallback
-    - history: lista de mensajes previos para mantener contexto tras la imagen
-    - follow_up: si es True, es un mensaje de seguimiento sobre la misma imagen
-    """
-    try:
-        data        = request.json or {}
-        image_b64   = data.get('image_b64', '')
-        message     = data.get('message', 'Describe esta imagen en detalle en español').strip()
-        mime_type   = data.get('mime_type', 'image/jpeg')
-        history     = data.get('history', [])   # historial previo del frontend
-        follow_up   = data.get('follow_up', False)  # True si es pregunta de seguimiento
-
-        if not image_b64 and not follow_up:
-            return jsonify({'error': 'imagen requerida'}), 400
-
-        groq_key = os.environ.get('GROQ_API_KEY', '')
-        system   = get_config('system_prompt', 'Eres Cic_IA, un asistente inteligente en español.')
-        system  += ("\n\nCuando analices imágenes, sé detallado y descriptivo. "
-                    "Mantén el contexto de la imagen durante toda la conversación "
-                    "para responder preguntas de seguimiento.")
-
-        def _build_groq_messages(include_image=True):
-            """Construye el array de mensajes para Groq con historial."""
-            msgs = [{'role': 'system', 'content': system}]
-            for h in history[-8:]:
-                h_role = h.get('role', 'user')
-                h_content = h.get('content', '')
-                if h_role in ('user', 'assistant') and h_content:
-                    msgs.append({'role': h_role, 'content': str(h_content)})
-            if include_image and image_b64:
-                # llama-4-scout: text ANTES de image_url, data URI completo
-                safe_mime = mime_type if mime_type.startswith('image/') else 'image/jpeg'
-                data_url  = f"data:{safe_mime};base64,{image_b64}"
-                msgs.append({'role': 'user', 'content': [
-                    {'type': 'text',      'text': message or 'Describe esta imagen en detalle en español.'},
-                    {'type': 'image_url', 'image_url': {'url': data_url}}
-                ]})
-            else:
-                msgs.append({'role': 'user', 'content': message or 'Hola'})
-            return msgs
-
-        def _build_anthropic_messages(include_image=True):
-            """Construye mensajes para Anthropic con historial."""
-            msgs = []
-            for h in history[-8:]:
-                role = h.get('role', 'user')
-                content = h.get('content', '')
-                if role in ('user', 'assistant') and content:
-                    msgs.append({'role': role, 'content': str(content)})
-            if include_image and image_b64:
-                msgs.append({'role': 'user', 'content': [
-                    {'type': 'image', 'source': {'type': 'base64', 'media_type': mime_type, 'data': image_b64}},
-                    {'type': 'text', 'text': message or 'Describe esta imagen en detalle.'}
-                ]})
-            else:
-                msgs.append({'role': 'user', 'content': message})
-            return msgs
-
-        result_text = None
-        tokens      = 0
-        provider    = 'fallback'
-        model_used  = '—'
-        error_detail = []  # acumula errores reales para diagnóstico
-
-        # ── Groq Vision — modelos activos (los -vision-preview fueron deprecados) ──
-        GROQ_VISION_MODELS = [
-            'meta-llama/llama-4-scout-17b-16e-instruct',
-            'llama-4-scout-17b-16e-instruct',  # alias sin prefijo
-        ]
-
-        if groq_key:
-            for vision_model in GROQ_VISION_MODELS:
-                if result_text is not None:
-                    break
-                try:
-                    resp = requests.post(
-                        'https://api.groq.com/openai/v1/chat/completions',
-                        headers={'Authorization': f'Bearer {groq_key}', 'Content-Type': 'application/json'},
-                        json={
-                            'model':       vision_model,
-                            'max_tokens':  1500,
-                            'temperature': 0.7,
-                            'messages':    _build_groq_messages(include_image=bool(image_b64))
-                        },
-                        timeout=35
-                    )
-                    if not resp.ok:
-                        err_body = resp.text[:300]
-                        error_detail.append(f"Groq {vision_model}: HTTP {resp.status_code} — {err_body}")
-                        logger.warning(f"Groq Vision {vision_model} HTTP {resp.status_code}: {err_body}")
-                        continue
-                    rdata       = resp.json()
-                    result_text = rdata['choices'][0]['message']['content']
-                    tokens      = rdata.get('usage', {}).get('completion_tokens', 0)
-                    provider    = 'groq_vision'
-                    model_used  = vision_model
-                    logger.info(f"✅ Groq Vision OK con {vision_model}")
-                except Exception as e:
-                    error_detail.append(f"Groq {vision_model}: {str(e)[:200]}")
-                    logger.warning(f"Groq Vision {vision_model} falló: {e}")
-
-        # ── Anthropic Vision (fallback) ─────────────────────────────────
-        if result_text is None and ANTHROPIC_API_KEY:
-            try:
-                resp = requests.post(
-                    'https://api.anthropic.com/v1/messages',
-                    headers={
-                        'x-api-key':         ANTHROPIC_API_KEY,
-                        'anthropic-version': '2023-06-01',
-                        'content-type':      'application/json'
-                    },
-                    json={
-                        'model':      'claude-haiku-4-5-20251001',
-                        'max_tokens': 1500,
-                        'system':     system,
-                        'messages':   _build_anthropic_messages(include_image=bool(image_b64))
-                    },
-                    timeout=35
-                )
-                if not resp.ok:
-                    error_detail.append(f"Anthropic: HTTP {resp.status_code} — {resp.text[:200]}")
-                else:
-                    rdata       = resp.json()
-                    result_text = rdata['content'][0]['text']
-                    tokens      = rdata.get('usage', {}).get('output_tokens', 0)
-                    provider    = 'anthropic_vision'
-                    model_used  = 'claude-haiku'
-            except Exception as e:
-                error_detail.append(f"Anthropic: {str(e)[:200]}")
-                logger.error(f"Anthropic Vision falló: {e}")
-
-        # ── Sin soporte de visión — mostrar error real ──────────────────
-        if result_text is None:
-            diag = ' | '.join(error_detail) if error_detail else 'Sin GROQ_API_KEY ni ANTHROPIC_API_KEY configuradas'
-            logger.error(f"Vision fallback total. Errores: {diag}")
-            return jsonify({
-                'success':  False,
-                'response': f'⚠️ No se pudo analizar la imagen.\n\nDetalle técnico: {diag}',
-                'provider': 'fallback'
-            })
-
-        # Guardar en BD con etiqueta limpia (sin HTML)
-        label = message[:80] if message else '(imagen)'
-        cic_ia._save_conversation(
-            user_msg  = f'[🖼️ IMAGEN] {label}',
-            bot_resp  = result_text,
-            user_id   = current_user.id,
-            tokens    = tokens,
-            sources   = [provider]
-        )
-
-        return jsonify({
-            'success':  True,
-            'response': result_text,
-            'provider': provider,
-            'model':    model_used,
-            'tokens':   tokens
-        })
-
-    except Exception as e:
-        logger.error(f"Error análisis imagen: {e}")
-        return jsonify({'error': str(e)}), 500
-
-# ========== MÓDULOS (compatibilidad) ==========
-
-@app.route('/api/modules/list', methods=['GET'])
-def list_modules():
-    return jsonify({'modules': [
-        {'id': 'chat',          'name': 'Chat IA',              'icon': '🤖', 'status': 'active'},
-        {'id': 'web_search',    'name': 'Búsqueda Web',         'icon': '🔍', 'status': 'active'},
-        {'id': 'memory',        'name': 'Memoria',              'icon': '🧠', 'status': 'active'},
-        {'id': 'data_analysis', 'name': 'Análisis de Datos',    'icon': '📊', 'status': 'available'},
-        {'id': 'code_assistant','name': 'Asistente de Código',  'icon': '💻', 'status': 'available'},
-        {'id': 'file_manager',  'name': 'Archivos',             'icon': '📁', 'status': 'available'},
-    ]})
-
-# ==========================================
-# ========== PANEL DESARROLLADOR ==========
-# ==========================================
-
-@app.route('/developer')
-def developer_panel():
-    """Panel de desarrollador — renderiza template o retorna info básica"""
-    try:
-        return render_template('developer.html')
-    except Exception:
-        return jsonify({'message': 'Panel desarrollador activo. Usa la API /api/dev/*'})
-
-# --- Estadísticas detalladas ---
-
-@app.route('/api/dev/stats', methods=['GET'])
-@dev_required
-def dev_stats():
-    try:
-        today = date.today()
-        log   = LearningLog.query.filter_by(date=today).first()
-
-        # Historial de aprendizaje (últimos 7 días)
-        week_logs = LearningLog.query.filter(
-            LearningLog.date >= today - timedelta(days=7)
-        ).order_by(LearningLog.date.desc()).all()
-
-        # Últimas conversaciones
-        last_convs = Conversation.query.order_by(
-            Conversation.timestamp.desc()
-        ).limit(5).all()
-
-        return jsonify({
-            'system': {
-                'total_memories':      Memory.query.count(),
-                'total_conversations': Conversation.query.count(),
-                'total_users':         User.query.count(),
-                'active_sessions':     UserSession.query.count(),
-                'manual_knowledge':    ManualKnowledge.query.filter_by(active=True).count(),
-                'cached_searches':     _safe_count(WebSearchCache),
-            },
-            'today': {
-                'conversations': log.count if log else 0,
-                'auto_learned':  log.auto_learned if log else 0,
-                'web_searches':  log.web_searches if log else 0,
-            },
-            'week_activity': [{
-                'date':         l.date.isoformat(),
-                'conversations': l.count,
-                'auto_learned': l.auto_learned,
-            } for l in week_logs],
-            'recent_conversations': [{
-                'user':     c.user_message[:80],
-                'bot':      c.bot_response[:80],
-                'time':     c.timestamp.isoformat(),
-                'tokens':   c.tokens_used,
-            } for c in last_convs],
-            'ai_config': {
-                'provider':        get_config('ai_provider', 'groq'),
-                'model':           get_config('ai_model'),
-                'has_anthropic':   bool(ANTHROPIC_API_KEY),
-                'has_openai':      bool(OPENAI_API_KEY),
-                'has_groq':        bool(os.environ.get('GROQ_API_KEY', '')),
-                'system_prompt':   get_config('system_prompt'),
-                'max_tokens':      get_config('max_tokens'),
-                'auto_learning':   get_config('auto_learning_enabled'),
-                'web_search':      get_config('web_search_enabled'),
-            }
-        })
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-# --- Gestión de conocimiento manual ---
-
-@app.route('/api/dev/knowledge', methods=['GET'])
-@dev_required
-def dev_get_knowledge():
-    """Lista todo el conocimiento manual"""
-    page     = request.args.get('page', 1, type=int)
-    category = request.args.get('category', '')
-    query    = ManualKnowledge.query.filter_by(active=True)
-    if category:
-        query = query.filter_by(category=category)
-    pagination = query.order_by(
-        ManualKnowledge.priority.desc(), ManualKnowledge.created_at.desc()
-    ).paginate(page=page, per_page=20, error_out=False)
-
-    return jsonify({
-        'knowledge': [{
-            'id':       k.id,
-            'title':    k.title,
-            'category': k.category,
-            'content':  k.content[:300],
-            'priority': k.priority,
-            'tags':     k.tags,
-            'created':  k.created_at.isoformat()
-        } for k in pagination.items],
-        'total': pagination.total,
-        'pages': pagination.pages
-    })
-
-@app.route('/api/dev/knowledge', methods=['POST'])
-@dev_required
-def dev_add_knowledge():
-    """Agregar conocimiento manual — el dev enseña a la IA directamente"""
-    try:
-        data    = request.json or {}
-        title   = data.get('title', '').strip()
-        content = data.get('content', '').strip()
-
-        if not title or not content:
-            return jsonify({'error': 'title y content son requeridos'}), 400
-
-        # Obtener user_id del token
-        token   = _get_token_from_request()
-        session = UserSession.query.filter_by(token=token).first()
-        user_id = session.user_id if session else None
-
-        mk = ManualKnowledge(
-            title=title,
-            content=content,
-            category=data.get('category', 'general'),
-            tags=data.get('tags', []),
-            priority=data.get('priority', 1),
-            added_by=user_id
-        )
-        db.session.add(mk)
-
-        # También agregar a Memory para que el LLM lo use en contexto
-        mem = Memory(
-            content=f"{title}\n\n{content}",
-            source='manual_dev',
-            topic=title,
-            relevance_score=0.9 + (data.get('priority', 1) * 0.03),
-            tags=data.get('tags', [])
-        )
-        db.session.add(mem)
-        db.session.commit()
-
-        return jsonify({
-            'success':     True,
-            'id':          mk.id,
-            'message':     f'Conocimiento "{title}" agregado exitosamente',
-            'memory_id':   mem.id
-        })
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/api/dev/knowledge/<int:kid>', methods=['PUT'])
-@dev_required
-def dev_update_knowledge(kid):
-    """Actualizar conocimiento existente"""
-    try:
-        mk = ManualKnowledge.query.get_or_404(kid)
-        data = request.json or {}
-        if 'title'    in data: mk.title    = data['title']
-        if 'content'  in data: mk.content  = data['content']
-        if 'category' in data: mk.category = data['category']
-        if 'tags'     in data: mk.tags     = data['tags']
-        if 'priority' in data: mk.priority = data['priority']
-        if 'active'   in data: mk.active   = data['active']
-        mk.updated_at = datetime.utcnow()
-        db.session.commit()
-        return jsonify({'success': True, 'message': 'Actualizado correctamente'})
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/api/dev/knowledge/<int:kid>', methods=['DELETE'])
-@dev_required
-def dev_delete_knowledge(kid):
-    """Eliminar conocimiento"""
-    mk = ManualKnowledge.query.get_or_404(kid)
-    mk.active = False  # Soft delete
-    db.session.commit()
-    return jsonify({'success': True, 'message': 'Conocimiento desactivado'})
-
-# --- Aprendizaje forzado ---
-
-@app.route('/api/dev/learn', methods=['POST'])
-@dev_required
-def dev_force_learn():
-    """Forzar aprendizaje sobre un tema específico"""
-    try:
-        data    = request.json or {}
-        topic   = data.get('topic', '').strip()
-        content = data.get('content', '').strip()  # Opcional: contenido directo
-
-        if not topic:
-            return jsonify({'error': 'topic es requerido'}), 400
-
-        token   = _get_token_from_request()
-        session = UserSession.query.filter_by(token=token).first()
-        user_id = session.user_id if session else None
-
-        result = cic_ia.force_learn(topic=topic, content=content or None, user_id=user_id)
-        return jsonify(result)
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/api/dev/learn/bulk', methods=['POST'])
-@dev_required
-def dev_bulk_learn():
-    """Aprendizaje masivo — lista de temas o textos"""
-    try:
-        data  = request.json or {}
-        items = data.get('items', [])  # [{topic, content?}, ...]
-
-        if not items:
-            return jsonify({'error': 'items es requerido'}), 400
-        if len(items) > 50:
-            return jsonify({'error': 'Máximo 50 items por lote'}), 400
-
-        results = []
-        for item in items:
-            if isinstance(item, str):
-                item = {'topic': item}
-            r = cic_ia.force_learn(
-                topic=item.get('topic', ''),
-                content=item.get('content', '') or None
-            )
-            results.append(r)
-            time.sleep(0.5)  # Respetar rate limits
-
-        total_learned = sum(r.get('web_learned', 0) for r in results)
-        return jsonify({
-            'success': True,
-            'processed': len(results),
-            'total_learned': total_learned,
-            'results': results
-        })
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-# --- Configuración del sistema ---
-
-@app.route('/api/dev/config', methods=['GET'])
-@dev_required
-def dev_get_config():
-    """Ver toda la configuración del sistema"""
-    configs = SystemConfig.query.all()
-    return jsonify({
-        'config': {c.key: {'value': c.value, 'type': c.type, 'updated': c.updated_at.isoformat()} for c in configs}
-    })
-
-@app.route('/api/dev/config', methods=['PUT'])
-@dev_required
-def dev_update_config():
-    """Actualizar configuración en tiempo real"""
-    try:
-        data    = request.json or {}
-        updates = data.get('updates', {})  # {key: value, ...}
-
-        if not updates:
-            return jsonify({'error': 'updates es requerido'}), 400
-
-        # Keys protegidas que no se pueden cambiar por API
-        protected = {'SECRET_KEY', 'DATABASE_URL'}
-        updated = []
-        for key, value in updates.items():
-            if key in protected:
-                continue
-            set_config(key, value)
-            updated.append(key)
-
-        return jsonify({
-            'success': True,
-            'updated': updated,
-            'message': f'{len(updated)} configuraciones actualizadas'
-        })
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/api/dev/config/prompt', methods=['PUT'])
-@dev_required
-def dev_update_prompt():
-    """Actualizar el system prompt de la IA"""
-    try:
-        data   = request.json or {}
-        prompt = data.get('prompt', '').strip()
-        if not prompt:
-            return jsonify({'error': 'prompt es requerido'}), 400
-        if len(prompt) > 2000:
-            return jsonify({'error': 'Prompt muy largo (máx 2000 caracteres)'}), 400
-        set_config('system_prompt', prompt)
-        return jsonify({'success': True, 'message': 'System prompt actualizado'})
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-# --- Gestión de memorias ---
-
-@app.route('/api/dev/memories', methods=['GET'])
-@dev_required
-def dev_get_memories():
-    page     = request.args.get('page', 1, type=int)
-    per_page = min(request.args.get('per_page', 30, type=int), 100)
-    source   = request.args.get('source', '')
-    topic    = request.args.get('topic', '')
-
-    query = Memory.query
-    if source: query = query.filter_by(source=source)
-    if topic:  query = query.filter(Memory.topic.ilike(f'%{topic}%'))
-
-    # Ordenar por fecha más reciente primero (por defecto)
-    sort_by = request.args.get('sort', 'recent')
-    if sort_by == 'score':
-        query = query.order_by(Memory.relevance_score.desc(), Memory.created_at.desc())
-    elif sort_by == 'accesses':
-        query = query.order_by(Memory.access_count.desc(), Memory.created_at.desc())
-    else:  # recent (default)
-        query = query.order_by(Memory.created_at.desc())
-
-    pagination = query.paginate(page=page, per_page=per_page, error_out=False)
-
-    return jsonify({
-        'memories': [{
-            'id':        m.id,
-            'topic':     m.topic,
-            'content':   m.content[:400],
-            'source':    m.source,
-            'score':     m.relevance_score,
-            'accesses':  m.access_count,
-            'created':   m.created_at.isoformat()
-        } for m in pagination.items],
-        'total': pagination.total,
-        'pages': pagination.pages
-    })
-
-@app.route('/api/dev/memories/<int:mid>', methods=['DELETE'])
-@dev_required
-def dev_delete_memory(mid):
-    mem = Memory.query.get_or_404(mid)
-    db.session.delete(mem)
-    db.session.commit()
-    return jsonify({'success': True})
-
-@app.route('/api/dev/memories/clear', methods=['POST'])
-@dev_required
-def dev_clear_memories():
-    """Limpiar memorias por fuente"""
-    data   = request.json or {}
-    source = data.get('source', '')
-    confirm = data.get('confirm', '')
-
-    if confirm != 'CONFIRMAR':
-        return jsonify({'error': 'Agrega confirm: "CONFIRMAR" para proceder'}), 400
-
-    if source:
-        count = Memory.query.filter_by(source=source).count()
-        Memory.query.filter_by(source=source).delete()
-    else:
-        count = Memory.query.count()
-        Memory.query.delete()
-
-    db.session.commit()
-    return jsonify({'success': True, 'deleted': count})
-
-# --- Usuarios ---
-
-@app.route('/api/dev/users', methods=['GET'])
-@dev_required
-def dev_list_users():
-    users = User.query.all()
-    return jsonify({'users': [{
-        'id':          u.id,
-        'username':    u.username,
-        'email':       u.email,
-        'is_developer': u.is_developer,
-        'is_active':   u.is_active,
-        'created_at':  u.created_at.isoformat(),
-        'conversations': Conversation.query.filter_by(user_id=u.id).count()
-    } for u in users]})
-
-@app.route('/api/dev/users/<int:uid>/toggle-dev', methods=['POST'])
-@dev_required
-def dev_toggle_developer(uid):
-    """Dar/quitar rol de desarrollador"""
-    user = User.query.get_or_404(uid)
-    user.is_developer = not user.is_developer
-    db.session.commit()
-    return jsonify({'success': True, 'username': user.username, 'is_developer': user.is_developer})
-
-# --- Test de IA ---
-
-@app.route('/api/dev/test-ai', methods=['POST'])
-@dev_required
-def dev_test_ai():
-    """Probar la IA con un mensaje sin guardar en BD"""
-    try:
-        data    = request.json or {}
-        message = data.get('message', 'Hola, ¿funcionas correctamente?').strip()
-        prompt  = data.get('system_prompt', get_config('system_prompt'))
-
-        llm = LLMEngine()
-        result = llm.chat(
-            user_message=message,
-            system_prompt=prompt,
-            max_tokens=500
-        )
-        return jsonify({
-            'test_message':  message,
-            'response':      result['response'],
-            'provider':      result.get('provider'),
-            'model':         result.get('model'),
-            'tokens':        result.get('tokens', 0),
-            'success':       result.get('success', False)
-        })
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-# --- Crear primer usuario desarrollador (setup inicial) ---
-
-@app.route('/api/dev/setup', methods=['POST'])
-def dev_setup():
-    """
-    Setup inicial — SOLO funciona si NO existe ningún usuario desarrollador.
-    Una vez que existe un dev, este endpoint queda bloqueado automáticamente.
-    """
-    existing_dev = User.query.filter_by(is_developer=True).first()
-    if existing_dev:
-        return jsonify({'error': 'Ya existe un usuario desarrollador. Este endpoint está deshabilitado.'}), 403
-
-    data     = request.json or {}
-    username = data.get('username', '').strip()
-    password = data.get('password', '')
-    email    = data.get('email', f'{username}@cic.local')
-    setup_key = data.get('setup_key', '')
-
-    # Requiere una clave de setup configurada como variable de entorno
-    expected_key = os.environ.get('SETUP_KEY', '')
-    if expected_key and setup_key != expected_key:
-        return jsonify({'error': 'setup_key inválida'}), 403
-
-    if not username or not password or len(password) < 8:
-        return jsonify({'error': 'username y password (mín 8 chars) requeridos'}), 400
-
-    try:
-        user = User(username=username, email=email, is_developer=True)
-        user.set_password(password)
-        db.session.add(user)
-        db.session.commit()
-
-        token   = secrets.token_urlsafe(48)
-        expires = datetime.utcnow() + timedelta(days=90)
-        sess    = UserSession(user_id=user.id, token=token, expires_at=expires)
-        db.session.add(sess)
-        db.session.commit()
-
-        return jsonify({
-            'success':  True,
-            'message':  f'Desarrollador "{username}" creado. Guarda tu token.',
-            'token':    token,
-            'user_id':  user.id
-        })
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({'error': str(e)}), 500
-
-# ========== MANEJO DE ERRORES ==========
-
-@app.errorhandler(404)
-def not_found(error):
-    if request.path.startswith('/api/'):
-        return jsonify({'error': 'Endpoint no encontrado'}), 404
-    try:
-        return render_template('index.html')
-    except Exception:
-        return jsonify({'error': 'Not found'}), 404
-
-@app.errorhandler(500)
-def internal_error(error):
-    db.session.rollback()
-    return jsonify({'error': 'Error interno del servidor'}), 500
-
-@app.errorhandler(413)
-def too_large(error):
-    return jsonify({'error': 'Archivo demasiado grande (máx 32MB)'}), 413
-
-# ========== INICIO ==========
-
-if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5000))
-    app.run(host='0.0.0.0', port=port, debug=False)
+      };
+      r.readAsDataURL(blob);
+      return;
+    }
+  }
+});
+
+function showGlobalPasteToast(role){
+  let t = document.getElementById('imgPasteToast');
+  if(!t){
+    t = document.createElement('div');
+    t.id = 'imgPasteToast';
+    t.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#22d3a0;color:#0a1a12;padding:7px 16px;border-radius:20px;font-size:.78rem;font-weight:700;z-index:9999;pointer-events:none;transition:opacity .3s;white-space:nowrap;box-shadow:0 4px 14px rgba(0,0,0,.4)';
+    document.body.appendChild(t);
+  }
+  t.textContent = '🖼️ Imagen lista — escribe tu pregunta y pulsa Enter';
+  t.style.opacity = '1';
+  setTimeout(()=>{ t.style.opacity='0'; }, 3000);
+}
+
+/* ═══ INIT ═══ */
+window.addEventListener('load',async()=>{
+  if(TOKEN){
+    try{
+      const r=await req('/api/auth/verify','GET');
+      if(r.success){currentUser=r.user;document.getElementById('loginScreen').style.display='none';r.user.is_developer?startDev():startUser();return;}
+    }catch{}
+    TOKEN='';localStorage.removeItem('cic_token');
+  }
+  document.getElementById('loginScreen').style.display='flex';
+});
+window.addEventListener('resize',()=>{
+  if(window.innerWidth<=768){
+    if(currentUser?.is_developer)document.getElementById('hamburger').style.display='flex';
+    else if(currentUser)document.getElementById('userHamburger').style.display='flex';
+  }else{
+    document.getElementById('hamburger').style.display='none';
+    document.getElementById('userHamburger').style.display='none';
+    document.getElementById('devSidebar').classList.remove('sb-open');
+    document.getElementById('userSidebar').classList.remove('sb-open');
+    document.getElementById('overlay').classList.remove('show');
+  }
+});
+</script>
+</body>
+</html>
