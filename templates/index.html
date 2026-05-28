@@ -664,10 +664,11 @@ tr:hover td{background:rgba(91,141,238,.03);}
           <img id="userImgPrev"/><button class="img-rm" onclick="clearUserImg()">✕</button>
         </div>
         <div class="input-toolbar">
-          <label class="btn btn-ghost btn-sm" style="cursor:pointer;font-size:.76rem">🖼 Imagen
+          <label class="btn btn-ghost btn-sm" style="cursor:pointer;font-size:.76rem" title="Seleccionar imagen desde tu dispositivo">🖼 Imagen
             <input type="file" id="userImgInput" accept="image/*" style="display:none" onchange="handleUserImg(this)"/>
           </label>
-          <select id="userMode" style="width:128px;font-size:.78rem">
+          <button class="btn btn-ghost btn-sm" onclick="triggerUserImgPaste()" title="También puedes pegar con Ctrl+V directamente" style="font-size:.76rem">📋 Pegar img</button>
+          <select id="userMode" style="width:120px;font-size:.78rem">
             <option value="balanced">Balanceado</option>
             <option value="fast">Rápido</option>
             <option value="complete">Completo</option>
@@ -675,7 +676,7 @@ tr:hover td{background:rgba(91,141,238,.03);}
         </div>
         <div class="input-row">
           <textarea id="userInput" rows="1"
-            placeholder="Escribe tu mensaje... (Enter = enviar, Shift+Enter = nueva línea)"
+            placeholder="Escribe tu mensaje... · Pega imagen con Ctrl+V (Enter = enviar)"
             onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendUserMsg();}"
             oninput="autoGrow(this,null)" onpaste="userPaste(event)"></textarea>
           <button class="btn btn-primary" onclick="sendUserMsg()" style="align-self:flex-end">↩</button>
@@ -1053,55 +1054,127 @@ function renderHistModal(items){
 }
 
 /* ═══ USER CHAT ═══ */
+// Guarda la última imagen analizada para poder hacer preguntas de seguimiento
+let userLastImg = null; // {base64, mimeType, src}
+
 function userNewConv(){
-  userH.length=0;userPendImg=null;clearUserImgUI();closeSidebar();
-  document.getElementById('userMsgs').innerHTML='<div class="chat-empty"><div class="ce-icon">✏️</div><p>Nueva conversación. Escribe tu primer mensaje.</p></div>';
+  userH.length=0; userPendImg=null; userLastImg=null; clearUserImgUI(); closeSidebar();
+  document.getElementById('userMsgs').innerHTML='<div class="chat-empty"><div class="ce-icon">🤖</div><h3 style="font-size:.98rem;color:var(--text);margin-bottom:5px">¡Hola! Soy Cic_IA</h3><p>Tu asistente inteligente. Puedo responder preguntas, analizar imágenes, generar código y mucho más.<br><span style="font-size:.75rem;color:var(--text3);margin-top:6px;display:inline-block">💡 Pega una imagen directamente con Ctrl+V</span></p></div>';
   const el=document.getElementById('userInput');if(el){el.value='';el.style.height='42px';}
   document.getElementById('userInfo').textContent='';
 }
-function handleUserImg(i){const f=i.files[0];if(!f)return;const r=new FileReader();r.onload=e=>{const d=e.target.result;setUserImg(d.split(',')[1],f.type,d);};r.readAsDataURL(f);}
-function userPaste(e){const items=e.clipboardData?.items;if(!items)return;for(const i of items){if(i.type.startsWith('image/')){e.preventDefault();const b=i.getAsFile();const r=new FileReader();r.onload=ev=>{const d=ev.target.result;setUserImg(d.split(',')[1],i.type,d);};r.readAsDataURL(b);return;}}}
-function setUserImg(b64,mime,preview){userPendImg={base64:b64,mimeType:mime};const w=document.getElementById('userImgWrap'),i=document.getElementById('userImgPrev');w.style.display='block';i.src=preview||`data:${mime};base64,${b64}`;}
+function handleUserImg(i){
+  const f=i.files[0];if(!f)return;
+  const r=new FileReader();r.onload=e=>{const d=e.target.result;setUserImg(d.split(',')[1],f.type,d);};
+  r.readAsDataURL(f);
+}
+// Ctrl+V / paste image — igual a como funciona en WhatsApp, Claude, ChatGPT
+function userPaste(e){
+  const items=e.clipboardData?.items;if(!items)return;
+  for(const i of items){
+    if(i.type.startsWith('image/')){
+      e.preventDefault();
+      const b=i.getAsFile();
+      const r=new FileReader();
+      r.onload=ev=>{const d=ev.target.result;setUserImg(d.split(',')[1],i.type,d);showImgPasteToast();};
+      r.readAsDataURL(b);return;
+    }
+  }
+}
+function showImgPasteToast(){
+  let t=document.getElementById('imgPasteToast');
+  if(!t){t=document.createElement('div');t.id='imgPasteToast';t.style.cssText='position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#22d3a0;color:#0a1a12;padding:6px 14px;border-radius:20px;font-size:.78rem;font-weight:700;z-index:999;pointer-events:none;transition:opacity .3s';document.body.appendChild(t);}
+  t.textContent='🖼️ Imagen lista — escribe tu pregunta y pulsa Enter';t.style.opacity='1';
+  setTimeout(()=>t.style.opacity='0',2800);
+}
+function setUserImg(b64,mime,preview){
+  userPendImg={base64:b64,mimeType:mime,src:preview||`data:${mime};base64,${b64}`};
+  const w=document.getElementById('userImgWrap'),i=document.getElementById('userImgPrev');
+  w.style.display='block';i.src=userPendImg.src;
+  // Enfocar el textarea para que el usuario escriba su pregunta
+  document.getElementById('userInput')?.focus();
+}
 function clearUserImg(){userPendImg=null;clearUserImgUI();}
 function clearUserImgUI(){const w=document.getElementById('userImgWrap');if(w)w.style.display='none';const i=document.getElementById('userImgInput');if(i)i.value='';}
 
 async function sendUserMsg(){
   const el=document.getElementById('userInput');
-  const msg=el.value.trim();if(!msg&&!userPendImg)return;
+  const msg=el.value.trim();
+  // Permite enviar solo imagen O solo texto O ambos
+  if(!msg && !userPendImg) return;
   el.value='';el.style.height='42px';closeSidebar();
   const mode=document.getElementById('userMode').value;
   const box=document.getElementById('userMsgs');
   const empty=box.querySelector('.chat-empty');if(empty)empty.remove();
 
+  // ── CASO 1: Hay imagen nueva pendiente ─────────────────────────────
   if(userPendImg){
-    const b=userPendImg.base64,m=userPendImg.mimeType,s=document.getElementById('userImgPrev').src;clearUserImg();
+    const {base64:b, mimeType:m, src:s} = userPendImg;
+    userLastImg = {base64:b, mimeType:m, src:s}; // guardar para contexto futuro
+    clearUserImg();
+
+    // Burbuja del usuario con imagen
     const ud=document.createElement('div');ud.className='msg-row ur';
-    ud.innerHTML=`<div class="bubble"><img src="${s}" style="max-width:170px;border-radius:6px;display:block;margin-bottom:4px"/>${msg?esc(msg):'Analiza la imagen'}</div>`;box.appendChild(ud);
+    ud.innerHTML=`<div class="bubble" style="max-width:100%">
+      <img src="${s}" style="max-width:220px;max-height:160px;border-radius:8px;display:block;margin-bottom:${msg?'6px':'0'}"/>
+      ${msg?`<span>${esc(msg)}</span>`:''}
+    </div>`;
+    box.appendChild(ud);
+
+    // Burbuja de respuesta con indicador
     const bd=document.createElement('div');bd.className='msg-row br';
-    const tid='u_'+Date.now();bd.innerHTML=`<div class="bubble" id="${tid}" style="color:var(--text2)">⏳ Analizando...</div>`;box.appendChild(bd);box.scrollTop=box.scrollHeight;
+    const tid='u_'+Date.now();
+    bd.innerHTML=`<div class="bubble" id="${tid}" style="color:var(--text2)">
+      <span style="font-size:.78rem">🔍 Analizando imagen...</span>
+    </div>`;
+    box.appendChild(bd);box.scrollTop=box.scrollHeight;
+
     try{
-      const r=await req('/api/chat/analyze-image','POST',{image_b64:b,mime_type:m,message:msg||'Descríbela.'});
-      const te=document.getElementById(tid);if(te){te.id='';te.style.color='';te.innerHTML=`<span style="white-space:pre-wrap">${esc(r.response)}</span>`;}
-      const me=document.createElement('div');me.className='msg-meta';me.textContent=`${r.provider||'—'} · ${r.tokens||0} tokens`;bd.appendChild(me);
-    }catch(e){const te=document.getElementById(tid);if(te){te.style.color='var(--red)';te.textContent='Error: '+e.message;}}
+      const r=await req('/api/chat/analyze-image','POST',{
+        image_b64: b, mime_type: m,
+        message:   msg || 'Describe esta imagen en detalle en español.',
+        history:   userH.slice(-8) // contexto previo
+      });
+      const te=document.getElementById(tid);
+      if(te){te.id='';te.style.color='';te.innerHTML=renderMsg(r.response);te.querySelectorAll('pre code').forEach(c=>hljs.highlightElement(c));}
+      const me=document.createElement('div');me.className='msg-meta';
+      me.textContent=`${r.provider||'—'} · ${r.model||'—'} · ${r.tokens||0} tokens 🖼️`;
+      bd.appendChild(me);
+      // Guardar en historial de contexto para seguimiento
+      const userLabel = msg||'[imagen adjunta]';
+      userH.push({role:'user', content:`[IMAGEN ADJUNTA] ${userLabel}`});
+      userH.push({role:'assistant', content:r.response});
+      if(userH.length>20)userH.splice(0,2);
+      document.getElementById('userInfo').textContent=`Intercambios: ${userH.length/2} — Puedes hacer preguntas sobre la imagen`;
+    }catch(e){
+      const te=document.getElementById(tid);
+      if(te){te.style.color='var(--red)';te.textContent='Error: '+e.message;}
+    }
     box.scrollTop=box.scrollHeight;loadUserHistory();return;
   }
 
+  // ── CASO 2: Texto solo (puede ser seguimiento sobre imagen anterior) ──
   const ud=document.createElement('div');ud.className='msg-row ur';
   ud.innerHTML=`<div class="bubble">${esc(msg)}</div>`;box.appendChild(ud);
   const bd=document.createElement('div');bd.className='msg-row br';
-  const tid='u_'+Date.now();bd.innerHTML=`<div class="bubble" id="${tid}" style="color:var(--text2)">⏳ Pensando...</div>`;
+  const tid='u_'+Date.now();
+  bd.innerHTML=`<div class="bubble" id="${tid}" style="color:var(--text2)">⏳ Pensando...</div>`;
   box.appendChild(bd);box.scrollTop=box.scrollHeight;
+
   try{
-    const r=await req('/api/chat','POST',{message:msg,mode,history:userH.slice(-10)});
+    const r=await req('/api/chat','POST',{message:msg, mode, history:userH.slice(-10)});
     userH.push({role:'user',content:msg});userH.push({role:'assistant',content:r.response});
     if(userH.length>20)userH.splice(0,2);
     const te=document.getElementById(tid);
-    if(te){te.id='';te.style.color='';te.innerHTML=`<span style="white-space:pre-wrap">${esc(r.response)}</span>`;}
+    if(te){te.id='';te.style.color='';te.innerHTML=renderMsg(r.response);te.querySelectorAll('pre code').forEach(c=>hljs.highlightElement(c));}
     const me=document.createElement('div');me.className='msg-meta';
-    me.textContent=`${r.provider||'—'} · ${r.tokens_used??r.tokens??0} tokens`;bd.appendChild(me);
+    me.textContent=`${r.provider||'—'} · ${r.model||'—'} · ${r.tokens_used??r.tokens??0} tokens`;
+    bd.appendChild(me);
     document.getElementById('userInfo').textContent=`Intercambios: ${userH.length/2}`;
-  }catch(e){const te=document.getElementById(tid);if(te){te.style.color='var(--red)';te.textContent='Error: '+e.message;}}
+  }catch(e){
+    const te=document.getElementById(tid);
+    if(te){te.style.color='var(--red)';te.textContent='Error: '+e.message;}
+  }
   box.scrollTop=box.scrollHeight;loadUserHistory();
 }
 
@@ -1110,12 +1183,22 @@ async function loadUserHistory(){
     const d=await req('/api/chat/history?per_page=30');
     userAllH=d.conversations||[];
     const el=document.getElementById('userHistNav');
-    if(!userAllH.length){el.innerHTML='<div style="color:var(--text3);font-size:.72rem;padding:7px 4px">Sin conversaciones aún</div>';return;}
-    el.innerHTML=userAllH.map(c=>`<div class="hist-item" onclick="loadUserConv(${c.id})">
-      <div class="hi-u">👤 ${esc(c.user_message.substring(0,42))}</div>
-      <div class="hi-b">🤖 ${esc(c.bot_response.substring(0,42))}</div>
-      <div class="hi-d">${new Date(c.timestamp).toLocaleDateString()}</div>
-    </div>`).join('');
+    // Filtrar conversaciones rotas o con HTML en el mensaje
+    const valid=userAllH.filter(c=>
+      c.user_message &&
+      !c.user_message.trim().startsWith('<!DOCTYPE') &&
+      !c.user_message.trim().startsWith('<html') &&
+      c.user_message.length < 500
+    );
+    if(!valid.length){el.innerHTML='<div style="color:var(--text3);font-size:.72rem;padding:7px 4px">Sin conversaciones aún</div>';return;}
+    el.innerHTML=valid.map(c=>{
+      const uMsg = c.user_message.replace(/\[🖼️ IMAGEN\]/g,'🖼️').replace(/\[IMAGEN\]/g,'🖼️');
+      return`<div class="hist-item" onclick="loadUserConv(${c.id})">
+        <div class="hi-u">${esc(uMsg.substring(0,42))}</div>
+        <div class="hi-b">🤖 ${esc(c.bot_response.substring(0,42))}</div>
+        <div class="hi-d">${new Date(c.timestamp).toLocaleDateString()}</div>
+      </div>`;
+    }).join('');
   }catch{}
 }
 function loadUserConv(id){
@@ -1321,6 +1404,27 @@ async function generateImage(){
   const prompt=document.getElementById('devImgPrompt')?.value.trim();if(!prompt)return;
   const el=document.getElementById('devImgGenRes');
   el.innerHTML='<div style="color:var(--text2);font-size:.84rem">⏳ Integra aquí tu API de imágenes (DALL-E, Stable Diffusion, Flux, etc.)</div>';
+}
+
+/* ═══ TRIGGER PASTE IMG ═══ */
+async function triggerUserImgPaste(){
+  try{
+    const items=await navigator.clipboard.read();
+    for(const item of items){
+      for(const type of item.types){
+        if(type.startsWith('image/')){
+          const blob=await item.getType(type);
+          const r=new FileReader();
+          r.onload=e=>{const d=e.target.result;setUserImg(d.split(',')[1],type,d);showImgPasteToast();};
+          r.readAsDataURL(blob);return;
+        }
+      }
+    }
+    alert('No hay imagen en el portapapeles. Usa Ctrl+C en una imagen primero, o selecciona con 🖼 Imagen.');
+  }catch(e){
+    // Si no tiene permiso de clipboard, mostrar instrucción
+    alert('💡 Puedes pegar imágenes directamente con Ctrl+V mientras escribes en el chat.');
+  }
 }
 
 /* ═══ INIT ═══ */
