@@ -1499,6 +1499,19 @@ let currentChatId = null;
 let attachedFile = null;
 let docFile = null;
 
+// Helper: alias para compatibilidad con código legado
+async function api(path, method='GET', body=null, auth=true) {
+  const headers = { 'Content-Type': 'application/json' };
+  if (auth && TOKEN) headers['Authorization'] = 'Bearer ' + TOKEN;
+  const opts = { method, headers };
+  if (body) opts.body = JSON.stringify(body);
+  const r = await fetch(API + path, opts);
+  let data;
+  try { data = await r.json(); } catch { data = {}; }
+  if (r.status >= 500) throw new Error(data.error || `Error servidor (${r.status})`);
+  return data;
+}
+
 // ============================================================
 //  UTILIDADES
 // ============================================================
@@ -1515,19 +1528,6 @@ function showAlert(id, msg, type) {
   if (!msg) { el.innerHTML = ''; return; }
   const cls = { ok:'alert-ok', err:'alert-err', warn:'alert-warn', info:'alert-info' }[type] || 'alert-info';
   el.innerHTML = `<div class="alert ${cls}">${msg}</div>`;
-}
-async function apiCall(path, method='GET', body=null, auth=true) {
-  const headers = { 'Content-Type': 'application/json' };
-  if (auth && TOKEN) headers['Authorization'] = 'Bearer ' + TOKEN;
-  const opts = { method, headers };
-  if (body) opts.body = JSON.stringify(body);
-  const r = await fetch(API + path, opts);
-  // Siempre intentar parsear el JSON — el llamador decide qué hacer con r.success
-  let data;
-  try { data = await r.json(); } catch { data = {}; }
-  // Solo lanzar error en fallos de servidor (500+) o si no hay info útil
-  if (r.status >= 500) throw new Error(data.error || `Error del servidor (${r.status})`);
-  return data;
 }
 
 // ============================================================
@@ -1561,7 +1561,7 @@ async function doLogin() {
   if (btn) { btn.disabled = true; btn.textContent = '⏳ Ingresando...'; }
 
   try {
-    const r = await apiCall('/api/auth/login','POST',{username:user,password:pass},false);
+    const r = await api('/api/auth/login','POST',{username:user,password:pass},false);
 
     if (r.success && r.token) {
       TOKEN = r.token;
@@ -1592,7 +1592,7 @@ async function doRegister() {
   if (!password || password.length < 6) return showAlert('loginAlert','Contraseña mínimo 6 caracteres','err');
   try {
     showAlert('loginAlert','⏳ Creando cuenta...','info');
-    const r = await apiCall('/api/auth/register','POST',{username,email,password},false);
+    const r = await api('/api/auth/register','POST',{username,email,password},false);
     if (r.success) {
       TOKEN = r.token; currentUser = r.user;
       localStorage.setItem('cic_token', TOKEN);
@@ -1603,7 +1603,7 @@ async function doRegister() {
   } catch(e) { showAlert('loginAlert',e.message,'err'); }
 }
 async function doLogout() {
-  try { await apiCall('/api/auth/logout', 'POST'); } catch {}
+  try { await api('/api/auth/logout', 'POST'); } catch {}
   TOKEN = '';
   localStorage.removeItem('cic_token');
   window.location.href = '/';
@@ -1616,7 +1616,7 @@ async function doSetup() {
   const key  = document.getElementById('setupKey').value.trim();
   showAlert('setupAlert','','');
   try {
-    const r = await apiCall('/api/dev/setup','POST',{username:user,password:pass,setup_key:key},false);
+    const r = await api('/api/dev/setup','POST',{username:user,password:pass,setup_key:key},false);
     if (r.success) {
       showAlert('setupAlert','✅ '+r.message,'ok');
       setTimeout(()=>hideSetup(),2000);
@@ -1705,7 +1705,7 @@ async function generateWithReference() {
   showAlert('imageAlert','','');
 
   try {
-    const r = await apiCall('/api/tools/image/generate', 'POST', {
+    const r = await api('/api/tools/image/generate', 'POST', {
       prompt,
       style:         document.getElementById('refImageStyle').value,
       size:          document.getElementById('refImageSize').value,
@@ -1865,7 +1865,7 @@ async function sendMessage() {
   document.getElementById('chatMessages').scrollTop = 999999;
 
   try {
-    const r = await apiCall('/api/chat', 'POST', {
+    const r = await api('/api/chat', 'POST', {
       message: msg,
       history: chatHistory.slice(-10)
     });
@@ -1898,7 +1898,7 @@ let activeSessionId = null;
 
 async function loadRecentChats() {
   try {
-    const r = await apiCall('/api/history?limit=8');
+    const r = await api('/api/history?limit=8');
     const list = document.getElementById('recentList');
     if (!r.history?.length) {
       list.innerHTML = '<div style="padding:8px 16px;font-size:.75rem;color:var(--text2)">Sin conversaciones aún</div>';
@@ -1921,7 +1921,7 @@ async function loadRecentChats() {
 // ── Cargar historial completo en página Buscar ────────────────────────────
 async function loadHistoryPage(page = 1) {
   try {
-    const r = await apiCall(`/api/history?limit=30`);
+    const r = await api(`/api/history?limit=30`);
     historyAllData = r.history || [];
     renderHistoryList(historyAllData);
   } catch(e) {
@@ -1973,7 +1973,7 @@ function renderHistoryList(sessions) {
 async function loadChatSession(sessionId, title, navigateToChat = true) {
   activeSessionId = sessionId;
   try {
-    const r = await apiCall('/api/history/' + sessionId);
+    const r = await api('/api/history/' + sessionId);
     if (!r.messages?.length) return;
 
     chatHistory = [];
@@ -2032,7 +2032,7 @@ function doSearch(query) {
 
   searchTimeout = setTimeout(async () => {
     try {
-      const r = await apiCall('/api/history/search?q=' + encodeURIComponent(query));
+      const r = await api('/api/history/search?q=' + encodeURIComponent(query));
       if (!r.results?.length) {
         res.innerHTML = `<div style="color:var(--text2);text-align:center;padding:40px;font-size:.9rem">Sin resultados para "<strong>${esc(query)}</strong>"</div>`;
         return;
@@ -2070,32 +2070,7 @@ function handleFileAttach(input) {
 }
 
 // ============================================================
-//  BÚSQUEDA
-// ============================================================
-let searchTimeout;
-function doSearch(query) {
-  clearTimeout(searchTimeout);
-  if (!query.trim()) {
-    document.getElementById('searchResults').innerHTML = '<div style="color:var(--text2);text-align:center;padding:40px;font-size:.9rem">Escribe para buscar en tu historial</div>';
-    return;
-  }
-  searchTimeout = setTimeout(async () => {
-    try {
-      const r = await apiCall('/api/history/search?q=' + encodeURIComponent(query));
-      const res = document.getElementById('searchResults');
-      if (!r.results?.length) {
-        res.innerHTML = '<div style="color:var(--text2);text-align:center;padding:40px;font-size:.9rem">Sin resultados para "' + esc(query) + '"</div>';
-        return;
-      }
-      res.innerHTML = r.results.map(item => `
-        <div class="search-result" onclick="loadChat('${item.id}')">
-          <div class="sr-title">${esc(item.title || 'Chat')}</div>
-          <div class="sr-preview">${esc(item.preview)}</div>
-          <div class="sr-date">${new Date(item.date).toLocaleDateString()}</div>
-        </div>`).join('');
-    } catch {}
-  }, 400);
-}
+
 
 // ============================================================
 //  PROYECTOS
@@ -2211,7 +2186,7 @@ async function generateImage() {
   showAlert('imageAlert','','');
 
   try {
-    const r = await apiCall('/api/tools/image/generate', 'POST', {
+    const r = await api('/api/tools/image/generate', 'POST', {
       prompt,
       style: document.getElementById('imageStyle').value,
       size:  document.getElementById('imageSize').value,
@@ -2370,38 +2345,21 @@ window.addEventListener('load', async () => {
   if (!TOKEN) return;
   try {
     // Usar fetch directo para tener control total del status code
-    const resp = await fetch('/api/auth/verify', {
-      method: 'GET',
-      headers: { 'Authorization': 'Bearer ' + TOKEN, 'Content-Type': 'application/json' }
-    });
-
-    if (resp.status === 200) {
-      const r = await resp.json();
-      if (r.success && r.user) {
-        currentUser = r.user;
-        if (r.user.is_developer) {
-          window.location.href = '/developer?token=' + TOKEN;
-          return;
-        }
-        initApp();
+    const r = await api('/api/auth/verify', 'GET');
+    if (r.success && r.user) {
+      currentUser = r.user;
+      if (r.user.is_developer) {
+        window.location.href = '/developer?token=' + TOKEN;
         return;
       }
-    }
-
-    if (resp.status === 401) {
-      // Token expirado en servidor — limpiar y mostrar login
+      initApp();
+    } else {
       TOKEN = '';
       localStorage.removeItem('cic_token');
-      return;
     }
-
-    // Cualquier otro error (500, red caída, Render dormido) — NO borrar token
-    // El usuario verá el login pero si recarga cuando el server esté up, entrará
-    console.warn('[CicIA] Verify status:', resp.status, '— manteniendo token');
-
-  } catch (e) {
-    // Error de red (Render frío, sin internet) — NO borrar token
-    console.warn('[CicIA] Verify error de red:', e.message, '— manteniendo token');
+  } catch(e) {
+    // Error de red — no borrar token (Render puede estar frío)
+    console.warn('[CicIA] verify error:', e.message);
   }
 });
 
