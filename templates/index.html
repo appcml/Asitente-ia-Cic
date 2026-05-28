@@ -1568,7 +1568,8 @@ async function doLogin() {
       currentUser = r.user;
       localStorage.setItem('cic_token', TOKEN);
       if (r.user.is_developer) {
-        window.location.href = '/developer?token=' + TOKEN;
+        // Token ya guardado en localStorage — developer.html lo leerá desde ahí
+        window.location.href = '/developer';
         return;
       }
       initApp();
@@ -2349,7 +2350,7 @@ window.addEventListener('load', async () => {
     if (r.success && r.user) {
       currentUser = r.user;
       if (r.user.is_developer) {
-        window.location.href = '/developer?token=' + TOKEN;
+        window.location.href = '/developer';
         return;
       }
       initApp();
