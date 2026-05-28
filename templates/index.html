@@ -117,7 +117,7 @@ textarea{resize:vertical;min-height:80px;}
 .overlay.show{display:block;}
 
 /* MAIN SECTIONS */
-.section{display:none;}.section.active{display:block;}
+.section{display:none;}.section.active{display:block;}#dev-chat.active{display:flex!important;}
 .main-pad{flex:1;overflow-y:auto;padding:26px;}
 .page-hd{margin-bottom:22px;}
 .page-hd h2{font-size:1.3rem;font-weight:700;letter-spacing:-.02em;}
@@ -455,7 +455,7 @@ tr:hover td{background:rgba(91,141,238,.03);}
     <div class="main-pad" id="devMainPad" style="flex:1;overflow-y:auto">
 
       <!-- CHAT (test) -->
-      <div id="dev-chat" class="section" style="height:calc(100vh - 0px);display:flex;flex-direction:column;padding:0;margin:0;overflow:hidden">
+      <div id="dev-chat" class="section" style="height:100%;flex-direction:column;padding:0;margin:0;overflow:hidden">
         <div class="chat-topbar">
           <input type="text" id="devSysPrompt" placeholder="System prompt opcional..." style="flex:2;min-width:0;font-size:.82rem"/>
           <select id="devMode" style="width:116px;font-size:.82rem">
