@@ -1302,21 +1302,21 @@ def analyze_image(current_user):
         def _build_groq_messages(include_image=True):
             """Construye el array de mensajes para Groq con historial."""
             msgs = [{'role': 'system', 'content': system}]
-            # Añadir historial previo como contexto (últimos 8 intercambios)
             for h in history[-8:]:
-                role = h.get('role', 'user')
-                content = h.get('content', '')
-                if role in ('user', 'assistant') and content:
-                    msgs.append({'role': role, 'content': str(content)})
-            # Mensaje actual con imagen
+                h_role = h.get('role', 'user')
+                h_content = h.get('content', '')
+                if h_role in ('user', 'assistant') and h_content:
+                    msgs.append({'role': h_role, 'content': str(h_content)})
             if include_image and image_b64:
-                data_url = f"data:{mime_type};base64,{image_b64}"
+                # llama-4-scout: text ANTES de image_url, data URI completo
+                safe_mime = mime_type if mime_type.startswith('image/') else 'image/jpeg'
+                data_url  = f"data:{safe_mime};base64,{image_b64}"
                 msgs.append({'role': 'user', 'content': [
-                    {'type': 'image_url', 'image_url': {'url': data_url, 'detail': 'auto'}},
-                    {'type': 'text', 'text': message or 'Describe esta imagen en detalle.'}
+                    {'type': 'text',      'text': message or 'Describe esta imagen en detalle en español.'},
+                    {'type': 'image_url', 'image_url': {'url': data_url}}
                 ]})
             else:
-                msgs.append({'role': 'user', 'content': message})
+                msgs.append({'role': 'user', 'content': message or 'Hola'})
             return msgs
 
         def _build_anthropic_messages(include_image=True):
@@ -1342,11 +1342,10 @@ def analyze_image(current_user):
         model_used  = '—'
         error_detail = []  # acumula errores reales para diagnóstico
 
-        # ── Groq Vision — intentar con llama-4-scout primero, luego llama-3.2 ──
+        # ── Groq Vision — modelos activos (los -vision-preview fueron deprecados) ──
         GROQ_VISION_MODELS = [
             'meta-llama/llama-4-scout-17b-16e-instruct',
-            'llama-3.2-11b-vision-preview',
-            'llama-3.2-90b-vision-preview',
+            'llama-4-scout-17b-16e-instruct',  # alias sin prefijo
         ]
 
         if groq_key:
