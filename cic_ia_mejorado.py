@@ -1440,7 +1440,38 @@ def analyze_image(current_user):
     except Exception as e:
         logger.error(f"Error análisis imagen: {e}")
         return jsonify({'error': str(e)}), 500
+@app.route('/api/image/generate', methods=['POST'])
+@token_required
+def generate_image(current_user):
+    try:
+        data    = request.json or {}
+        prompt  = data.get('prompt', '').strip()
+        style   = data.get('style',   'realistic')
+        size    = data.get('size',    'square')
+        quality = data.get('quality', 'standard')
+        count   = int(data.get('count', data.get('n', 1)))
+        model   = data.get('model',   'auto')
 
+        if not prompt:
+            return jsonify({'success': False, 'error': 'El prompt es requerido'}), 400
+
+        valid_styles  = {'realistic','artistic','anime','sketch','3d','minimalist','fantasy','cyberpunk','cartoon','abstract','space','fractal','landscape'}
+        valid_sizes   = {'square','landscape','portrait','512'}
+        valid_quality = {'standard','hd'}
+        valid_models  = {'auto','svg','pil','fractal','pollinations'}
+        if style   not in valid_styles:   style   = 'realistic'
+        if size    not in valid_sizes:    size    = 'square'
+        if quality not in valid_quality:  quality = 'standard'
+        if model   not in valid_models:   model   = 'auto'
+        count = max(1, min(4, count))
+
+        logger.info(f"[/api/image/generate] user={current_user.username} prompt={prompt[:60]!r}")
+        result = generar_imagen(prompt=prompt, style=style, size=size, quality=quality, count=count, model=model)
+        return jsonify(result)
+
+    except Exception as e:
+        logger.error(f"[/api/image/generate] {e}", exc_info=True)
+        return jsonify({'success': False, 'error': str(e)}), 500
 # ========== MÓDULOS (compatibilidad) ==========
 
 @app.route('/api/modules/list', methods=['GET'])
