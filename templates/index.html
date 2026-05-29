@@ -385,6 +385,7 @@ tr:hover td{background:rgba(91,141,238,.03);}
 
       <!-- PLATAFORMA (funciones públicas que dev también ve) -->
       <div class="nav-sec-label">Plataforma</div>
+      <div class="nav-item" onclick="devGo('dashboard',this)"><span class="ni">📊</span><span class="nl">Dashboard</span></div>
       <div class="nav-item" onclick="devGo('chat',this)"><span class="ni">💬</span><span class="nl">Chat</span></div>
       <div class="nav-item" onclick="devGo('search',this)"><span class="ni">🔍</span><span class="nl">Buscar</span></div>
       <div class="nav-item" onclick="devGo('projects',this)"><span class="ni">📁</span><span class="nl">Proyectos</span></div>
@@ -401,7 +402,6 @@ tr:hover td{background:rgba(91,141,238,.03);}
       <!-- DEV TOOLS (solo desarrollador) -->
       <div class="nav-sec-label nav-dev" style="margin-top:6px;color:var(--accent3);opacity:.85">⚡ Dev Tools</div>
       <div class="nav-dev">
-        <div class="nav-item" onclick="devGo('dashboard',this)"><span class="ni">📊</span><span class="nl">Dashboard</span></div>
         <div class="nav-item" onclick="devGo('knowledge',this)"><span class="ni">🧠</span><span class="nl">Conocimiento</span></div>
         <div class="nav-item" onclick="devGo('learn',this)"><span class="ni">📚</span><span class="nl">Aprendizaje</span></div>
         <div class="nav-item" onclick="devGo('memories',this)"><span class="ni">💾</span><span class="nl">Memorias</span><button onclick="event.stopPropagation();openKnowledgeDrawer('recent')" style="margin-left:auto;background:rgba(91,141,238,.15);border:none;color:var(--accent);border-radius:4px;padding:1px 5px;font-size:.6rem;cursor:pointer" title="Vista rápida">👁</button></div>
@@ -915,6 +915,7 @@ function startDev(){
   const dashSec = document.getElementById('dev-dashboard');
   if(dashSec) dashSec.classList.add('active');
   // Marcar Dashboard como activo en sidebar
+  // Marcar Dashboard activo (primer item de PLATAFORMA)
   document.querySelectorAll('#devSidebar .nav-item').forEach(item=>{
     if(item.getAttribute('onclick')&&item.getAttribute('onclick').includes('dashboard'))
       item.classList.add('active');
