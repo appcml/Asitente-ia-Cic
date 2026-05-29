@@ -118,7 +118,7 @@ textarea{resize:vertical;min-height:80px;}
 
 /* MAIN SECTIONS */
 .section{display:none;}.section.active{display:block;}#dev-chat.active{display:flex!important;}
-.main-pad{flex:1;overflow-y:auto;padding:26px;}#dev-dashboard{min-height:100%;}
+.main-pad{flex:1;overflow-y:auto;padding:26px;min-height:0;}#dev-dashboard{min-height:100%;}
 .page-hd{margin-bottom:22px;}
 .page-hd h2{font-size:1.3rem;font-weight:700;letter-spacing:-.02em;}
 .page-hd p{color:var(--text2);font-size:.84rem;margin-top:4px;}
@@ -420,7 +420,7 @@ tr:hover td{background:rgba(91,141,238,.03);}
 
   <!-- Dev content + code panel side by side -->
   <div style="flex:1;display:flex;overflow:hidden">
-    <div class="main-pad" id="devMainPad" style="flex:1;overflow-y:auto">
+    <div class="main-pad" id="devMainPad" style="flex:1;overflow-y:auto;min-height:0">
 
       <!-- CHAT (test) -->
       <div id="dev-chat" class="section" style="height:100%;flex-direction:column;padding:0;margin:0;overflow:hidden">
@@ -447,6 +447,7 @@ tr:hover td{background:rgba(91,141,238,.03);}
           <div id="devImgWrap" style="display:none" class="img-prev-wrap">
             <img id="devImgPrev"/><button class="img-rm" onclick="clearDevImg()">✕</button>
           </div>
+          <div id="devTxtAttach" style="display:none;margin-bottom:7px"></div>
           <div class="input-row">
             <textarea id="devInput" rows="1"
               placeholder="Escribe un mensaje... (Enter = enviar, Shift+Enter = nueva línea)"
@@ -636,10 +637,13 @@ tr:hover td{background:rgba(91,141,238,.03);}
           <div class="panel">
             <h3 style="margin-bottom:12px;font-size:.88rem">🤖 Proveedor de IA</h3>
             <div class="form-group"><label>Proveedor</label>
-              <select id="cfg-provider"><option value="groq">Groq (LLaMA)</option><option value="anthropic">Anthropic (Claude)</option><option value="openai">OpenAI (GPT)</option></select>
+              <select id="cfg-provider" onchange="updateProviderHint(this.value)"><option value="auto">🤖 Automático (Groq → Anthropic → OpenAI)</option><option value="groq">Groq (LLaMA)</option><option value="anthropic">Anthropic (Claude)</option><option value="openai">OpenAI (GPT)</option></select>
+              <div id="providerHint" style="font-size:.72rem;color:var(--text2);margin-top:5px;padding:6px 8px;background:var(--bg3);border-radius:6px">
+                ✅ Modo recomendado — intenta Groq primero (gratis y rápido), si falla usa Anthropic, luego OpenAI. Solo necesitas tener al menos una API Key configurada.
+              </div>
             </div>
-            <div class="form-group"><label>Modelo</label><input type="text" id="cfg-model"/></div>
-            <div class="form-group"><label>Máximo tokens</label><input type="number" id="cfg-tokens" min="100" max="4000"/></div>
+            <div class="form-group"><label>Modelo Groq (principal)</label><input type="text" id="cfg-model" placeholder="llama-3.1-8b-instant"/></div>
+            <div class="form-group"><label>Máximo tokens <span style="font-size:.68rem;color:var(--text3)"></span></label><input type="number" id="cfg-tokens" min="100"/></div>
             <button class="btn btn-primary" onclick="saveAIConfig()">Guardar</button>
             <div id="cfgAIAlert" style="margin-top:8px"></div>
           </div>
@@ -790,6 +794,7 @@ tr:hover td{background:rgba(91,141,238,.03);}
         <div id="userImgWrap" style="display:none" class="img-prev-wrap">
           <img id="userImgPrev"/><button class="img-rm" onclick="clearUserImg()">✕</button>
         </div>
+        <div id="userTxtAttach" style="display:none;margin-bottom:7px"></div>
         <div class="input-toolbar">
           <label class="btn btn-ghost btn-sm" style="cursor:pointer;font-size:.76rem" title="Seleccionar imagen desde tu dispositivo">🖼 Imagen
             <input type="file" id="userImgInput" accept="image/*" style="display:none" onchange="handleUserImg(this)"/>
@@ -1137,16 +1142,23 @@ async function sendDevMsg(){
     box.scrollTop=box.scrollHeight;loadDevRecent();return;
   }
 
+  // Construir mensaje final con txt adjunto si existe
+  const finalMsg = buildMessageWithTxt(msg, devPendingTxt);
+  const hasTxt   = !!devPendingTxt;
+  const txtName  = devPendingTxt?.filename||'';
+  if(devPendingTxt){ removeTxtAttachment('devTxtAttach','dev'); }
+
   const ud=document.createElement('div');ud.className='msg-row ur';
-  ud.innerHTML=`<div class="bubble">${esc(msg)}</div>`;box.appendChild(ud);
+  ud.innerHTML=`<div class="bubble">${msg?esc(msg):''}${hasTxt?`<div style="display:flex;align-items:center;gap:6px;margin-top:${msg?'6px':'0'};padding:5px 8px;background:rgba(91,141,238,.1);border-radius:6px;border:1px solid rgba(91,141,238,.2)"><span>📄</span><span style="font-size:.76rem;color:var(--accent2)">${esc(txtName)}</span></div>`:''}</div>`;
+  box.appendChild(ud);
   const bd=document.createElement('div');bd.className='msg-row br';
-  const tid='t_'+Date.now();bd.innerHTML=`<div class="bubble" id="${tid}" style="color:var(--text2)">⏳ Pensando...</div>`;
+  const tid='t_'+Date.now();bd.innerHTML=`<div class="bubble" id="${tid}" style="color:var(--text2)">⏳ ${hasTxt?'Leyendo archivo...':'Pensando...'}</div>`;
   box.appendChild(bd);box.scrollTop=box.scrollHeight;
   try{
     const lh=devH.slice(-10);
     let r;
-    if(customPrompt)r=await req('/api/dev/test-ai','POST',{message:msg,system_prompt:customPrompt});
-    else r=await req('/api/chat','POST',{message:msg,mode,history:lh});
+    if(customPrompt)r=await req('/api/dev/test-ai','POST',{message:finalMsg,system_prompt:customPrompt});
+    else r=await req('/api/chat','POST',{message:finalMsg,mode,history:lh});
     devH.push({role:'user',content:msg});devH.push({role:'assistant',content:r.response});
     if(devH.length>20)devH.splice(0,2);
     const te=document.getElementById(tid);
@@ -1457,16 +1469,22 @@ async function sendUserMsg(){
     box.scrollTop=box.scrollHeight;loadUserHistory();return;
   }
 
-  // ── CASO 2: Texto solo (puede ser seguimiento sobre imagen anterior) ──
+  // ── CASO 2: Texto solo (con posible adjunto txt) ──
+  const uFinalMsg = buildMessageWithTxt(msg, userPendingTxt);
+  const uHasTxt   = !!userPendingTxt;
+  const uTxtName  = userPendingTxt?.filename||'';
+  if(userPendingTxt){ removeTxtAttachment('userTxtAttach','user'); }
+
   const ud=document.createElement('div');ud.className='msg-row ur';
-  ud.innerHTML=`<div class="bubble">${esc(msg)}</div>`;box.appendChild(ud);
+  ud.innerHTML=`<div class="bubble">${msg?esc(msg):''}${uHasTxt?`<div style="display:flex;align-items:center;gap:6px;margin-top:${msg?'6px':'0'};padding:5px 8px;background:rgba(91,141,238,.1);border-radius:6px;border:1px solid rgba(91,141,238,.2)"><span>📄</span><span style="font-size:.76rem;color:var(--accent2)">${esc(uTxtName)}</span></div>`:''}</div>`;
+  box.appendChild(ud);
   const bd=document.createElement('div');bd.className='msg-row br';
   const tid='u_'+Date.now();
-  bd.innerHTML=`<div class="bubble" id="${tid}" style="color:var(--text2)">⏳ Pensando...</div>`;
+  bd.innerHTML=`<div class="bubble" id="${tid}" style="color:var(--text2)">⏳ ${uHasTxt?'Leyendo archivo...':'Pensando...'}</div>`;
   box.appendChild(bd);box.scrollTop=box.scrollHeight;
 
   try{
-    const r=await req('/api/chat','POST',{message:msg, mode, history:userH.slice(-10)});
+    const r=await req('/api/chat','POST',{message:uFinalMsg, mode, history:userH.slice(-10)});
     userH.push({role:'user',content:msg});userH.push({role:'assistant',content:r.response});
     if(userH.length>20)userH.splice(0,2);
     const te=document.getElementById(tid);
@@ -1703,7 +1721,7 @@ function clearMemPrompt(){
 async function loadConfig(){
   try{
     const d=await req('/api/dev/config');const c=d.config;const v=k=>c[k]?.value||'';
-    const prov=v('ai_provider')||'groq';
+    const prov=v('ai_provider')||'auto';
     const sel=document.getElementById('cfg-provider');
     if([...sel.options].some(o=>o.value===prov))sel.value=prov;else sel.value='groq';
     document.getElementById('cfg-model').value=v('ai_model')||'llama-3.1-8b-instant';
@@ -1711,12 +1729,33 @@ async function loadConfig(){
     document.getElementById('cfg-autolearn').value=v('auto_learning_enabled')||'true';
     document.getElementById('cfg-interval').value=v('auto_learning_interval_hours')||'1';
     document.getElementById('cfg-websearch').value=v('web_search_enabled')||'true';
-    document.getElementById('cfg-prompt').value=v('system_prompt')||'Eres Cic_IA, un asistente inteligente en español.';
+    document.getElementById('cfg-prompt').value=v('system_prompt')||'Eres Cic_IA, un asistente inteligente en español.'
+    // Corregir tokens si está fuera de rango
+    // Sin límite — respetar valor guardado
+    // Mostrar hint del proveedor actual
+    updateProviderHint(prov);;
   }catch(e){showAlert('cfgAIAlert','Error: '+e.message,'err');}
 }
+function updateProviderHint(val){
+  const hints={
+    'auto': '✅ Recomendado — intenta Groq (gratis) → Anthropic → OpenAI. Si uno falla, usa el siguiente automáticamente.',
+    'groq': '⚡ Solo Groq (LLaMA). Gratis y rápido. Si falla, el bot no responde.',
+    'anthropic': '🤖 Solo Anthropic (Claude). Alta calidad. Requiere ANTHROPIC_API_KEY.',
+    'openai': '🧠 Solo OpenAI (GPT). Requiere OPENAI_API_KEY.'
+  };
+  const el=document.getElementById('providerHint');
+  if(el) el.textContent=hints[val]||'';
+}
 async function saveAIConfig(){
-  try{await req('/api/dev/config','PUT',{updates:{ai_provider:document.getElementById('cfg-provider').value,ai_model:document.getElementById('cfg-model').value,max_tokens:document.getElementById('cfg-tokens').value}});showAlert('cfgAIAlert','✅ Guardado','ok');}
-  catch(e){showAlert('cfgAIAlert','❌ '+e.message,'err');}
+  const tokens=parseInt(document.getElementById('cfg-tokens').value)||8000;
+  try{
+    await req('/api/dev/config','PUT',{updates:{
+      ai_provider: document.getElementById('cfg-provider').value,
+      ai_model:    document.getElementById('cfg-model').value,
+      max_tokens:  String(tokens)
+    }});
+    showAlert('cfgAIAlert','✅ Guardado — tokens: '+tokens,'ok');
+  }catch(e){showAlert('cfgAIAlert','❌ '+e.message,'err');}
 }
 async function saveLearningConfig(){
   try{await req('/api/dev/config','PUT',{updates:{auto_learning_enabled:document.getElementById('cfg-autolearn').value,auto_learning_interval_hours:document.getElementById('cfg-interval').value,web_search_enabled:document.getElementById('cfg-websearch').value}});showAlert('cfgLearnAlert','✅ Guardado','ok');}
@@ -1779,10 +1818,28 @@ async function triggerUserImgPaste(){
    Funciona igual que ChatGPT, WhatsApp Web, Claude, etc.
 ══════════════════════════════════ */
 document.addEventListener('paste', function(e){
-  if(!currentUser) return; // no logueado, ignorar
+  if(!currentUser) return;
 
   const items = e.clipboardData?.items;
   if(!items) return;
+
+  // Primero verificar si hay texto largo (antes que imagen)
+  for(const item of items){
+    if(item.type==='text/plain'){
+      item.getAsString(text=>{
+        if(text && text.length>=LONG_TEXT_THRESHOLD){
+          e.preventDefault();
+          const ctx = currentUser.is_developer ? 'dev' : 'user';
+          checkAndConvertLongText(text, ctx);
+          // Toast de confirmación
+          showGlobalPasteToast(ctx==='dev'?'dev':'user');
+          const toastEl=document.getElementById('imgPasteToast');
+          if(toastEl) toastEl.textContent='📄 Texto largo detectado — adjuntado como archivo .txt';
+        }
+      });
+      break;
+    }
+  }
 
   for(const item of items){
     if(item.type.startsWith('image/')){
