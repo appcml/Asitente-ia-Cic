@@ -210,7 +210,7 @@ def run_migration():
 
             # Config por defecto (solo inserta si no existe la clave)
             defaults = [
-                ('ai_provider',                   'groq',                                                                                                   'string'),
+                ('ai_provider',                   'auto',                                                                                                   'string'),
                 ('ai_model',                      'claude-haiku-4-5-20251001',                                                                              'string'),
                 ('system_prompt',                 'Eres Cic_IA, un asistente inteligente en español. Responde de forma clara, útil y amigable.',             'string'),
                 ('max_tokens',                    '1000',                                                                                                    'int'),
@@ -687,7 +687,7 @@ class CicIA:
             logger.info(f"   Memorias: {Memory.query.count()}")
             logger.info(f"   Conversaciones: {Conversation.query.count()}")
             logger.info(f"   Conocimiento manual: {ManualKnowledge.query.count()}")
-            provider = get_config('ai_provider', 'groq')
+            provider = get_config('ai_provider', 'auto')
             has_key  = bool(ANTHROPIC_API_KEY or OPENAI_API_KEY)
             logger.info(f"   Proveedor IA: {provider} ({'✅ API Key OK' if has_key else '⚠️ Sin API Key'})")
             logger.info("=" * 55)
@@ -1460,11 +1460,9 @@ def list_modules():
 
 @app.route('/developer')
 def developer_panel():
-    """Panel de desarrollador — renderiza template o retorna info básica"""
-    try:
-        return render_template('developer.html')
-    except Exception:
-        return jsonify({'message': 'Panel desarrollador activo. Usa la API /api/dev/*'})
+    """Redirige al index unificado — el rol se detecta automáticamente en el frontend"""
+    from flask import redirect, url_for
+    return redirect(url_for('index'))
 
 # --- Estadísticas detalladas ---
 
