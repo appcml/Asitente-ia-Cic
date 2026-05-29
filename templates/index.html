@@ -497,11 +497,87 @@ tr:hover td{background:rgba(91,141,238,.03);}
 
       <!-- IMG GEN -->
       <div id="dev-img-gen" class="section">
-        <div class="page-hd"><h2>🖼️ Crear imagen</h2><p>Generación de imágenes con IA</p></div>
+        <div class="page-hd"><h2>🖼️ Crear imagen</h2><p>Motor propio Cic_IA · SVG · PIL · Fractal · Sin APIs de pago</p></div>
         <div class="panel">
-          <div class="form-group"><label>Prompt</label><textarea id="devImgPrompt" rows="3" placeholder="Describe la imagen..."></textarea></div>
-          <button class="btn btn-primary" onclick="generateImage()">🖼️ Generar imagen</button>
-          <div id="devImgGenRes" style="margin-top:14px"></div>
+
+          <div class="form-group">
+            <label>Describe la imagen</label>
+            <textarea id="devImgPrompt" rows="3" placeholder="Ej: Un astronauta caminando por Marte al atardecer, cielo rosado..."></textarea>
+          </div>
+
+          <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px">
+            <span class="badge badge-blue" style="cursor:pointer;padding:4px 9px" onclick="document.getElementById('devImgPrompt').value=this.textContent.trim()">Ciudad cyberpunk bajo la lluvia</span>
+            <span class="badge badge-blue" style="cursor:pointer;padding:4px 9px" onclick="document.getElementById('devImgPrompt').value=this.textContent.trim()">Nebulosa galáctica en el espacio</span>
+            <span class="badge badge-blue" style="cursor:pointer;padding:4px 9px" onclick="document.getElementById('devImgPrompt').value=this.textContent.trim()">Bosque encantado al atardecer</span>
+            <span class="badge badge-blue" style="cursor:pointer;padding:4px 9px" onclick="document.getElementById('devImgPrompt').value=this.textContent.trim()">Arte fractal abstracto colorido</span>
+          </div>
+
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:12px">
+
+            <div class="form-group" style="margin:0">
+              <label>Estilo</label>
+              <select id="devImgStyle">
+                <option value="realistic">📷 Fotorrealista</option>
+                <option value="artistic">🎨 Arte digital</option>
+                <option value="anime">⛩ Anime</option>
+                <option value="sketch">✏️ Boceto</option>
+                <option value="3d">🧊 Render 3D</option>
+                <option value="cyberpunk">⚡ Cyberpunk</option>
+                <option value="fantasy">🐉 Fantasía</option>
+                <option value="abstract">🌀 Abstracto</option>
+                <option value="minimalist">◻️ Minimalista</option>
+                <option value="space">🌌 Espacio</option>
+              </select>
+            </div>
+
+            <div class="form-group" style="margin:0">
+              <label>Motor</label>
+              <select id="devImgEngine">
+                <option value="auto">Auto (recomendado)</option>
+                <option value="svg">SVG vectorial</option>
+                <option value="pil">PIL / píxeles</option>
+                <option value="fractal">Fractal matemático</option>
+              </select>
+            </div>
+
+            <div class="form-group" style="margin:0">
+              <label>Formato</label>
+              <select id="devImgSize">
+                <option value="square">⬛ Cuadrado</option>
+                <option value="landscape">🖼 Horizontal</option>
+                <option value="portrait">📱 Vertical</option>
+                <option value="512">🔲 Pequeño 512</option>
+              </select>
+            </div>
+
+            <div class="form-group" style="margin:0">
+              <label>Calidad</label>
+              <select id="devImgQuality">
+                <option value="standard">Standard — rápido</option>
+                <option value="hd">HD — máxima</option>
+              </select>
+            </div>
+
+            <div class="form-group" style="margin:0">
+              <label>Variantes</label>
+              <div style="display:flex;gap:5px" id="devImgCountBtns">
+                <button class="btn btn-outline btn-sm" style="flex:1;background:var(--accent);color:#fff;border-color:var(--accent)" onclick="setImgCount(1,this)">1</button>
+                <button class="btn btn-outline btn-sm" style="flex:1" onclick="setImgCount(2,this)">2</button>
+                <button class="btn btn-outline btn-sm" style="flex:1" onclick="setImgCount(3,this)">3</button>
+                <button class="btn btn-outline btn-sm" style="flex:1" onclick="setImgCount(4,this)">4</button>
+              </div>
+            </div>
+
+          </div>
+
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <button class="btn btn-primary" id="devImgBtn" onclick="generateImage()">🖼️ Generar imagen</button>
+            <button class="btn btn-outline btn-sm" onclick="document.getElementById('devImgPrompt').value='';document.getElementById('devImgGenRes').innerHTML=''">Limpiar</button>
+            <span id="devImgProviderLabel" style="font-size:.72rem;color:var(--text2)"></span>
+          </div>
+
+          <div id="devImgGenRes" style="margin-top:16px"></div>
+
         </div>
       </div>
 
@@ -993,9 +1069,37 @@ function renderUserMod(name){
     return;
   }
   if(name==='img-gen'){
-    el.innerHTML=`<div class="page-hd"><h2>🖼️ Crear imagen</h2><p>Generación de imágenes con IA</p></div>
-      <div class="panel"><div class="form-group"><label>Describe la imagen</label><textarea id="uImgPrompt" rows="3" placeholder="Un paisaje montañoso al amanecer..."></textarea></div>
-      <button class="btn btn-primary" onclick="alert('Módulo disponible próximamente')">🖼️ Generar imagen</button></div>`;
+    el.innerHTML=`<div class="page-hd"><h2>🖼️ Crear imagen</h2><p>Motor propio Cic_IA — sin APIs de pago</p></div>
+      <div class="panel">
+        <div class="form-group"><label>Describe la imagen</label>
+          <textarea id="uImgPrompt" rows="3" placeholder="Ej: Un dragón volando sobre una ciudad medieval al amanecer..."></textarea></div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px">
+          <span class="badge badge-blue" style="cursor:pointer;padding:4px 9px" onclick="document.getElementById('uImgPrompt').value=this.textContent.trim()">Paisaje montañoso</span>
+          <span class="badge badge-blue" style="cursor:pointer;padding:4px 9px" onclick="document.getElementById('uImgPrompt').value=this.textContent.trim()">Ciudad cyberpunk</span>
+          <span class="badge badge-blue" style="cursor:pointer;padding:4px 9px" onclick="document.getElementById('uImgPrompt').value=this.textContent.trim()">Arte fractal</span>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
+          <div class="form-group" style="margin:0"><label>Estilo</label>
+            <select id="uImgStyle">
+              <option value="realistic">📷 Fotorrealista</option>
+              <option value="artistic">🎨 Arte digital</option>
+              <option value="anime">⛩ Anime</option>
+              <option value="3d">🧊 Render 3D</option>
+              <option value="cyberpunk">⚡ Cyberpunk</option>
+              <option value="fantasy">🐉 Fantasía</option>
+              <option value="space">🌌 Espacio</option>
+              <option value="fractal">🌀 Fractal</option>
+            </select></div>
+          <div class="form-group" style="margin:0"><label>Formato</label>
+            <select id="uImgSize">
+              <option value="square">⬛ Cuadrado</option>
+              <option value="landscape">🖼 Horizontal</option>
+              <option value="portrait">📱 Vertical</option>
+            </select></div>
+        </div>
+        <button class="btn btn-primary" id="uImgBtn" onclick="generateImageUser()">🖼️ Generar imagen</button>
+        <div id="uImgRes" style="margin-top:14px"></div>
+      </div>`;
     return;
   }
   const coming={'projects':'📁 Proyectos','artifacts':'🗃️ Artefactos'};
@@ -1784,10 +1888,99 @@ async function loadUsers(){
 async function toggleDev(id){try{await req(`/api/dev/users/${id}/toggle-dev`,'POST');loadUsers();}catch(e){alert(e.message);}}
 
 /* ═══ IMG GEN ═══ */
+/* ── Estado variantes ── */
+let _imgCount = 1;
+function setImgCount(n, el){
+  _imgCount = n;
+  document.querySelectorAll('#devImgCountBtns .btn').forEach(b=>{
+    b.style.background='transparent';b.style.color='var(--text2)';b.style.borderColor='var(--border2)';
+  });
+  if(el){el.style.background='var(--accent)';el.style.color='#fff';el.style.borderColor='var(--accent)';}
+}
+
+/* ── Panel DEV ── */
 async function generateImage(){
-  const prompt=document.getElementById('devImgPrompt')?.value.trim();if(!prompt)return;
-  const el=document.getElementById('devImgGenRes');
-  el.innerHTML='<div style="color:var(--text2);font-size:.84rem">⏳ Integra aquí tu API de imágenes (DALL-E, Stable Diffusion, Flux, etc.)</div>';
+  const prompt=(document.getElementById('devImgPrompt')?.value||'').trim();
+  if(!prompt){alert('Escribe una descripción');return;}
+
+  const style   = document.getElementById('devImgStyle')?.value   || 'realistic';
+  const model   = document.getElementById('devImgEngine')?.value  || 'auto';
+  const size    = document.getElementById('devImgSize')?.value    || 'square';
+  const quality = document.getElementById('devImgQuality')?.value || 'standard';
+  const el      = document.getElementById('devImgGenRes');
+  const btn     = document.getElementById('devImgBtn');
+  const provEl  = document.getElementById('devImgProviderLabel');
+
+  el.innerHTML  = `<div style="color:var(--text2);font-size:.84rem;padding:8px 0">⏳ Generando ${_imgCount} imagen(es) con motor ${model}...</div>`;
+  btn.disabled  = true;
+  if(provEl) provEl.textContent = '';
+
+  try{
+    const r = await req('/api/image/generate','POST',{prompt,style,size,quality,count:_imgCount,model});
+    if(!r.success){el.innerHTML=`<div class="alert alert-err">${esc(r.error||'Error desconocido')}</div>`;return;}
+    if(provEl) provEl.textContent = `✓ ${r.provider||''} · ${r.count||1} imagen(es)`;
+    el.innerHTML = _renderImgGallery(r.images, r);
+  }catch(e){
+    el.innerHTML = `<div class="alert alert-err">Error de red: ${esc(e.message)}</div>`;
+  }finally{
+    btn.disabled = false;
+  }
+}
+
+/* ── Panel USUARIO ── */
+async function generateImageUser(){
+  const prompt=(document.getElementById('uImgPrompt')?.value||'').trim();
+  if(!prompt){alert('Escribe una descripción');return;}
+  const style = document.getElementById('uImgStyle')?.value || 'realistic';
+  const size  = document.getElementById('uImgSize')?.value  || 'square';
+  const el    = document.getElementById('uImgRes');
+  const btn   = document.getElementById('uImgBtn');
+
+  el.innerHTML = `<div style="color:var(--text2);font-size:.84rem;padding:8px 0">⏳ Generando imagen...</div>`;
+  btn.disabled = true;
+
+  try{
+    const r = await req('/api/image/generate','POST',{prompt,style,size,quality:'standard',count:1,model:'auto'});
+    if(!r.success){el.innerHTML=`<div class="alert alert-err">${esc(r.error||'Error')}</div>`;return;}
+    el.innerHTML = _renderImgGallery(r.images, r);
+  }catch(e){
+    el.innerHTML = `<div class="alert alert-err">Error: ${esc(e.message)}</div>`;
+  }finally{
+    btn.disabled = false;
+  }
+}
+
+/* ── Render galería ── */
+function _renderImgGallery(images, meta){
+  if(!images||!images.length) return '<div class="alert alert-warn">Sin imágenes generadas</div>';
+  const cards = images.map((img,i)=>{
+    const src = img.url||'';
+    const revised = (img.revised_prompt && img.revised_prompt !== meta.original)
+      ? `<div style="font-size:.7rem;color:var(--text2);margin-top:6px;line-height:1.4;padding:0 10px 8px">✏️ ${esc((img.revised_prompt||'').substring(0,120))}</div>`
+      : '';
+    const isB64 = src.startsWith('data:image/png') || src.startsWith('data:image/jp');
+    return `<div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;overflow:hidden">
+      <img src="${src}" alt="Imagen ${i+1}" style="width:100%;display:block" loading="lazy" onerror="this.style.display='none'"/>
+      <div style="padding:7px 10px;display:flex;justify-content:space-between;align-items:center">
+        <span style="font-size:.7rem;color:var(--text2)">${esc(img.provider||meta.provider||'')} · #${i+1}</span>
+        <div style="display:flex;gap:5px">
+          <button class="btn btn-outline btn-sm btn-icon" title="Descargar" onclick="_imgDown(${i})">⬇</button>
+          ${isB64?'':`<button class="btn btn-outline btn-sm btn-icon" title="Abrir" onclick="window.open('${src}','_blank')">↗</button>`}
+        </div>
+      </div>${revised}
+    </div>`;
+  }).join('');
+  const grid = images.length===1
+    ? `<div>${cards}</div>`
+    : `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px">${cards}</div>`;
+  const note = meta.note ? `<div style="font-size:.7rem;color:var(--text3);margin-top:6px">${esc(meta.note)}</div>` : '';
+  return grid + note;
+}
+function _imgDown(idx){
+  const imgs = document.querySelectorAll('#devImgGenRes img, #uImgRes img');
+  const src  = imgs[idx]?.src; if(!src) return;
+  const a    = document.createElement('a');
+  a.href     = src; a.download = `cic_ia_${idx+1}.png`; a.click();
 }
 
 /* ═══ TRIGGER PASTE IMG ═══ */
