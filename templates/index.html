@@ -549,42 +549,7 @@ tr:hover td{background:rgba(91,141,238,.03);}
             </div>
           </div>
 
-          <!-- Derecha: panel IA fijo con scroll propio -->
-          <div style="position:sticky;top:0;height:calc(100vh - 48px);overflow-y:auto;scrollbar-width:thin;padding-bottom:16px">
-            <div class="panel" style="border-color:rgba(91,141,238,.3)">
-              <div class="sw-head">
-                <h4>🧠 Sistema IA</h4>
-                <button class="btn btn-ghost btn-sm" onclick="loadDashboardPanel()" title="Actualizar" style="font-size:.85rem;padding:2px 6px">↺</button>
-              </div>
-              <div id="swNewBadge" style="display:none" class="sw-new-badge">
-                <span>✨</span><span id="swNewCount">0</span> aprendizajes hoy
-              </div>
-              <div class="sw-stats">
-                <div class="sw-stat" onclick="devGo('memories',null)">
-                  <div class="ss-val" id="sw-mem">—</div><div class="ss-lbl">💾 Memorias</div>
-                </div>
-                <div class="sw-stat green" onclick="devGo('knowledge',null)">
-                  <div class="ss-val" id="sw-kb">—</div><div class="ss-lbl">🧠 Conocimiento</div>
-                </div>
-                <div class="sw-stat yellow">
-                  <div class="ss-val" id="sw-today">—</div><div class="ss-lbl">💬 Msgs hoy</div>
-                </div>
-                <div class="sw-stat purple" onclick="openKnowledgeDrawer('recent')">
-                  <div class="ss-val" id="sw-learned">—</div><div class="ss-lbl">📚 Aprendido hoy</div>
-                </div>
-              </div>
-              <div class="sw-suggestions">
-                <h5 style="font-size:.7rem;color:var(--text2);font-weight:700;margin-bottom:8px;text-transform:uppercase;letter-spacing:.07em">💡 Sugerencias</h5>
-                <div id="swSuggestions"><div style="color:var(--text3);font-size:.74rem">Cargando...</div></div>
-              </div>
-              <div style="display:flex;gap:6px;margin-top:10px">
-                <button class="btn btn-outline btn-sm" style="flex:1;justify-content:center;font-size:.7rem" onclick="openKnowledgeDrawer('recent')">📖 Aprendizajes</button>
-                <button class="btn btn-outline btn-sm" style="flex:1;justify-content:center;font-size:.7rem" onclick="openKnowledgeDrawer('knowledge')">🧠 Conocimiento</button>
-              </div>
-            </div>
-          </div>
-
-        </div><!-- /grid -->
+                </div><!-- /grid -->
       </div></div>
 
       <!-- KNOWLEDGE -->
