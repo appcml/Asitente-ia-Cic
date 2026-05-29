@@ -1,428 +1,860 @@
 """
-modules/image_generator/main.py
-================================
-Módulo independiente de generación de imágenes para Cic_IA.
-Se actualiza solo, sin tocar el bot principal.
+modules/image_generator/main.py — Motor de imágenes PROPIO de Cic_IA
+======================================================================
+Sin DALL-E. Sin APIs de pago. 100% local con Pillow + NumPy.
+Fallback opcional: Pollinations.ai (gratis, sin key).
 
-Estrategia de generación (en orden de prioridad):
-  1. Pollinations.ai  — API gratuita, sin key, funciona ya
-  2. Picsum / SVG     — fallback visual si Pollinations falla
-  3. Arte generativo  — fallback puro Python/SVG, siempre funciona
+Motores disponibles:
+  1. SVG     — escenas vectoriales (paisajes, ciudades, cosmos, abstracto)
+  2. PIL     — imágenes en píxeles reales con ruido, texturas, capas
+  3. FRACTAL — arte matemático (Mandelbrot, Julia sets, Flame)
+  auto       — elige el más adecuado según el estilo
 
 Autor: Cic_IA Dev
 """
 
-import os
-import io
-import math
-import hashlib
-import requests
-import base64
-import urllib.parse
-import logging
+import os, io, math, hashlib, base64, logging, requests, urllib.parse
 from datetime import datetime
+from PIL import Image, ImageDraw, ImageFilter, ImageEnhance, ImageFont
+import numpy as np
 
 logger = logging.getLogger('cic_image')
 
-# ─── Directorio de salida (relativo al proyecto) ───────────────────────────
-OUTPUT_DIR = os.path.join(os.path.dirname(__file__), '..', '..', 'static', 'generated')
-os.makedirs(OUTPUT_DIR, exist_ok=True)
+# ─── Paletas por temática ──────────────────────────────────────────────────
 
-# ─── Config por estilo ──────────────────────────────────────────────────────
-STYLE_PROMPTS = {
-    'realistic':  'photorealistic, high detail, 8k, professional photography',
-    'artistic':   'oil painting, fine art, colorful, brushstrokes visible',
-    'cartoon':    'cartoon style, vibrant colors, clean lines, illustration',
-    'abstract':   'abstract art, geometric shapes, modern art, vivid colors',
-    'minimalist': 'minimalist, clean, simple, white background, elegant',
+PALETTES = {
+    'naturaleza': [(45,106,79),(82,183,136),(149,213,178),(184,228,199),(216,243,220)],
+    'ciudad':     [(26,26,46),(22,33,62),(15,52,96),(83,52,131),(233,69,96)],
+    'oceano':     [(3,4,94),(0,119,182),(0,180,216),(144,224,239),(202,240,248)],
+    'atardecer':  [(255,107,53),(247,147,30),(255,215,0),(255,69,0),(139,26,26)],
+    'espacio':    [(13,13,13),(26,26,46),(22,33,62),(123,45,139),(224,64,251)],
+    'cyberpunk':  [(10,10,30),(0,255,200),(255,0,120),(180,0,255),(255,230,0)],
+    'fantasy':    [(30,10,60),(100,20,140),(200,50,255),(255,180,50),(255,240,200)],
+    'anime':      [(255,200,220),(255,150,180),(200,100,255),(100,150,255),(255,255,200)],
+    'default':    [(108,99,255),(72,219,251),(29,209,161),(255,217,61),(255,107,107)],
 }
 
-# ─── Colores por temática (para arte generativo) ────────────────────────────
-THEME_PALETTES = {
-    'naturaleza':  ['#2d6a4f', '#52b788', '#95d5b2', '#b7e4c7', '#d8f3dc'],
-    'ciudad':      ['#1a1a2e', '#16213e', '#0f3460', '#533483', '#e94560'],
-    'oceano':      ['#03045e', '#0077b6', '#00b4d8', '#90e0ef', '#caf0f8'],
-    'atardecer':   ['#ff6b35', '#f7931e', '#ffd700', '#ff4500', '#8b1a1a'],
-    'espacio':     ['#0d0d0d', '#1a1a2e', '#16213e', '#7b2d8b', '#e040fb'],
-    'default':     ['#6c63ff', '#48dbfb', '#1dd1a1', '#ffd93d', '#ff6b6b'],
+STYLE_TO_ENGINE = {
+    'realistic':  'pil',
+    'artistic':   'pil',
+    'anime':      'pil',
+    'sketch':     'pil',
+    '3d':         'pil',
+    'minimalist': 'svg',
+    'fantasy':    'svg',
+    'cyberpunk':  'svg',
+    'abstract':   'svg',
+    'fractal':    'fractal',
+    'mandelbrot': 'fractal',
+    'cartoon':    'svg',
+    'landscape':  'svg',
+    'space':      'pil',
+}
+
+THEME_KEYWORDS = {
+    'naturaleza': ['bosque','árbol','verde','naturaleza','forest','tree','grass','flower','flor'],
+    'ciudad':     ['ciudad','urbano','building','city','urban','calle','street'],
+    'oceano':     ['mar','océano','agua','sea','ocean','playa','beach','wave','ola'],
+    'atardecer':  ['atardecer','amanecer','sunset','sunrise','sol','sun','naranja','cielo rojo'],
+    'espacio':    ['espacio','galaxia','space','galaxy','stars','estrellas','cosmos','nebula','luna'],
+    'cyberpunk':  ['cyberpunk','neon','futuro','cyber','robot','tech','hack'],
+    'fantasy':    ['fantasía','dragón','dragon','magic','wizard','mago','castillo','castle'],
+    'anime':      ['anime','manga','kawaii','chibi'],
+}
+
+SIZES = {
+    'square':    (1024, 1024),
+    'landscape': (1280, 720),
+    'portrait':  (720, 1280),
+    '512':       (512, 512),
 }
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# FUNCIÓN PRINCIPAL — esta es la que llama el bot
+# ENTRADA PRINCIPAL
 # ═══════════════════════════════════════════════════════════════════════════
 
-def generar(prompt: str, style: str = 'realistic', size: str = '512x512', count: int = 1) -> dict:
+def generar(prompt: str, style: str = 'realistic', size: str = 'square',
+            quality: str = 'standard', count: int = 1, model: str = 'auto') -> dict:
     """
-    Genera imágenes a partir de un prompt de texto.
-
-    Parámetros:
-        prompt  : descripción de la imagen
-        style   : realistic | artistic | cartoon | abstract | minimalist
-        size    : 512x512 | 768x768 | 1024x1024 | 1024x576
-        count   : cantidad de imágenes (1-4)
-
-    Retorna:
-        {
-          "success": True,
-          "images": [{"url": "...", "type": "url|base64|svg"}],
-          "provider": "pollinations|generativo",
-          "prompt_usado": "..."
-        }
+    Genera imágenes con el motor propio de Cic_IA.
+    No requiere ninguna API de pago.
     """
-    count = max(1, min(count, 4))
+    count = max(1, min(4, int(count)))
+    W, H  = SIZES.get(size, (1024, 1024))
 
-    # Construir prompt enriquecido con el estilo
-    style_suffix = STYLE_PROMPTS.get(style, '')
-    prompt_completo = f"{prompt}, {style_suffix}" if style_suffix else prompt
+    # Semilla determinística basada en prompt
+    seed = int(hashlib.md5(prompt.encode()).hexdigest()[:8], 16)
 
-    logger.info(f"[ImageGen] prompt='{prompt[:60]}' style={style} size={size} count={count}")
+    # Seleccionar motor
+    engine = model if model in ('svg', 'pil', 'fractal') else _select_engine(style)
+
+    logger.info(f"[CicImage] engine={engine} style={style} size={W}x{H} count={count}")
 
     images = []
-
     for i in range(count):
-        # Intentar Pollinations.ai (gratis, no requiere API key)
-        result = _generar_pollinations(prompt_completo, size, seed=i * 42)
+        img_seed = seed + i * 1337
+        try:
+            if engine == 'svg':
+                result = _engine_svg(prompt, style, W, H, img_seed)
+            elif engine == 'fractal':
+                result = _engine_fractal(prompt, W, H, img_seed)
+            else:
+                result = _engine_pil(prompt, style, W, H, img_seed, quality)
 
-        # Si falla, usar arte generativo SVG
-        if not result:
-            result = _generar_svg_artistico(prompt, style, size, seed=i)
+            if result:
+                images.append(result)
+        except Exception as e:
+            logger.error(f"[CicImage] Error engine={engine}: {e}", exc_info=True)
+            # Fallback a SVG siempre funciona
+            try:
+                images.append(_engine_svg(prompt, style, W, H, img_seed))
+            except:
+                pass
 
-        if result:
-            images.append(result)
+    # Último recurso: Pollinations.ai (gratis)
+    if not images:
+        for i in range(count):
+            p = _pollinations_fallback(prompt, W, H, seed=i*42)
+            if p: images.append(p)
 
     if not images:
-        return {
-            'success': False,
-            'error':   'No se pudo generar ninguna imagen',
-            'images':  []
-        }
+        return {'success': False, 'error': 'No se pudo generar ninguna imagen', 'images': []}
 
     return {
         'success':      True,
         'images':       images,
-        'provider':     images[0].get('provider', 'desconocido'),
-        'prompt_usado': prompt_completo,
-        'generado_en':  datetime.utcnow().isoformat()
+        'count':        len(images),
+        'provider':     images[0].get('provider', 'Cic_IA Engine'),
+        'engine':       engine,
+        'prompt_usado': prompt,
+        'original':     prompt,
+        'generado_en':  datetime.utcnow().isoformat(),
     }
 
 
-# ═══════════════════════════════════════════════════════════════════════════
-# PROVEEDOR 1 — Pollinations.ai (gratuito, sin API key)
-# ═══════════════════════════════════════════════════════════════════════════
+# ─── Selector de motor ────────────────────────────────────────────────────
 
-def _generar_pollinations(prompt: str, size: str, seed: int = 0) -> dict | None:
-    """
-    Usa Pollinations.ai — API pública gratuita de generación de imágenes.
-    Documentación: https://pollinations.ai/
-    """
-    try:
-        # Parsear tamaño
-        partes = size.split('x')
-        ancho  = int(partes[0]) if len(partes) == 2 else 512
-        alto   = int(partes[1]) if len(partes) == 2 else 512
+def _select_engine(style: str) -> str:
+    return STYLE_TO_ENGINE.get(style, 'pil')
 
-        # Codificar prompt para URL
-        prompt_encoded = urllib.parse.quote(prompt)
+def _detect_palette(prompt: str) -> list:
+    p = prompt.lower()
+    for theme, words in THEME_KEYWORDS.items():
+        if any(w in p for w in words):
+            return PALETTES[theme]
+    return PALETTES['default']
 
-        # URL de Pollinations — genera imagen directo
-        url = f"https://image.pollinations.ai/prompt/{prompt_encoded}?width={ancho}&height={alto}&seed={seed}&nologo=true"
+def _rng_factory(seed: int):
+    """Generador LCG determinístico para resultados reproducibles."""
+    state = [seed & 0x7fffffff]
+    def rng(lo=0.0, hi=1.0):
+        state[0] = (state[0] * 1664525 + 1013904223) & 0x7fffffff
+        return lo + (state[0] / 0x7fffffff) * (hi - lo)
+    return rng
 
-        # Verificar que la URL responde
-        response = requests.get(url, timeout=30, stream=True)
-
-        if response.status_code == 200 and 'image' in response.headers.get('Content-Type', ''):
-            # Convertir a base64 para retornar embebido
-            img_data = response.content
-            b64 = base64.b64encode(img_data).decode('utf-8')
-
-            # Detectar formato
-            content_type = response.headers.get('Content-Type', 'image/jpeg')
-
-            logger.info(f"[ImageGen] Pollinations OK — {len(img_data)} bytes")
-            return {
-                'url':      f"data:{content_type};base64,{b64}",
-                'type':     'base64',
-                'provider': 'pollinations',
-                'size':     f"{ancho}x{alto}",
-                'bytes':    len(img_data)
-            }
-
-    except requests.Timeout:
-        logger.warning("[ImageGen] Pollinations timeout — usando fallback")
-    except Exception as e:
-        logger.warning(f"[ImageGen] Pollinations error: {e}")
-
-    return None
+def _pil_to_b64(img: Image.Image, quality_hint: str = 'standard') -> str:
+    """Convierte PIL Image a base64 PNG."""
+    # Redimensionar si es muy grande para ahorrar ancho de banda
+    max_side = 1024 if quality_hint == 'standard' else 1280
+    if max(img.size) > max_side:
+        img.thumbnail((max_side, max_side), Image.LANCZOS)
+    buf = io.BytesIO()
+    img.save(buf, format='PNG', optimize=True)
+    return base64.b64encode(buf.getvalue()).decode()
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# PROVEEDOR 2 — Arte generativo SVG (siempre funciona, 0 dependencias)
+# MOTOR 1 — SVG (vectorial, siempre disponible, sin dependencias extra)
 # ═══════════════════════════════════════════════════════════════════════════
 
-def _generar_svg_artistico(prompt: str, style: str, size: str, seed: int = 0) -> dict:
-    """
-    Genera arte visual único basado en el prompt usando SVG puro.
-    No requiere ninguna dependencia externa.
-    El resultado es determinístico: mismo prompt = misma imagen.
-    """
-    # Seed determinístico basado en el prompt
-    hash_val  = int(hashlib.md5((prompt + str(seed)).encode()).hexdigest(), 16)
-    rng_state = hash_val
+def _engine_svg(prompt: str, style: str, W: int, H: int, seed: int) -> dict:
+    """Genera arte vectorial SVG puro según el estilo."""
+    rng      = _rng_factory(seed)
+    palette  = _detect_palette(prompt)
 
-    def rng():
-        nonlocal rng_state
-        rng_state = (rng_state * 1103515245 + 12345) & 0x7fffffff
-        return rng_state / 0x7fffffff
+    generators = {
+        'landscape': _svg_landscape,
+        'fantasy':   _svg_landscape,
+        'cyberpunk': _svg_cyberpunk,
+        'abstract':  _svg_abstract,
+        'minimalist':_svg_minimalist,
+        'cartoon':   _svg_cartoon,
+        'space':     _svg_space,
+    }
 
-    # Parsear tamaño
-    partes = size.split('x')
-    W = int(partes[0]) if len(partes) == 2 else 512
-    H = int(partes[1]) if len(partes) == 2 else 512
+    # Mapeo de estilos a generadores
+    style_map = {
+        'cyberpunk': 'cyberpunk', 'abstract': 'abstract',
+        'minimalist': 'minimalist', 'cartoon': 'cartoon',
+        'fantasy': 'fantasy', 'landscape': 'landscape',
+    }
+    gen_key = style_map.get(style, 'landscape')
+    fn = generators.get(gen_key, _svg_landscape)
 
-    # Paleta de colores según temática del prompt
-    palette = _detectar_paleta(prompt)
-
-    # Generar SVG según estilo
-    if style == 'abstract':
-        svg_content = _svg_abstracto(W, H, palette, rng)
-    elif style == 'minimalist':
-        svg_content = _svg_minimalista(W, H, palette, rng)
-    elif style == 'cartoon':
-        svg_content = _svg_cartoon(W, H, palette, rng, prompt)
-    else:
-        # Por defecto: paisaje generativo
-        svg_content = _svg_paisaje(W, H, palette, rng)
-
-    # Convertir SVG a data URL
-    svg_b64 = base64.b64encode(svg_content.encode('utf-8')).decode('utf-8')
+    svg_str = fn(W, H, palette, rng)
+    b64     = base64.b64encode(svg_str.encode()).decode()
 
     return {
-        'url':      f"data:image/svg+xml;base64,{svg_b64}",
+        'url':      f"data:image/svg+xml;base64,{b64}",
         'type':     'svg',
-        'provider': 'generativo',
+        'provider': 'Cic_IA — Motor SVG',
+        'engine':   'svg',
         'size':     f"{W}x{H}",
-        'bytes':    len(svg_content)
     }
 
 
-def _detectar_paleta(prompt: str) -> list:
-    """Detecta la paleta apropiada según palabras clave del prompt."""
-    prompt_lower = prompt.lower()
-    keywords = {
-        'naturaleza': ['bosque', 'árbol', 'verde', 'naturaleza', 'forest', 'tree', 'nature', 'grass'],
-        'ciudad':     ['ciudad', 'urbano', 'building', 'city', 'urban', 'noche', 'night'],
-        'oceano':     ['mar', 'océano', 'agua', 'sea', 'ocean', 'water', 'playa', 'beach'],
-        'atardecer':  ['atardecer', 'amanecer', 'sunset', 'sunrise', 'sol', 'sun', 'naranja'],
-        'espacio':    ['espacio', 'galaxia', 'space', 'galaxy', 'stars', 'estrellas', 'cosmos'],
-    }
-    for theme, words in keywords.items():
-        if any(w in prompt_lower for w in words):
-            return THEME_PALETTES[theme]
-    return THEME_PALETTES['default']
+def _rgb(c): return f"rgb({c[0]},{c[1]},{c[2]})"
+def _hex(c): return '#{:02x}{:02x}{:02x}'.format(c[0],c[1],c[2])
 
-
-def _hex_to_rgb(hex_color: str) -> tuple:
-    h = hex_color.lstrip('#')
-    return tuple(int(h[i:i+2], 16) for i in (0, 2, 4))
-
-
-def _svg_paisaje(W: int, H: int, palette: list, rng) -> str:
-    """Genera un paisaje abstracto con capas de ondas."""
-    c1, c2, c3, c4, c5 = palette[:5]
-
-    # Generar puntos para polígonos de paisaje
-    layers = []
-    for layer_idx in range(4):
-        base_y = H * (0.4 + layer_idx * 0.15)
-        points = []
-        num_points = 12
-        for j in range(num_points + 2):
-            x = W * j / (num_points + 1)
-            y = base_y + (rng() - 0.5) * H * 0.25
-            points.append(f"{x:.1f},{y:.1f}")
-        points.append(f"{W},{H}")
-        points.append(f"0,{H}")
-        pts_str = ' '.join(points)
-        color = palette[layer_idx % len(palette)]
-        opacity = 0.7 + layer_idx * 0.08
-        layers.append(f'<polygon points="{pts_str}" fill="{color}" opacity="{opacity:.2f}"/>')
-
-    # Círculo (sol/luna)
-    cx = W * (0.2 + rng() * 0.6)
-    cy = H * (0.1 + rng() * 0.25)
-    cr = W * (0.06 + rng() * 0.08)
-    sun_color = palette[-1]
-
-    # Estrellas/partículas
-    particles = []
-    for _ in range(30):
-        px = rng() * W
-        py = rng() * H * 0.5
-        pr = 1 + rng() * 2.5
-        particles.append(f'<circle cx="{px:.1f}" cy="{py:.1f}" r="{pr:.1f}" fill="white" opacity="{0.3+rng()*0.5:.2f}"/>')
-
-    svg = f'''<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" viewBox="0 0 {W} {H}">
-  <defs>
-    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="{c1}"/>
-      <stop offset="100%" stop-color="{c2}"/>
-    </linearGradient>
-    <filter id="blur"><feGaussianBlur stdDeviation="2"/></filter>
-  </defs>
-  <rect width="{W}" height="{H}" fill="url(#sky)"/>
-  {''.join(particles)}
-  <circle cx="{cx:.1f}" cy="{cy:.1f}" r="{cr*1.4:.1f}" fill="{sun_color}" opacity="0.3" filter="url(#blur)"/>
-  <circle cx="{cx:.1f}" cy="{cy:.1f}" r="{cr:.1f}" fill="{sun_color}" opacity="0.9"/>
-  {''.join(layers)}
-</svg>'''
-    return svg
-
-
-def _svg_abstracto(W: int, H: int, palette: list, rng) -> str:
-    """Genera arte abstracto con formas geométricas."""
-    shapes = []
-
-    # Fondo con gradiente
-    c1, c2 = palette[0], palette[1]
-
-    # Círculos grandes de fondo
-    for _ in range(6):
-        cx   = rng() * W
-        cy   = rng() * H
-        r    = W * (0.1 + rng() * 0.35)
-        col  = palette[int(rng() * len(palette))]
-        op   = 0.15 + rng() * 0.4
-        shapes.append(f'<circle cx="{cx:.1f}" cy="{cy:.1f}" r="{r:.1f}" fill="{col}" opacity="{op:.2f}"/>')
-
-    # Líneas diagonales
-    for _ in range(15):
-        x1   = rng() * W
-        y1   = rng() * H
-        x2   = rng() * W
-        y2   = rng() * H
-        col  = palette[int(rng() * len(palette))]
-        sw   = 1 + rng() * 4
-        op   = 0.3 + rng() * 0.5
-        shapes.append(f'<line x1="{x1:.1f}" y1="{y1:.1f}" x2="{x2:.1f}" y2="{y2:.1f}" stroke="{col}" stroke-width="{sw:.1f}" opacity="{op:.2f}"/>')
-
-    # Triángulos
-    for _ in range(8):
-        cx   = rng() * W
-        cy   = rng() * H
-        s    = W * (0.05 + rng() * 0.12)
-        col  = palette[int(rng() * len(palette))]
-        op   = 0.4 + rng() * 0.4
-        pts  = f"{cx:.1f},{cy-s:.1f} {cx-s:.1f},{cy+s:.1f} {cx+s:.1f},{cy+s:.1f}"
-        shapes.append(f'<polygon points="{pts}" fill="{col}" opacity="{op:.2f}"/>')
-
-    # Círculos pequeños de detalle
-    for _ in range(20):
-        cx   = rng() * W
-        cy   = rng() * H
-        r    = 3 + rng() * 12
-        col  = palette[int(rng() * len(palette))]
-        shapes.append(f'<circle cx="{cx:.1f}" cy="{cy:.1f}" r="{r:.1f}" fill="{col}" opacity="0.7"/>')
-
-    svg = f'''<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" viewBox="0 0 {W} {H}">
-  <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="{c1}"/>
-      <stop offset="100%" stop-color="{c2}"/>
-    </linearGradient>
-    <filter id="glow"><feGaussianBlur stdDeviation="3" result="blur"/>
-      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
-    </filter>
-  </defs>
-  <rect width="{W}" height="{H}" fill="url(#bg)"/>
-  {''.join(shapes)}
-</svg>'''
-    return svg
-
-
-def _svg_minimalista(W: int, H: int, palette: list, rng) -> str:
-    """Genera composición minimalista."""
-    bg    = '#f8f9fa'
-    c1    = palette[0]
-    c2    = palette[2] if len(palette) > 2 else palette[0]
-
-    shapes = []
-    # Rectángulos de bloque color
-    for i in range(3):
-        x    = W * (0.1 + rng() * 0.3)
-        y    = H * (0.1 + rng() * 0.6)
-        w    = W * (0.1 + rng() * 0.25)
-        h    = H * (0.05 + rng() * 0.3)
-        col  = palette[i % len(palette)]
-        shapes.append(f'<rect x="{x:.1f}" y="{y:.1f}" width="{w:.1f}" height="{h:.1f}" fill="{col}" rx="4"/>')
-
-    # Círculo central
-    cx = W * (0.3 + rng() * 0.4)
-    cy = H * (0.3 + rng() * 0.4)
-    cr = W * (0.08 + rng() * 0.1)
-    shapes.append(f'<circle cx="{cx:.1f}" cy="{cy:.1f}" r="{cr:.1f}" fill="{c2}" opacity="0.8"/>')
-
-    # Línea horizontal
-    y_line = H * (0.5 + rng() * 0.3)
-    shapes.append(f'<line x1="{W*0.1:.1f}" y1="{y_line:.1f}" x2="{W*0.9:.1f}" y2="{y_line:.1f}" stroke="{c1}" stroke-width="1.5" opacity="0.4"/>')
-
-    svg = f'''<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" viewBox="0 0 {W} {H}">
-  <rect width="{W}" height="{H}" fill="{bg}"/>
-  {''.join(shapes)}
-</svg>'''
-    return svg
-
-
-def _svg_cartoon(W: int, H: int, palette: list, rng, prompt: str) -> str:
-    """Genera una escena cartoon simple."""
-    cielo  = '#87CEEB'
-    tierra = '#90EE90'
-    c1     = palette[0]
-    c2     = palette[2] if len(palette) > 2 else palette[1]
-
-    # Sol
-    sx = W * 0.8
-    sy = H * 0.15
-    sr = W * 0.08
+def _svg_landscape(W, H, palette, rng):
+    c1,c2,c3,c4,c5 = [_hex(c) for c in palette[:5]]
+    # Cielo con degradado simulado via rectángulos
+    sky_layers = ''
+    sky_steps = 8
+    for i in range(sky_steps):
+        y  = H * i / sky_steps
+        h  = H / sky_steps + 1
+        a  = 0.15 + (1 - i/sky_steps) * 0.85
+        sky_layers += f'<rect x="0" y="{y:.1f}" width="{W}" height="{h:.1f}" fill="{c1}" opacity="{a:.2f}"/>'
 
     # Nubes
-    nubes = []
-    for i in range(3):
-        nx = W * (0.1 + i * 0.3 + rng() * 0.1)
-        ny = H * (0.1 + rng() * 0.2)
-        nr = W * (0.05 + rng() * 0.06)
-        nubes.append(f'<ellipse cx="{nx:.1f}" cy="{ny:.1f}" rx="{nr*1.8:.1f}" ry="{nr:.1f}" fill="white" opacity="0.9"/>')
-        nubes.append(f'<ellipse cx="{nx+nr*0.8:.1f}" cy="{ny-nr*0.3:.1f}" rx="{nr:.1f}" ry="{nr*0.8:.1f}" fill="white" opacity="0.9"/>')
+    clouds = ''
+    for _ in range(int(rng(3,7))):
+        cx, cy = W*rng(0.1,0.9), H*rng(0.05,0.35)
+        for j in range(int(rng(3,6))):
+            rx = W*rng(0.04,0.10)
+            ry = rx*rng(0.45,0.7)
+            ox = rx*rng(-1.2,1.2)
+            oy = ry*rng(-0.5,0.5)
+            clouds += f'<ellipse cx="{cx+ox:.1f}" cy="{cy+oy:.1f}" rx="{rx:.1f}" ry="{ry:.1f}" fill="white" opacity="{rng(0.4,0.85):.2f}"/>'
 
-    # Árbol simple
-    def arbol(ax, ay, escala):
-        h_tronco = H * 0.12 * escala
-        w_tronco = W * 0.025 * escala
-        r_copa   = W * 0.07 * escala
-        return [
-            f'<rect x="{ax-w_tronco/2:.1f}" y="{ay-h_tronco:.1f}" width="{w_tronco:.1f}" height="{h_tronco:.1f}" fill="#8B4513"/>',
-            f'<circle cx="{ax:.1f}" cy="{ay-h_tronco:.1f}" r="{r_copa:.1f}" fill="{c1}"/>',
-            f'<circle cx="{ax-r_copa*0.5:.1f}" cy="{ay-h_tronco*0.7:.1f}" r="{r_copa*0.8:.1f}" fill="{c2}" opacity="0.7"/>',
+    # Capas de terreno
+    layers = ''
+    for li in range(5):
+        base_y = H * (0.38 + li * 0.13)
+        pts = []
+        for j in range(20):
+            x = W * j / 19
+            y = base_y + (rng(-0.5,0.5)) * H * 0.12
+            pts.append(f"{x:.1f},{y:.1f}")
+        pts += [f"{W},{H}", f"0,{H}"]
+        col = _hex(palette[li % 5])
+        op  = 0.55 + li * 0.09
+        layers += f'<polygon points="{" ".join(pts)}" fill="{col}" opacity="{op:.2f}"/>'
+
+    # Sol / luna
+    sx, sy = W*rng(0.15,0.85), H*rng(0.06,0.22)
+    sr = W * rng(0.04, 0.09)
+    glow = f'<circle cx="{sx:.1f}" cy="{sy:.1f}" r="{sr*1.8:.1f}" fill="{c5}" opacity="0.2"/>'
+    sun  = f'<circle cx="{sx:.1f}" cy="{sy:.1f}" r="{sr:.1f}" fill="{c5}" opacity="0.95"/>'
+
+    # Partículas (estrellas o polvo)
+    pts_svg = ''
+    for _ in range(40):
+        px,py = W*rng(),H*rng(0,0.45)
+        pr = rng(0.8,2.5)
+        pts_svg += f'<circle cx="{px:.1f}" cy="{py:.1f}" r="{pr:.1f}" fill="white" opacity="{rng(0.1,0.6):.2f}"/>'
+
+    return f'<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" viewBox="0 0 {W} {H}">{sky_layers}{pts_svg}{clouds}{glow}{sun}{layers}</svg>'
+
+
+def _svg_cyberpunk(W, H, palette, rng):
+    bg = _hex(palette[0])
+    lines_svg = ''
+    # Líneas de horizonte
+    for i in range(int(rng(20,35))):
+        y  = H * rng(0.3, 0.9)
+        x1 = W * rng(0,0.4)
+        x2 = W * rng(0.6,1.0)
+        col = _hex(palette[int(rng(1,5))])
+        sw  = rng(0.5, 2.5)
+        lines_svg += f'<line x1="{x1:.1f}" y1="{y:.1f}" x2="{x2:.1f}" y2="{y:.1f}" stroke="{col}" stroke-width="{sw:.1f}" opacity="{rng(0.3,0.9):.2f}"/>'
+
+    # Edificios
+    buildings = ''
+    num_b = int(rng(8,15))
+    for i in range(num_b):
+        bw = W * rng(0.04, 0.10)
+        bh = H * rng(0.15, 0.55)
+        bx = W * i / num_b + rng(-0.01,0.01)*W
+        by = H - bh
+        col = _hex(palette[int(rng(0,3))])
+        buildings += f'<rect x="{bx:.1f}" y="{by:.1f}" width="{bw:.1f}" height="{bh:.1f}" fill="{col}" opacity="0.85"/>'
+        # Ventanas
+        for wi in range(int(bh/20)):
+            for wj in range(int(bw/12)):
+                if rng() > 0.45:
+                    wx = bx + wj*11 + 3
+                    wy = by + wi*18 + 5
+                    wc = _hex(palette[int(rng(1,5))])
+                    buildings += f'<rect x="{wx:.1f}" y="{wy:.1f}" width="7" height="10" fill="{wc}" opacity="{rng(0.5,1.0):.2f}"/>'
+
+    # Reflejo en suelo
+    floor_y = H * 0.8
+    floor_h = H * 0.2
+    reflect = f'<rect x="0" y="{floor_y:.1f}" width="{W}" height="{floor_h:.1f}" fill="{_hex(palette[1])}" opacity="0.35"/>'
+
+    return f'<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" viewBox="0 0 {W} {H}"><rect width="{W}" height="{H}" fill="{bg}"/>{lines_svg}{buildings}{reflect}</svg>'
+
+
+def _svg_abstract(W, H, palette, rng):
+    c1,c2 = _hex(palette[0]), _hex(palette[1])
+    shapes = ''
+    # Círculos grandes
+    for _ in range(8):
+        cx,cy = W*rng(),H*rng()
+        r     = W*rng(0.05,0.3)
+        col   = _hex(palette[int(rng(0,5))])
+        shapes += f'<circle cx="{cx:.1f}" cy="{cy:.1f}" r="{r:.1f}" fill="{col}" opacity="{rng(0.08,0.35):.2f}"/>'
+    # Líneas
+    for _ in range(20):
+        x1,y1,x2,y2 = W*rng(),H*rng(),W*rng(),H*rng()
+        col = _hex(palette[int(rng(0,5))])
+        sw  = rng(0.5,5)
+        shapes += f'<line x1="{x1:.1f}" y1="{y1:.1f}" x2="{x2:.1f}" y2="{y2:.1f}" stroke="{col}" stroke-width="{sw:.1f}" opacity="{rng(0.2,0.7):.2f}"/>'
+    # Polígonos
+    for _ in range(12):
+        cx,cy = W*rng(),H*rng()
+        s     = W*rng(0.03,0.12)
+        n     = int(rng(3,8))
+        pts   = ' '.join(f"{cx+s*math.cos(2*math.pi*k/n):.1f},{cy+s*math.sin(2*math.pi*k/n):.1f}" for k in range(n))
+        col   = _hex(palette[int(rng(0,5))])
+        shapes += f'<polygon points="{pts}" fill="{col}" opacity="{rng(0.3,0.75):.2f}"/>'
+    # Círculos pequeños
+    for _ in range(30):
+        cx,cy = W*rng(),H*rng()
+        r     = rng(2,10)
+        col   = _hex(palette[int(rng(0,5))])
+        shapes += f'<circle cx="{cx:.1f}" cy="{cy:.1f}" r="{r:.1f}" fill="{col}" opacity="0.8"/>'
+
+    return f'<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" viewBox="0 0 {W} {H}"><rect width="{W}" height="{H}" fill="{c1}"/><rect width="{W}" height="{H}" fill="{c2}" opacity="0.4"/>{shapes}</svg>'
+
+
+def _svg_minimalist(W, H, palette, rng):
+    c1,c2 = _hex(palette[0]), _hex(palette[2] if len(palette)>2 else palette[0])
+    shapes = ''
+    for i in range(int(rng(2,5))):
+        x,y = W*rng(0.05,0.45), H*rng(0.05,0.7)
+        w,h = W*rng(0.08,0.22), H*rng(0.04,0.28)
+        col = _hex(palette[i % len(palette)])
+        shapes += f'<rect x="{x:.1f}" y="{y:.1f}" width="{w:.1f}" height="{h:.1f}" fill="{col}" rx="6" opacity="0.9"/>'
+    cx,cy,cr = W*rng(0.25,0.75), H*rng(0.2,0.7), W*rng(0.07,0.14)
+    shapes += f'<circle cx="{cx:.1f}" cy="{cy:.1f}" r="{cr:.1f}" fill="{c2}" opacity="0.8"/>'
+    yl = H*rng(0.4,0.75)
+    shapes += f'<line x1="{W*0.08:.1f}" y1="{yl:.1f}" x2="{W*0.92:.1f}" y2="{yl:.1f}" stroke="{c1}" stroke-width="1.5" opacity="0.4"/>'
+    return f'<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" viewBox="0 0 {W} {H}"><rect width="{W}" height="{H}" fill="#f7f8fc"/>{shapes}</svg>'
+
+
+def _svg_cartoon(W, H, palette, rng):
+    c1,c2 = _hex(palette[0]), _hex(palette[2] if len(palette)>2 else palette[1])
+    sky_h  = H * 0.72
+    nubes  = ''
+    for i in range(int(rng(2,5))):
+        nx,ny = W*rng(0.05,0.9), H*rng(0.05,0.25)
+        nr    = W*rng(0.04,0.08)
+        for j in range(int(rng(3,5))):
+            ox,oy = nr*rng(-1.4,1.4), nr*rng(-0.4,0.4)
+            rx2   = nr*rng(0.6,1.1)
+            nubes += f'<ellipse cx="{nx+ox:.1f}" cy="{ny+oy:.1f}" rx="{rx2:.1f}" ry="{rx2*0.65:.1f}" fill="white" opacity="0.95"/>'
+    arboles = ''
+    for i in range(int(rng(3,6))):
+        ax  = W*(0.08 + i*0.18 + rng(-0.02,0.02))
+        ay  = sky_h
+        esc = rng(0.6,1.2)
+        ht  = H*0.13*esc; wt = W*0.025*esc; rc = W*0.07*esc
+        arboles += (f'<rect x="{ax-wt/2:.1f}" y="{ay-ht:.1f}" width="{wt:.1f}" height="{ht:.1f}" fill="#8B4513"/>'
+                   +f'<circle cx="{ax:.1f}" cy="{ay-ht:.1f}" r="{rc:.1f}" fill="{c1}"/>'
+                   +f'<circle cx="{ax-rc*0.5:.1f}" cy="{ay-ht*0.65:.1f}" r="{rc*0.78:.1f}" fill="{c2}" opacity="0.8"/>')
+    sx,sy,sr = W*0.82, H*0.13, W*0.07
+    return f'''<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" viewBox="0 0 {W} {H}">
+<rect width="{W}" height="{sky_h:.1f}" fill="#87CEEB"/>
+<rect y="{sky_h:.1f}" width="{W}" height="{H-sky_h:.1f}" fill="#90EE90"/>
+<circle cx="{sx}" cy="{sy}" r="{sr*1.4:.1f}" fill="#FFD700" opacity="0.3"/>
+<circle cx="{sx}" cy="{sy}" r="{sr:.1f}" fill="#FFD700"/>
+{nubes}{arboles}</svg>'''
+
+
+def _svg_space(W, H, palette, rng):
+    stars = ''
+    for _ in range(200):
+        sx,sy = W*rng(),H*rng()
+        sr    = rng(0.5,2.5)
+        sa    = rng(0.3,1.0)
+        stars += f'<circle cx="{sx:.1f}" cy="{sy:.1f}" r="{sr:.1f}" fill="white" opacity="{sa:.2f}"/>'
+    # Nebulosas
+    nebulas = ''
+    for i in range(int(rng(3,6))):
+        nx,ny = W*rng(0.1,0.9), H*rng(0.1,0.9)
+        nr    = W*rng(0.06,0.2)
+        col   = _hex(palette[int(rng(1,5))])
+        nebulas += f'<ellipse cx="{nx:.1f}" cy="{ny:.1f}" rx="{nr:.1f}" ry="{nr*rng(0.4,0.9):.1f}" fill="{col}" opacity="{rng(0.06,0.18):.2f}"/>'
+    # Planeta
+    px,py = W*rng(0.2,0.8), H*rng(0.15,0.75)
+    pr    = W*rng(0.05,0.12)
+    pc    = _hex(palette[int(rng(1,5))])
+    ring_w = pr*rng(1.6,2.2)
+    return f'''<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" viewBox="0 0 {W} {H}">
+<rect width="{W}" height="{H}" fill="#050816"/>
+{stars}{nebulas}
+<ellipse cx="{px:.1f}" cy="{py:.1f}" rx="{ring_w:.1f}" ry="{pr*0.25:.1f}" fill="none" stroke="{pc}" stroke-width="{pr*0.12:.1f}" opacity="0.6"/>
+<circle cx="{px:.1f}" cy="{py:.1f}" r="{pr:.1f}" fill="{pc}" opacity="0.92"/>
+<ellipse cx="{px:.1f}" cy="{py:.1f}" rx="{ring_w:.1f}" ry="{pr*0.25:.1f}" fill="none" stroke="{pc}" stroke-width="{pr*0.06:.1f}" opacity="0.3"/>
+</svg>'''
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# MOTOR 2 — PIL / NumPy (píxeles reales, texturas, efectos)
+# ═══════════════════════════════════════════════════════════════════════════
+
+def _engine_pil(prompt: str, style: str, W: int, H: int, seed: int, quality: str) -> dict:
+    """Genera imágenes en píxeles usando PIL y NumPy."""
+    palette = _detect_palette(prompt)
+    rng     = _rng_factory(seed)
+    np.random.seed(seed % (2**31))
+
+    generators = {
+        'realistic': _pil_realistic,
+        'artistic':  _pil_artistic,
+        'anime':     _pil_anime,
+        'sketch':    _pil_sketch,
+        '3d':        _pil_3d,
+        'space':     _pil_space,
+    }
+    fn  = generators.get(style, _pil_artistic)
+    img = fn(W, H, palette, rng)
+
+    # Post-proceso
+    img = _postprocess(img, quality)
+
+    return {
+        'url':      f"data:image/png;base64,{_pil_to_b64(img, quality)}",
+        'type':     'base64',
+        'provider': 'Cic_IA — Motor PIL',
+        'engine':   'pil',
+        'size':     f"{W}x{H}",
+    }
+
+
+def _pil_realistic(W, H, palette, rng) -> Image.Image:
+    """Paisaje fotorrealista con ruido y capas de gradiente."""
+    img  = Image.new('RGB', (W, H))
+    pix  = img.load()
+    c1, c2, c3, c4, c5 = palette[:5]
+
+    # Cielo: gradiente vertical con ruido Perlin-like
+    noise = np.random.normal(0, 4, (H, W, 3)).astype(np.float32)
+
+    for y in range(H):
+        t = y / H
+        # Interpolación cielo→horizonte
+        if t < 0.5:
+            r = int(c1[0]*(1-t*2) + c2[0]*t*2 + noise[y,:,0].mean())
+            g = int(c1[1]*(1-t*2) + c2[1]*t*2 + noise[y,:,1].mean())
+            b = int(c1[2]*(1-t*2) + c2[2]*t*2 + noise[y,:,2].mean())
+        else:
+            t2 = (t-0.5)*2
+            r  = int(c3[0]*(1-t2) + c4[0]*t2)
+            g  = int(c3[1]*(1-t2) + c4[1]*t2)
+            b_ = int(c3[2]*(1-t2) + c4[2]*t2)
+            r,g,b = r,g,b_
+        for x in range(W):
+            nr = int(noise[y,x,0]*0.5)
+            ng = int(noise[y,x,1]*0.5)
+            nb = int(noise[y,x,2]*0.5)
+            pix[x,y] = (
+                max(0,min(255,r+nr)),
+                max(0,min(255,g+ng)),
+                max(0,min(255,b+nb)),
+            )
+
+    # Terreno con ruido
+    terrain_arr = np.array(img, dtype=np.float32)
+    horizon = int(H * 0.55)
+    ground_noise = np.random.normal(0, 12, (H-horizon, W, 3))
+    terrain_arr[horizon:] = np.clip(
+        terrain_arr[horizon:] * 0.6 + [[c4]] * (H-horizon) + ground_noise * 0.4, 0, 255
+    )
+    img = Image.fromarray(terrain_arr.astype(np.uint8))
+
+    # Aplicar blur suave para cohesión
+    img = img.filter(ImageFilter.GaussianBlur(radius=1.2))
+
+    # Sol/luna difuso
+    draw = ImageDraw.Draw(img)
+    sx, sy = int(W * rng(0.15,0.85)), int(H * rng(0.06,0.22))
+    sr = int(W * rng(0.04, 0.09))
+    for r_offset in range(sr*3, 0, -3):
+        alpha_f = (1 - r_offset/(sr*3)) * 0.25
+        col     = tuple(int(c * alpha_f + 255*(1-alpha_f)) for c in c5)
+        draw.ellipse([sx-r_offset, sy-r_offset, sx+r_offset, sy+r_offset], fill=col)
+    draw.ellipse([sx-sr, sy-sr, sx+sr, sy+sr], fill=c5)
+
+    return img
+
+
+def _pil_artistic(W, H, palette, rng) -> Image.Image:
+    """Arte pictórico con pinceladas simuladas."""
+    # Base con ruido de color
+    arr  = np.zeros((H, W, 3), dtype=np.float32)
+    c1, c2, c3, c4, c5 = palette[:5]
+
+    # Capa base: gradiente diagonal
+    for y in range(H):
+        for x_chunk in range(0, W, 32):
+            t  = (y/H + x_chunk/W) / 2
+            c  = [int(c1[i]*(1-t) + c2[i]*t) for i in range(3)]
+            arr[y, x_chunk:x_chunk+32] = c
+
+    # Pinceladas: elipses de colores de la paleta
+    img  = Image.fromarray(arr.astype(np.uint8))
+    draw = ImageDraw.Draw(img, 'RGBA')
+    num_strokes = int(rng(80, 180))
+    for _ in range(num_strokes):
+        bx   = int(W * rng())
+        by   = int(H * rng())
+        bw   = int(W * rng(0.02, 0.14))
+        bh   = int(bw * rng(0.2, 0.5))
+        col  = palette[int(rng(0, len(palette)-0.01))]
+        alpha= int(rng(80, 200))
+        angle= rng(0, 360)
+        # Simular ángulo con transformación manual
+        draw.ellipse([bx-bw, by-bh, bx+bw, by+bh], fill=(*col, alpha))
+
+    img = img.convert('RGB')
+    img = img.filter(ImageFilter.SMOOTH)
+    return img
+
+
+def _pil_anime(W, H, palette, rng) -> Image.Image:
+    """Estilo anime: colores planos, cel-shading, contornos."""
+    img  = Image.new('RGB', (W, H), color=palette[0])
+    draw = ImageDraw.Draw(img)
+    c1,c2,c3,c4,c5 = palette[:5]
+
+    # Cielo plano
+    sky_h = int(H * 0.6)
+    draw.rectangle([0,0,W,sky_h], fill=c1)
+    # Gradiente de cielo simplificado (bandas)
+    for i in range(8):
+        y_band = sky_h * i // 8
+        h_band = sky_h // 8
+        t      = i / 8
+        col    = tuple(int(c1[j]*(1-t) + c2[j]*t) for j in range(3))
+        draw.rectangle([0,y_band,W,y_band+h_band], fill=col)
+
+    # Suelo/mar plano
+    draw.rectangle([0,sky_h,W,H], fill=c3)
+
+    # Figuras geométricas limpias (estilo anime: cel-shaded)
+    # Montañas o edificios estilizados
+    for i in range(int(rng(3,6))):
+        mx = int(W * (0.1 + i*0.18 + rng(-0.05,0.05)))
+        mh = int(H * rng(0.18, 0.42))
+        mw = int(W * rng(0.10, 0.20))
+        col = palette[i % len(palette)]
+        shadow = tuple(max(0,c-40) for c in col)
+        # Triángulo montaña
+        pts = [(mx-mw, sky_h), (mx, sky_h-mh), (mx+mw, sky_h)]
+        draw.polygon(pts, fill=col)
+        # Sombra lateral
+        shadow_pts = [(mx, sky_h-mh), (mx+mw, sky_h), (mx+mw//2, sky_h-mh//3)]
+        draw.polygon(shadow_pts, fill=shadow)
+
+    # Sol grande estilo anime
+    sx,sy = int(W*rng(0.6,0.85)), int(H*rng(0.08,0.2))
+    sr    = int(W*0.07)
+    draw.ellipse([sx-sr,sy-sr,sx+sr,sy+sr], fill=c5)
+    draw.ellipse([sx-sr+3,sy-sr+3,sx+sr-3,sy+sr-3], fill=tuple(min(255,c+40) for c in c5))
+
+    # Contorno oscuro (cel-shading)
+    img2 = img.filter(ImageFilter.FIND_EDGES)
+    arr  = np.array(img)
+    arr2 = np.array(img2)
+    mask = arr2 > 20
+    arr[mask] = [20,20,40]
+    img = Image.fromarray(arr)
+
+    return img
+
+
+def _pil_sketch(W, H, palette, rng) -> Image.Image:
+    """Boceto a lápiz: blanco y negro con texturas."""
+    # Base blanca con textura de papel
+    paper_noise = np.random.normal(245, 8, (H, W, 3)).clip(220, 255).astype(np.uint8)
+    img  = Image.fromarray(paper_noise)
+    draw = ImageDraw.Draw(img)
+
+    # Líneas de boceto: rectángulos, elipses, líneas cruzadas
+    for _ in range(int(rng(20,50))):
+        x1,y1 = int(W*rng()), int(H*rng())
+        x2,y2 = int(W*rng()), int(H*rng())
+        shade = int(rng(10,90))
+        draw.line([x1,y1,x2,y2], fill=(shade,shade,shade), width=int(rng(1,3)))
+
+    for _ in range(int(rng(15,30))):
+        cx,cy = int(W*rng()), int(H*rng())
+        rx    = int(W*rng(0.02,0.15))
+        ry    = int(rx*rng(0.3,1.2))
+        shade = int(rng(20,120))
+        draw.ellipse([cx-rx,cy-ry,cx+rx,cy+ry], outline=(shade,shade,shade), width=int(rng(1,3)))
+
+    # Sombreado: líneas paralelas
+    for _ in range(int(rng(8,20))):
+        x0    = int(W*rng(0,0.8))
+        y0    = int(H*rng())
+        length= int(W*rng(0.05,0.3))
+        shade = int(rng(60,160))
+        for k in range(int(rng(5,15))):
+            y_off = y0 + k*int(rng(3,8))
+            if y_off < H:
+                draw.line([x0, y_off, x0+length, y_off+int(rng(-4,4))], fill=(shade,shade,shade), width=1)
+
+    img = img.filter(ImageFilter.SHARPEN)
+    return img
+
+
+def _pil_3d(W, H, palette, rng) -> Image.Image:
+    """Render 3D simplificado: esferas y superficies con iluminación."""
+    arr = np.zeros((H, W, 3), dtype=np.float32)
+    c1  = np.array(palette[0], dtype=np.float32)
+    c2  = np.array(palette[2], dtype=np.float32)
+
+    # Fondo: gradiente oscuro
+    for y in range(H):
+        t = y / H
+        arr[y] = c1 * (1-t) * 0.3 + c2 * t * 0.15
+
+    # Superficie plana reflectante
+    floor_y   = int(H * 0.65)
+    floor_col = np.array(palette[1], dtype=np.float32) * 0.6
+    arr[floor_y:] = floor_col
+
+    img  = Image.fromarray(arr.astype(np.uint8))
+    draw = ImageDraw.Draw(img)
+
+    # Esferas con sombreado por raycast simplificado
+    light = np.array([0.6, -0.8, 0.5])
+    light = light / np.linalg.norm(light)
+
+    spheres = []
+    for _ in range(int(rng(2,5))):
+        sx = int(W * rng(0.15, 0.85))
+        sy = int(floor_y * rng(0.3, 0.85))
+        sr = int(W * rng(0.04, 0.12))
+        sc = palette[int(rng(0, len(palette)-0.01))]
+        spheres.append((sx, sy, sr, sc))
+
+    # Dibujar esferas con iluminación
+    for (sx, sy, sr, sc) in spheres:
+        for px in range(max(0,sx-sr), min(W,sx+sr)):
+            for py in range(max(0,sy-sr), min(H,sy+sr)):
+                dx = (px-sx)/sr; dy = (py-sy)/sr
+                dist2 = dx*dx + dy*dy
+                if dist2 <= 1.0:
+                    dz  = math.sqrt(max(0, 1.0 - dist2))
+                    n   = np.array([dx, dy, dz])
+                    diff= max(0.0, float(np.dot(n, light)))
+                    amb = 0.25
+                    int_= min(1.0, amb + diff * 0.8 + diff**6 * 0.4)
+                    col = tuple(int(min(255, sc[i]*int_)) for i in range(3))
+                    img.putpixel((px, py), col)
+
+    # Sombras suaves en el suelo
+    for (sx, sy, sr, sc) in spheres:
+        shadow_a = 0.35
+        for px in range(max(0,sx-sr*2), min(W,sx+sr*2)):
+            for py in range(max(0,floor_y), min(H,floor_y+sr)):
+                dx  = (px-sx)/(sr*1.4); dy = (py-floor_y)/(sr*0.5)
+                if dx*dx+dy*dy <= 1.0:
+                    pix = img.getpixel((px,py))
+                    img.putpixel((px,py), tuple(int(c*(1-shadow_a)) for c in pix))
+
+    return img
+
+
+def _pil_space(W, H, palette, rng) -> Image.Image:
+    """Espacio: fondo oscuro, nebulosas difusas, estrellas."""
+    arr = np.zeros((H, W, 3), dtype=np.float32)
+    arr[:] = [5, 5, 15]  # fondo muy oscuro
+
+    # Nebulosas con ruido gaussiano coloreado
+    for _ in range(int(rng(3,7))):
+        nx, ny = int(W*rng()), int(H*rng())
+        nr     = int(W * rng(0.1, 0.35))
+        col    = np.array(palette[int(rng(0, len(palette)-0.01))], dtype=np.float32)
+        Y, X   = np.ogrid[:H, :W]
+        dist   = np.sqrt((X-nx)**2 + (Y-ny)**2)
+        mask   = np.exp(-dist**2 / (2*(nr*0.4)**2))
+        for c in range(3):
+            arr[:,:,c] += mask * col[c] * rng(0.06, 0.18)
+
+    arr = np.clip(arr, 0, 255)
+    img = Image.fromarray(arr.astype(np.uint8))
+
+    # Estrellas como puntos blancos
+    draw = ImageDraw.Draw(img)
+    for _ in range(int(rng(200,400))):
+        sx, sy = int(W*rng()), int(H*rng())
+        br     = rng(0.3, 1.0)
+        col    = tuple(int(br*255) for _ in range(3))
+        sr     = rng(0, 1)
+        if sr > 0.5:
+            draw.ellipse([sx-1,sy-1,sx+1,sy+1], fill=col)
+        else:
+            img.putpixel((sx,sy), col)
+
+    # Planeta grande
+    px,py = int(W*rng(0.2,0.8)), int(H*rng(0.15,0.75))
+    pr    = int(W*rng(0.06,0.14))
+    pc    = palette[int(rng(0,len(palette)-0.01))]
+    draw.ellipse([px-pr,py-pr,px+pr,py+pr], fill=pc)
+    # Brillo especular
+    draw.ellipse([px-pr//3,py-pr//2,px+pr//6,py-pr//6], fill=tuple(min(255,c+80) for c in pc))
+
+    return img
+
+
+def _postprocess(img: Image.Image, quality: str) -> Image.Image:
+    """Mejoras básicas de post-proceso."""
+    if quality == 'hd':
+        img = ImageEnhance.Sharpness(img).enhance(1.4)
+        img = ImageEnhance.Contrast(img).enhance(1.15)
+        img = ImageEnhance.Color(img).enhance(1.1)
+    else:
+        img = ImageEnhance.Contrast(img).enhance(1.05)
+        img = ImageEnhance.Color(img).enhance(1.05)
+    return img
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# MOTOR 3 — FRACTAL (Mandelbrot, Julia sets)
+# ═══════════════════════════════════════════════════════════════════════════
+
+def _engine_fractal(prompt: str, W: int, H: int, seed: int) -> dict:
+    """Genera arte fractal matemático."""
+    palette = _detect_palette(prompt)
+    rng     = _rng_factory(seed)
+    np.random.seed(seed % (2**31))
+
+    fractal_type = 'julia' if rng() > 0.4 else 'mandelbrot'
+    if fractal_type == 'julia':
+        img = _fractal_julia(W, H, palette, rng)
+    else:
+        img = _fractal_mandelbrot(W, H, palette)
+
+    img = _postprocess(img, 'standard')
+
+    return {
+        'url':      f"data:image/png;base64,{_pil_to_b64(img)}",
+        'type':     'base64',
+        'provider': 'Cic_IA — Motor Fractal',
+        'engine':   'fractal',
+        'size':     f"{W}x{H}",
+    }
+
+
+def _fractal_mandelbrot(W: int, H: int, palette: list) -> Image.Image:
+    """Conjunto de Mandelbrot en NumPy (vectorizado)."""
+    MAX_ITER = 120
+    zoom, cx, cy = 1.0, -0.5, 0.0
+
+    x = np.linspace(-2.5/zoom + cx, 1.5/zoom + cx, W)
+    y = np.linspace(-1.5/zoom + cy, 1.5/zoom + cy, H)
+    C = x[np.newaxis,:] + 1j*y[:,np.newaxis]
+
+    Z       = np.zeros_like(C)
+    escaped = np.zeros(C.shape, dtype=np.float32)
+    mask    = np.ones(C.shape, dtype=bool)
+
+    for i in range(MAX_ITER):
+        Z[mask]       = Z[mask]**2 + C[mask]
+        newly_escaped = mask & (np.abs(Z) > 2)
+        escaped[newly_escaped] = i + 1 - np.log2(np.log2(np.abs(Z[newly_escaped]) + 1e-10))
+        mask[newly_escaped]    = False
+
+    # Colorear con paleta
+    norm  = escaped / MAX_ITER
+    arr   = np.zeros((H, W, 3), dtype=np.uint8)
+    n_col = len(palette)
+    for i, col in enumerate(palette):
+        lo = i / n_col; hi = (i+1) / n_col
+        m  = (norm >= lo) & (norm < hi)
+        t  = (norm[m] - lo) / (hi - lo + 1e-10)
+        nc = palette[(i+1) % n_col]
+        arr[m] = [
+            int(col[0]*(1-t.mean()) + nc[0]*t.mean()),
+            int(col[1]*(1-t.mean()) + nc[1]*t.mean()),
+            int(col[2]*(1-t.mean()) + nc[2]*t.mean()),
         ]
 
-    arboles = []
-    for i in range(4):
-        ax = W * (0.1 + i * 0.25 + rng() * 0.05)
-        ay = H * 0.75
-        escala = 0.7 + rng() * 0.6
-        arboles.extend(arbol(ax, ay, escala))
+    # Colorear pixel a pixel (más preciso)
+    idx   = (norm * (n_col-1)).astype(int)
+    idx   = np.clip(idx, 0, n_col-2)
+    t_map = (norm * (n_col-1)) - idx
+    for c in range(3):
+        col_lo = np.array([palette[i][c] for i in range(n_col-1)])[idx]
+        col_hi = np.array([palette[i][c] for i in range(1, n_col)])[idx]
+        arr[:,:,c] = np.clip(col_lo*(1-t_map) + col_hi*t_map, 0, 255).astype(np.uint8)
 
-    svg = f'''<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" viewBox="0 0 {W} {H}">
-  <!-- Cielo -->
-  <rect width="{W}" height="{H*0.75:.1f}" fill="{cielo}"/>
-  <!-- Tierra -->
-  <rect y="{H*0.75:.1f}" width="{W}" height="{H*0.25:.1f}" fill="{tierra}"/>
-  <!-- Sol -->
-  <circle cx="{sx:.1f}" cy="{sy:.1f}" r="{sr*1.3:.1f}" fill="#FFD700" opacity="0.3"/>
-  <circle cx="{sx:.1f}" cy="{sy:.1f}" r="{sr:.1f}" fill="#FFD700"/>
-  <!-- Nubes -->
-  {''.join(nubes)}
-  <!-- Árboles -->
-  {''.join(arboles)}
-</svg>'''
-    return svg
+    arr[escaped == 0] = [0,0,0]
+    return Image.fromarray(arr)
+
+
+def _fractal_julia(W: int, H: int, palette: list, rng) -> Image.Image:
+    """Julia set con constante aleatoria pero bonita."""
+    MAX_ITER = 100
+    # Constantes clásicas interesantes + variación aleatoria
+    c_options = [
+        (-0.7269+0.1889j), (-0.8+0.156j), (0.285+0.01j),
+        (-0.4+0.6j), (0.0+0.8j), (-0.7269+rng(-0.2,0.2)*1j),
+    ]
+    c   = c_options[int(rng(0, len(c_options)-0.01))]
+    zoom= rng(0.9, 1.4)
+
+    x   = np.linspace(-1.5/zoom, 1.5/zoom, W)
+    y   = np.linspace(-1.5/zoom, 1.5/zoom, H)
+    Z   = x[np.newaxis,:] + 1j*y[:,np.newaxis]
+
+    escaped = np.zeros(Z.shape, dtype=np.float32)
+    mask    = np.ones(Z.shape, dtype=bool)
+
+    for i in range(MAX_ITER):
+        Z[mask]       = Z[mask]**2 + c
+        newly_escaped = mask & (np.abs(Z) > 2)
+        escaped[newly_escaped] = i + 1
+        mask[newly_escaped]    = False
+
+    norm  = escaped / MAX_ITER
+    n_col = len(palette)
+    idx   = (norm * (n_col-1)).astype(int)
+    idx   = np.clip(idx, 0, n_col-2)
+    t_map = (norm * (n_col-1)) - idx
+
+    arr = np.zeros((H, W, 3), dtype=np.uint8)
+    for c_ch in range(3):
+        col_lo = np.array([palette[i][c_ch] for i in range(n_col-1)])[idx]
+        col_hi = np.array([palette[i][c_ch] for i in range(1, n_col)])[idx]
+        arr[:,:,c_ch] = np.clip(col_lo*(1-t_map)+col_hi*t_map, 0, 255).astype(np.uint8)
+
+    arr[escaped == 0] = [5, 5, 15]
+    return Image.fromarray(arr)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# FALLBACK — Pollinations.ai (gratis, sin API key)
+# ═══════════════════════════════════════════════════════════════════════════
+
+def _pollinations_fallback(prompt: str, W: int, H: int, seed: int = 0) -> dict | None:
+    try:
+        enc = urllib.parse.quote(prompt[:500])
+        url = f"https://image.pollinations.ai/prompt/{enc}?width={W}&height={H}&seed={seed}&nologo=true"
+        r   = requests.get(url, timeout=30, stream=True)
+        if r.status_code == 200 and 'image' in r.headers.get('Content-Type',''):
+            ct  = r.headers.get('Content-Type','image/jpeg')
+            b64 = base64.b64encode(r.content).decode()
+            return {'url': f"data:{ct};base64,{b64}", 'type': 'base64',
+                    'provider': 'Pollinations.ai (fallback)', 'size': f"{W}x{H}"}
+    except Exception as e:
+        logger.warning(f"[Pollinations fallback] {e}")
+    return None
