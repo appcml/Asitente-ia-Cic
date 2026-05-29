@@ -623,11 +623,10 @@ tr:hover td{background:rgba(91,141,238,.03);}
           <button class="btn btn-red btn-sm" onclick="clearMemPrompt()" style="margin-left:auto">🗑 Limpiar</button>
         </div>
         <div style="font-size:.73rem;color:var(--text2);margin-bottom:8px" id="memCount"></div>
-        <div class="table-wrap">
-          <table><thead><tr><th>Tema</th><th>Fuente</th><th>Score</th><th>Accesos</th><th>Fecha</th><th>Preview</th><th></th></tr></thead>
-          <tbody id="memTable"><tr><td colspan="7" style="text-align:center;color:var(--text2);padding:18px">Cargando...</td></tr></tbody></table>
+        <div id="memTable" style="display:flex;flex-direction:column;gap:8px">
+          <div style="text-align:center;color:var(--text2);padding:18px;font-size:.84rem">Cargando...</div>
         </div>
-        <div id="memPag" class="pagination"></div>
+        <div id="memPag" class="pagination" style="margin-top:12px"></div>
       </div>
 
       <!-- CONFIG -->
@@ -1235,38 +1234,63 @@ function closeSummaryWidget(){
 }
 function renderSuggestions(stats){
   const sug = [];
-  const mem    = stats.system?.total_memories||0;
-  const kb     = stats.system?.manual_knowledge||0;
-  const convs  = stats.system?.total_conversations||0;
-  const learned= stats.today?.auto_learned||0;
-  const prov   = stats.ai_config?.provider||'';
-  const hasGroq= stats.ai_config?.has_groq;
-  const hasAnt = stats.ai_config?.has_anthropic;
+  const mem     = stats.system?.total_memories||0;
+  const kb      = stats.system?.manual_knowledge||0;
+  const convs   = stats.system?.total_conversations||0;
+  const learned = stats.today?.auto_learned||0;
+  const todayMsgs = stats.today?.conversations||0;
+  const prov    = stats.ai_config?.provider||'';
+  const hasGroq = stats.ai_config?.has_groq;
+  const hasAnt  = stats.ai_config?.has_anthropic;
+  const weekActivity = stats.week_activity||[];
+  const totalWeekLearned = weekActivity.reduce((s,w)=>s+(w.auto_learned||0),0);
+  const avgScore = stats.system?.avg_memory_score||0;
 
-  // Lógica de sugerencias basada en estado real del sistema
-  if(kb === 0)
-    sug.push({icon:'🧠',text:'Agrega conocimiento manual para que el bot responda mejor sobre tu negocio',prio:'high',action:"devGo('knowledge',null);closeSummaryWidget()"});
-  if(mem < 20)
-    sug.push({icon:'📚',text:'El bot tiene pocas memorias. Inicia aprendizaje forzado sobre temas clave',prio:'high',action:"devGo('learn',null);closeSummaryWidget()"});
+  // ── ARQUITECTURA: APIs y proveedores ──────────────────
   if(!hasGroq && !hasAnt)
-    sug.push({icon:'⚡',text:'Sin API Key de IA activa. Configura GROQ_API_KEY en Render para activar el bot',prio:'high',action:"devGo('config',null);closeSummaryWidget()"});
-  if(prov==='groq' && !hasAnt)
-    sug.push({icon:'🔄',text:'Considera agregar ANTHROPIC_API_KEY como fallback para mayor disponibilidad',prio:'med',action:"devGo('config',null);closeSummaryWidget()"});
+    sug.push({icon:'🔴',text:'Sin motor de IA activo. Configura GROQ_API_KEY en Render → Variables de entorno',prio:'high',action:"devGo('config',null)"});
+  else if(prov==='groq' && !hasAnt)
+    sug.push({icon:'🔄',text:'Solo tienes Groq activo. Agrega ANTHROPIC_API_KEY como fallback — si Groq falla, el bot seguirá respondiendo',prio:'med',action:"devGo('config',null)"});
+
+  // ── CONOCIMIENTO: base de datos de la IA ─────────────
+  if(kb === 0)
+    sug.push({icon:'🧠',text:'Base de conocimiento vacía — el bot no sabe nada de tu negocio. Agrega mínimo 5 entradas en Conocimiento',prio:'high',action:"devGo('knowledge',null)"});
+  else if(kb < 5)
+    sug.push({icon:'🧠',text:`Solo ${kb} entradas de conocimiento. Con más contexto propio el bot mejora sus respuestas específicas`,prio:'med',action:"devGo('knowledge',null)"});
+
+  // ── MEMORIAS: calidad del aprendizaje ────────────────
+  if(mem < 10)
+    sug.push({icon:'📚',text:'Pocas memorias acumuladas. Ve a Aprendizaje Forzado y agrega 5-10 temas relevantes para tu caso de uso',prio:'high',action:"devGo('learn',null)"});
+  else if(mem > 150 && avgScore < 0.5)
+    sug.push({icon:'🗑️',text:`${mem} memorias pero score bajo (${avgScore.toFixed(2)}). Limpia memorias irrelevantes para mejorar precisión`,prio:'med',action:"devGo('memories',null)"});
+  else if(mem > 100)
+    sug.push({icon:'🗑️',text:'Considera limpiar memorias de baja calidad (score < 0.4) para mejorar la precisión del bot',prio:'low',action:"devGo('memories',null)"});
+
+  // ── USO: comportamiento de usuarios ──────────────────
   if(convs > 50 && kb < 5)
-    sug.push({icon:'💡',text:`${convs} conversaciones sin conocimiento base. Revisa las frecuentes y agrégalas`,prio:'med',action:"devGo('knowledge',null);closeSummaryWidget()"});
-  if(learned > 10)
-    sug.push({icon:'✅',text:`Excelente — ${learned} memorias aprendidas hoy. Revísalas para verificar calidad`,prio:'low',action:"openKnowledgeDrawer('memories');closeSummaryWidget()"});
-  if(mem > 100)
-    sug.push({icon:'🗑️',text:'Considera limpiar memorias de baja calidad para mejorar la precisión del bot',prio:'low',action:"devGo('memories',null);closeSummaryWidget()"});
-  // Sugerencias de módulos
-  sug.push({icon:'🖼️',text:'Módulo de imágenes activo. Considera integrar DALL-E o Flux para generación',prio:'low',action:"devGo('img-gen',null);closeSummaryWidget()"});
+    sug.push({icon:'💡',text:`${convs} conversaciones registradas pero sin base de conocimiento. Revisa las preguntas más frecuentes en el historial y agrégalas`,prio:'med',action:"devGo('knowledge',null)"});
+  if(todayMsgs === 0 && convs > 10)
+    sug.push({icon:'📊',text:'Sin actividad hoy. Verifica que el bot esté respondiendo correctamente enviando un mensaje de prueba',prio:'med',action:"devGo('chat',null)"});
+
+  // ── APRENDIZAJE: calidad y frecuencia ────────────────
+  if(totalWeekLearned === 0)
+    sug.push({icon:'📖',text:'Sin aprendizajes esta semana. Activa el auto-aprendizaje o fuerza el aprendizaje manual de temas nuevos',prio:'med',action:"devGo('learn',null)"});
+  else if(learned > 5)
+    sug.push({icon:'✅',text:`${learned} nuevas memorias aprendidas hoy. Revísalas en el drawer para verificar que sean relevantes`,prio:'low',action:"openKnowledgeDrawer('recent')"});
+
+  // ── MÓDULOS: mejoras de funcionalidad ────────────────
+  sug.push({icon:'🖼️',text:'Módulo "Crear imagen" listo para integrar DALL-E 3 o Flux — puede aumentar valor percibido del asistente',prio:'low',action:"devGo('img-gen',null)"});
+  sug.push({icon:'📄',text:'Módulo "Análisis docs" pendiente — permitiría a usuarios subir PDFs y hacer preguntas sobre ellos',prio:'low',action:"devGo('doc-analysis',null)"});
 
   if(!sug.length){
-    document.getElementById('swSuggestions').innerHTML='<div style="color:var(--green);font-size:.74rem">✅ Sistema en buen estado</div>';
+    document.getElementById('swSuggestions').innerHTML='<div style="color:var(--green);font-size:.76rem;padding:8px 0">✅ Sistema en óptimo estado</div>';
     return;
   }
   const prioLabel={'high':'URGENTE','med':'MEDIA','low':'BAJA'};
-  document.getElementById('swSuggestions').innerHTML = sug.slice(0,4).map(s=>`
+  // Ordenar: urgentes primero
+  const order={'high':0,'med':1,'low':2};
+  sug.sort((a,b)=>order[a.prio]-order[b.prio]);
+  document.getElementById('swSuggestions').innerHTML = sug.slice(0,5).map(s=>`
     <div class="sw-sug-item" onclick="${s.action}">
       <span class="si-icon">${s.icon}</span>
       <span class="si-text">${s.text}</span>
@@ -1648,14 +1672,22 @@ async function loadMem(page=1){
     if(df)items=items.filter(m=>new Date(m.created)>=new Date(df));
     if(dt)items=items.filter(m=>new Date(m.created)<=new Date(dt+'T23:59:59'));
     document.getElementById('memCount').textContent=`${d.total||0} memorias totales`;
-    document.getElementById('memTable').innerHTML=items.length?items.map(m=>`<tr>
-      <td style="max-width:130px;font-size:.79rem">${esc((m.topic||'—').substring(0,42))}</td>
-      <td><span class="badge ${m.source==='manual_dev'?'badge-blue':m.source==='auto_learning'?'badge-green':'badge-yellow'}">${m.source}</span></td>
-      <td>${(m.score||0).toFixed(2)}</td><td>${m.accesses}</td>
-      <td style="font-size:.72rem;color:var(--text3)">${new Date(m.created).toLocaleDateString()}</td>
-      <td style="color:var(--text2);font-size:.75rem;max-width:160px">${esc(m.content)}</td>
-      <td><button class="btn btn-red btn-sm" onclick="deleteMem(${m.id})">🗑</button></td>
-    </tr>`).join(''):'<tr><td colspan="7" style="text-align:center;color:var(--text2);padding:18px">Sin memorias</td></tr>';
+    const srcColor={'auto_learning':'badge-green','manual_dev':'badge-blue','web_search':'badge-yellow'};
+    const srcLabel={'auto_learning':'Auto-aprendizaje','manual_dev':'Manual','web_search':'Web'};
+    document.getElementById('memTable').innerHTML=items.length?items.map(m=>`
+      <div style="background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:12px 14px;transition:border-color .15s" onmouseover="this.style.borderColor='var(--border2)'" onmouseout="this.style.borderColor='var(--border)'">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:6px">
+          <div style="font-size:.86rem;font-weight:600;color:var(--text);flex:1;line-height:1.3">${esc((m.topic||'Sin tema').substring(0,80))}</div>
+          <button onclick="deleteMem(${m.id})" style="background:rgba(248,113,113,.1);border:1px solid rgba(248,113,113,.25);color:var(--red);border-radius:6px;padding:3px 8px;cursor:pointer;font-size:.72rem;flex-shrink:0" title="Eliminar">🗑</button>
+        </div>
+        <div style="font-size:.78rem;color:var(--text2);line-height:1.5;margin-bottom:8px">${esc((m.content||'').substring(0,220))}${(m.content||'').length>220?'…':''}</div>
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <span class="badge ${srcColor[m.source]||'badge-purple'}" style="font-size:.66rem">${srcLabel[m.source]||m.source}</span>
+          <span style="font-size:.68rem;color:var(--text3)">⭐ ${(m.score||0).toFixed(2)}</span>
+          <span style="font-size:.68rem;color:var(--text3)">👁 ${m.accesses||0} accesos</span>
+          <span style="font-size:.68rem;color:var(--text3);margin-left:auto">${new Date(m.created).toLocaleDateString()}</span>
+        </div>
+      </div>`).join(''):'<div style="text-align:center;color:var(--text2);padding:30px;font-size:.84rem">Sin memorias encontradas</div>';
     renderPag('memPag',d.pages,memPage,loadMem);
   }catch(e){document.getElementById('memTable').innerHTML=`<tr><td colspan="7" style="color:var(--red)">${e.message}</td></tr>`;}
 }
