@@ -293,6 +293,7 @@ tr:hover td{background:rgba(91,141,238,.03);}
   .code-panel.open{width:100%;position:fixed;inset:0;z-index:80;}
   .user-topbar{padding-top:46px;}
   :root{--sidebar-w:240px;}
+  #dev-dashboard > div{grid-template-columns:1fr!important;}
 }
 @media(min-width:769px){.hamburger{display:none!important;}}
 
@@ -359,40 +360,7 @@ tr:hover td{background:rgba(91,141,238,.03);}
      DEVELOPER APP
 ═══════════════════════════════════════════ -->
 
-<!-- WIDGET RESUMEN IA (aparece al entrar al panel dev) -->
-<div id="iaSummaryWidget" class="ia-summary-widget sw-hidden">
-  <div class="sw-head">
-    <h4>🧠 Resumen del sistema</h4>
-    <button class="sw-close" onclick="closeSummaryWidget()">✕</button>
-  </div>
-  <div id="swNewBadge" style="display:none" class="sw-new-badge">
-    <span>✨</span><span id="swNewCount">0 nuevos</span> aprendizajes hoy
-  </div>
-  <div class="sw-stats">
-    <div class="sw-stat" onclick="devGo('memories',document.querySelector('#devSidebar .nav-item:nth-child(14)'));closeSummaryWidget()">
-      <div class="ss-val" id="sw-mem">—</div><div class="ss-lbl">Memorias</div>
-    </div>
-    <div class="sw-stat green" onclick="devGo('knowledge',document.querySelector('#devSidebar .nav-item:nth-child(13)'));closeSummaryWidget()">
-      <div class="ss-val" id="sw-kb">—</div><div class="ss-lbl">Conocimiento</div>
-    </div>
-    <div class="sw-stat yellow">
-      <div class="ss-val" id="sw-today">—</div><div class="ss-lbl">Msgs hoy</div>
-    </div>
-    <div class="sw-stat purple" onclick="openKnowledgeDrawer('memories');closeSummaryWidget()">
-      <div class="ss-val" id="sw-learned">—</div><div class="ss-lbl">Aprendido hoy</div>
-    </div>
-  </div>
-  <div class="sw-suggestions">
-    <h5>💡 Sugerencias de mejora</h5>
-    <div id="swSuggestions">
-      <div style="color:var(--text3);font-size:.74rem">Cargando sugerencias...</div>
-    </div>
-  </div>
-  <div style="margin-top:8px;display:flex;gap:6px">
-    <button class="btn btn-outline btn-sm" style="flex:1;justify-content:center;font-size:.72rem" onclick="openKnowledgeDrawer('recent');closeSummaryWidget()">📖 Ver aprendizajes</button>
-    <button class="btn btn-ghost btn-sm" style="font-size:.72rem" onclick="closeSummaryWidget()">Cerrar</button>
-  </div>
-</div>
+<!-- panel IA integrado en dashboard -->
 
 <!-- KNOWLEDGE DETAIL DRAWER -->
 <div id="kdDrawer" class="kd-drawer">
@@ -562,20 +530,62 @@ tr:hover td{background:rgba(91,141,238,.03);}
 
       <!-- DASHBOARD -->
       <div id="dev-dashboard" class="section">
-        <div class="page-hd"><h2>📊 Dashboard</h2><p>Estado del sistema en tiempo real</p></div>
-        <div id="dashAlert"></div>
-        <div class="cards-row">
-          <div class="stat-card"><div class="sv" id="d-mem">—</div><div class="sl">Memorias</div></div>
-          <div class="stat-card green"><div class="sv" id="d-conv">—</div><div class="sl">Conversaciones</div></div>
-          <div class="stat-card yellow"><div class="sv" id="d-kb">—</div><div class="sl">Conocimiento</div></div>
-          <div class="stat-card"><div class="sv" id="d-today">—</div><div class="sl">Msgs hoy</div></div>
-          <div class="stat-card purple"><div class="sv" id="d-ai" style="font-size:1rem">—</div><div class="sl">Proveedor IA</div></div>
-        </div>
-        <div class="grid2">
-          <div class="panel"><h3 style="margin-bottom:10px;font-size:.88rem">Últimas conversaciones</h3><div id="recentConvs" style="color:var(--text2);font-size:.82rem">Cargando...</div></div>
-          <div class="panel"><h3 style="margin-bottom:10px;font-size:.88rem">Actividad (7 días)</h3><div id="weekActivity" style="color:var(--text2);font-size:.82rem">Cargando...</div></div>
-        </div>
-      </div>
+        <div style="display:grid;grid-template-columns:1fr 300px;gap:16px;align-items:start">
+
+          <!-- Izquierda: stats + tablas -->
+          <div>
+            <div class="page-hd"><h2>📊 Dashboard</h2><p>Estado del sistema en tiempo real</p></div>
+            <div id="dashAlert"></div>
+            <div class="cards-row">
+              <div class="stat-card"><div class="sv" id="d-mem">—</div><div class="sl">Memorias</div></div>
+              <div class="stat-card green"><div class="sv" id="d-conv">—</div><div class="sl">Conversaciones</div></div>
+              <div class="stat-card yellow"><div class="sv" id="d-kb">—</div><div class="sl">Conocimiento</div></div>
+              <div class="stat-card"><div class="sv" id="d-today">—</div><div class="sl">Msgs hoy</div></div>
+              <div class="stat-card purple"><div class="sv" id="d-ai" style="font-size:1rem">—</div><div class="sl">Proveedor IA</div></div>
+            </div>
+            <div class="grid2">
+              <div class="panel"><h3 style="margin-bottom:10px;font-size:.88rem">Últimas conversaciones</h3><div id="recentConvs" style="color:var(--text2);font-size:.82rem">Cargando...</div></div>
+              <div class="panel"><h3 style="margin-bottom:10px;font-size:.88rem">Actividad (7 días)</h3><div id="weekActivity" style="color:var(--text2);font-size:.82rem">Cargando...</div></div>
+            </div>
+          </div>
+
+          <!-- Derecha: panel IA siempre visible -->
+          <div style="position:sticky;top:0">
+            <div class="panel" style="border-color:rgba(91,141,238,.3)">
+              <div class="sw-head">
+                <h4>🧠 Sistema IA</h4>
+                <button class="btn btn-ghost btn-sm" onclick="loadDashboardPanel()" title="Actualizar" style="font-size:.85rem;padding:2px 6px">↺</button>
+              </div>
+              <div id="swNewBadge" style="display:none" class="sw-new-badge">
+                <span>✨</span><span id="swNewCount">0</span> aprendizajes hoy
+              </div>
+              <div class="sw-stats">
+                <div class="sw-stat" onclick="devGo('memories',null)">
+                  <div class="ss-val" id="sw-mem">—</div><div class="ss-lbl">💾 Memorias</div>
+                </div>
+                <div class="sw-stat green" onclick="devGo('knowledge',null)">
+                  <div class="ss-val" id="sw-kb">—</div><div class="ss-lbl">🧠 Conocimiento</div>
+                </div>
+                <div class="sw-stat yellow">
+                  <div class="ss-val" id="sw-today">—</div><div class="ss-lbl">💬 Msgs hoy</div>
+                </div>
+                <div class="sw-stat purple" onclick="openKnowledgeDrawer('recent')">
+                  <div class="ss-val" id="sw-learned">—</div><div class="ss-lbl">📚 Aprendido hoy</div>
+                </div>
+              </div>
+              <div class="sw-suggestions">
+                <h5 style="font-size:.7rem;color:var(--text2);font-weight:700;margin-bottom:8px;text-transform:uppercase;letter-spacing:.07em">💡 Sugerencias</h5>
+                <div id="swSuggestions"><div style="color:var(--text3);font-size:.74rem">Cargando...</div></div>
+              </div>
+              <div style="display:flex;gap:6px;margin-top:10px">
+                <button class="btn btn-outline btn-sm" style="flex:1;justify-content:center;font-size:.7rem" onclick="openKnowledgeDrawer('recent')">📖 Aprendizajes</button>
+                <button class="btn btn-outline btn-sm" style="flex:1;justify-content:center;font-size:.7rem" onclick="openKnowledgeDrawer('knowledge')">🧠 Conocimiento</button>
+              </div>
+            </div>
+          </div>
+
+        </div><!-- /grid -->
+      </div></div>
 
       <!-- KNOWLEDGE -->
       <div id="dev-knowledge" class="section">
@@ -906,8 +916,6 @@ function startDev(){
       item.classList.add('active');
   });
   loadDashboard();
-  // Widget de resumen con delay
-  setTimeout(loadAndShowSummary, 900);
 }
 function startUser(){
   document.getElementById('userApp').style.display='flex';
@@ -1484,9 +1492,12 @@ function loadUserConv(id){
 }
 
 /* ═══ DASHBOARD ═══ */
+let dashData = null;
 async function loadDashboard(){
   try{
-    const d=await req('/api/dev/stats');
+    const d = await req('/api/dev/stats');
+    dashData = d;
+    // Stats principales
     document.getElementById('d-mem').textContent=(d.system?.total_memories||0).toLocaleString();
     document.getElementById('d-conv').textContent=(d.system?.total_conversations||0).toLocaleString();
     document.getElementById('d-kb').textContent=(d.system?.manual_knowledge||0).toLocaleString();
@@ -1495,20 +1506,50 @@ async function loadDashboard(){
     const ok=d.ai_config?.has_groq||d.ai_config?.has_anthropic||d.ai_config?.has_openai;
     document.getElementById('d-ai').innerHTML=`<span class="dot ${ok?'dot-green pulse':'dot-red'}" style="margin-right:4px"></span>${prov}`;
     if(!ok)showAlert('dashAlert','⚠️ No hay API Key de IA configurada.','warn');
+    // Conversaciones recientes
     const rc=document.getElementById('recentConvs');
     if(d.recent_conversations?.length){
       rc.innerHTML=d.recent_conversations.map(c=>`<div style="padding:7px 0;border-bottom:1px solid var(--border)">
-        <div style="font-size:.78rem;color:var(--text2)">👤 ${esc(c.user.substring(0,60))}</div>
-        <div style="font-size:.78rem;margin-top:2px">🤖 ${esc(c.bot.substring(0,60))}</div>
+        <div style="font-size:.78rem;color:var(--text2)">👤 ${esc((c.user||'').substring(0,60))}</div>
+        <div style="font-size:.78rem;margin-top:2px">🤖 ${esc((c.bot||'').substring(0,60))}</div>
         <div style="font-size:.68rem;color:var(--text3);margin-top:2px">${new Date(c.time).toLocaleString()}</div>
       </div>`).join('');
     }else rc.innerHTML='<div style="color:var(--text3);font-size:.8rem">Sin conversaciones aún</div>';
+    // Actividad semanal
     const wa=document.getElementById('weekActivity');
     if(d.week_activity?.length){
       wa.innerHTML='<table style="width:100%"><thead><tr><th>Fecha</th><th>Msgs</th><th>Aprendido</th></tr></thead><tbody>'+
         d.week_activity.map(w=>`<tr><td style="font-size:.76rem">${w.date}</td><td>${w.conversations}</td><td>${w.auto_learned}</td></tr>`).join('')+'</tbody></table>';
     }else wa.innerHTML='<div style="color:var(--text3);font-size:.8rem">Sin actividad</div>';
+    // Panel derecho IA
+    fillIAPanel(d);
   }catch(e){showAlert('dashAlert','Error: '+e.message,'err');}
+}
+async function loadDashboardPanel(){
+  try{
+    const d = await req('/api/dev/stats');
+    dashData = d;
+    fillIAPanel(d);
+  }catch(e){}
+}
+function fillIAPanel(d){
+  if(!d) return;
+  // Stats panel derecho
+  document.getElementById('sw-mem').textContent=(d.system?.total_memories||0).toLocaleString();
+  document.getElementById('sw-kb').textContent=(d.system?.manual_knowledge||0).toLocaleString();
+  document.getElementById('sw-today').textContent=d.today?.conversations||0;
+  const learnedToday=d.today?.auto_learned||0;
+  document.getElementById('sw-learned').textContent=learnedToday;
+  // Badge nuevos aprendizajes
+  const badge=document.getElementById('swNewBadge');
+  if(badge){
+    if(learnedToday>0){
+      document.getElementById('swNewCount').textContent=learnedToday+' nuevos';
+      badge.style.display='inline-flex';
+    }else badge.style.display='none';
+  }
+  // Sugerencias
+  renderSuggestions(d);
 }
 
 /* ═══ KNOWLEDGE ═══ */
