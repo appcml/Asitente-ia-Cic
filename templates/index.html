@@ -118,7 +118,7 @@ textarea{resize:vertical;min-height:80px;}
 
 /* MAIN SECTIONS */
 .section{display:none;}.section.active{display:block;}#dev-chat.active{display:flex!important;}
-.main-pad{flex:1;overflow-y:auto;padding:26px;}
+.main-pad{flex:1;overflow-y:auto;padding:26px;}#dev-dashboard{min-height:100%;}
 .page-hd{margin-bottom:22px;}
 .page-hd h2{font-size:1.3rem;font-weight:700;letter-spacing:-.02em;}
 .page-hd p{color:var(--text2);font-size:.84rem;margin-top:4px;}
@@ -530,7 +530,7 @@ tr:hover td{background:rgba(91,141,238,.03);}
 
       <!-- DASHBOARD -->
       <div id="dev-dashboard" class="section">
-        <div style="display:grid;grid-template-columns:1fr 300px;gap:16px;align-items:start">
+        <div style="display:grid;grid-template-columns:1fr 300px;gap:16px;align-items:start;min-height:100%">
 
           <!-- Izquierda: stats + tablas -->
           <div>
@@ -549,8 +549,8 @@ tr:hover td{background:rgba(91,141,238,.03);}
             </div>
           </div>
 
-          <!-- Derecha: panel IA siempre visible -->
-          <div style="position:sticky;top:0">
+          <!-- Derecha: panel IA fijo con scroll propio -->
+          <div style="position:sticky;top:0;height:calc(100vh - 48px);overflow-y:auto;scrollbar-width:thin;padding-bottom:16px">
             <div class="panel" style="border-color:rgba(91,141,238,.3)">
               <div class="sw-head">
                 <h4>🧠 Sistema IA</h4>
