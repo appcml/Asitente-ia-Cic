@@ -30,3 +30,10 @@ duckduckgo-search>=6.3.0
 
 # Machine Learning (opcional — comentar si build falla)
 scikit-learn>=1.4.0
+
+# ════════════════════════════════════════════════════════════
+# MOTOR DE IMÁGENES Cic_IA — Sin APIs de pago
+# Pillow y numpy ya están arriba, requests también.
+# Solo agregamos conversor SVG→PNG opcional
+# ════════════════════════════════════════════════════════════
+cairosvg>=2.7.0        # Opcional: convierte SVG a PNG real
