@@ -19,6 +19,18 @@ from PIL import Image, ImageDraw, ImageFilter, ImageEnhance
 
 logger = logging.getLogger('cic_image')
 
+# ── CicDream — Motor propio con aprendizaje ───────────────────────────────
+try:
+    from .cicdream import cicdream_generate, cicdream_status, is_ready as cicdream_ready
+    _CICDREAM_OK = True
+    logger.info('[main] CicDream motor propio cargado')
+except Exception as _cd_err:
+    _CICDREAM_OK = False
+    def cicdream_generate(**kw): return {'success': False, 'images': [], 'error': 'CicDream no disponible'}
+    def cicdream_status(**kw):   return {'ready': False}
+    def cicdream_ready():        return False
+    logger.warning(f'[main] CicDream no disponible: {_cd_err}')
+
 # ─── Verificar dependencias críticas ───────────────────────────────────────
 try:
     import numpy as np
@@ -934,6 +946,7 @@ EXTERNAL_MOTORS = {
     'stability_core':      ('Stability AI Core',             'STABILITY_KEY', 'Plan gratis disponible'),
     'stability_sd3':       ('Stability AI SD3',              'STABILITY_KEY', 'Stable Diffusion 3'),
     'gemini_flash':        ('Gemini 2.5 Flash Image',        'GEMINI_KEY',    '500 imgs/dia gratis'),
+    'cicdream':            ('CicDream v1.0',                None,            'Motor propio con aprendizaje'),
     'cic_svg':             ('Cic_IA Motor SVG',              None,            'Arte vectorial propio'),
     'cic_pil':             ('Cic_IA Motor PIL',              None,            'Arte pixeles propio'),
     'cic_fractal':         ('Cic_IA Motor Fractal',          None,            'Arte matematico propio'),
@@ -946,6 +959,7 @@ _HF_MODELS = {
 }
 
 AUTO_CASCADE = [
+    'cicdream',             # Motor propio — aprende con cada feedback
     'pollinations_flux',
     'pollinations_turbo',
     'fal_flux_schnell',
@@ -1101,9 +1115,28 @@ def _ext_gemini(prompt: str, W: int, H: int) -> dict:
     return None
 
 
-def _ext_single(motor_key: str, prompt: str, W: int, H: int, seed: int) -> dict:
+def _size_from_dims(W: int, H: int) -> str:
+    if W == H: return '512' if W <= 512 else 'square'
+    return 'landscape' if W > H else 'portrait'
+
+
+def _ext_single(motor_key: str, prompt: str, W: int, H: int, seed: int,
+                style: str = 'realistic', quality: str = 'standard',
+                user_id: int = None) -> dict:
     """Dispatcher central — llama al motor correcto por ID."""
-    if motor_key.startswith('pollinations_'):
+    if motor_key == 'cicdream':
+        if not _CICDREAM_OK:
+            return None
+        r = cicdream_generate(
+            prompt=prompt, style=style, size=_size_from_dims(W, H),
+            quality=quality, seed=seed, count=1, user_id=user_id,
+        )
+        if r.get('success') and r.get('images'):
+            img = r['images'][0]
+            img['generation_id'] = r.get('generation_id', 0)
+            return img
+        return None
+    elif motor_key.startswith('pollinations_'):
         return _ext_pollinations(prompt, W, H, seed, motor_key.replace('pollinations_', ''))
     elif motor_key.startswith('hf_'):
         return _ext_huggingface(prompt, motor_key)
