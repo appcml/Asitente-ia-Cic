@@ -78,9 +78,9 @@ THEME_KEYWORDS = {
 }
 
 SIZES = {
-    'square':    (1024, 1024),
-    'landscape': (1280, 720),
-    'portrait':  (720, 1280),
+    'square':    (768, 768),
+    'landscape': (1024, 576),
+    'portrait':  (576, 1024),
     '512':       (512, 512),
 }
 
@@ -775,7 +775,7 @@ def _engine_fractal(prompt: str, W: int, H: int, seed: int) -> dict:
 
 def _fractal_mandelbrot(W: int, H: int, palette: list) -> Image.Image:
     """Conjunto de Mandelbrot en NumPy (vectorizado)."""
-    MAX_ITER = 120
+    MAX_ITER = 60
     zoom, cx, cy = 1.0, -0.5, 0.0
 
     x = np.linspace(-2.5/zoom + cx, 1.5/zoom + cx, W)
@@ -822,7 +822,7 @@ def _fractal_mandelbrot(W: int, H: int, palette: list) -> Image.Image:
 
 def _fractal_julia(W: int, H: int, palette: list, rng) -> Image.Image:
     """Julia set con constante aleatoria pero bonita."""
-    MAX_ITER = 100
+    MAX_ITER = 60
     # Constantes clásicas interesantes + variación aleatoria
     c_options = [
         (-0.7269+0.1889j), (-0.8+0.156j), (0.285+0.01j),
