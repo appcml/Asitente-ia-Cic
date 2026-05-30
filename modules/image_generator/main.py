@@ -122,22 +122,6 @@ def generar(prompt: str, style: str = 'realistic', size: str = 'square',
     logger.info(f"[CicImage] engine={engine} style={style} size={W}x{H} count={count}")
 
     images = []
-    # Prompt mejorado para motores externos (agregar descriptores de estilo)
-    _style_hints = {
-        'realistic': 'photorealistic, 8K, sharp focus, cinematic lighting',
-        'artistic':  'digital painting, concept art, masterpiece, ArtStation',
-        'anime':     'anime art style, cel-shaded, vibrant colors',
-        'cyberpunk': 'cyberpunk, neon lights, rain-soaked streets, holographic',
-        'fantasy':   'epic fantasy art, magical lighting, detailed environment',
-        'space':     'space nebula, stars, cosmic, photorealistic',
-        'sketch':    'pencil sketch, detailed linework, hand-drawn',
-        '3d':        '3D render, Unreal Engine, PBR materials, cinematic',
-        'abstract':  'abstract art, vivid colors, modern art',
-        'minimalist':'minimalist design, clean composition, modern aesthetic',
-    }
-    style_suffix = _style_hints.get(style, '')
-    enhanced = f"{prompt}, {style_suffix}" if style_suffix else prompt
-
     for i in range(count):
         img_seed = seed + i * 1337
         try:
@@ -162,9 +146,27 @@ def generar(prompt: str, style: str = 'realistic', size: str = 'square',
             except Exception as e2:
                 logger.error(f"[CicImage] Fallback SVG también falló: {e2}")
 
-    # Motores externos (si no hay imágenes propias o si engine='external')
+    # Motores externos — cascada automática si no hay imágenes propias
     if not images:
-        images = _run_external_cascade(enhanced, W, H, seed, count)
+        # Prompt enriquecido con estilo para mejores resultados
+        _style_hints = {
+            'realistic':  'photorealistic, 8K, sharp focus, cinematic lighting, DSLR',
+            'artistic':   'digital painting, concept art, masterpiece, ArtStation trending',
+            'anime':      'anime art style, cel-shaded, vibrant colors, Studio Ghibli',
+            'cyberpunk':  'cyberpunk aesthetic, neon lights, rain-soaked streets, holographic',
+            'fantasy':    'epic fantasy art, magical lighting, Tolkien-inspired, detailed',
+            'space':      'space nebula, stars, galaxy, cosmic, photorealistic astronomy',
+            'sketch':     'pencil sketch, detailed linework, charcoal texture, hand-drawn',
+            '3d':         '3D render, Unreal Engine 5, PBR materials, volumetric lighting',
+            'abstract':   'abstract art, vivid colors, geometric shapes, expressionist',
+            'minimalist': 'minimalist design, clean composition, flat colors, modern',
+            'cartoon':    'cartoon style, vibrant colors, clean lines, Pixar inspired',
+        }
+        suffix = _style_hints.get(style, '')
+        enhanced = f"{prompt}, {suffix}" if suffix else prompt
+        # Si el usuario especificó motor externo, forzarlo
+        force = model if model not in ('auto', 'svg', 'pil', 'fractal') else None
+        images = _run_external_cascade(enhanced, W, H, seed, count, force_motor=force)
 
     if not images:
         return {'success': False, 'error': 'No se pudo generar ninguna imagen', 'images': []}
@@ -174,7 +176,7 @@ def generar(prompt: str, style: str = 'realistic', size: str = 'square',
         'images':       images,
         'count':        len(images),
         'provider':     images[0].get('provider', 'Cic_IA Engine'),
-        'engine':       engine,
+        'engine':       images[0].get('engine', engine),
         'prompt_usado': prompt,
         'original':     prompt,
         'generado_en':  datetime.utcnow().isoformat(),
@@ -897,37 +899,64 @@ def _fractal_julia(W: int, H: int, palette: list, rng) -> Image.Image:
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# MOTORES EXTERNOS GRATUITOS
-# Prioridad auto: pollinations_flux → turbo → hf_sdxl → hf_flux → gemini → sd
+# MOTORES EXTERNOS — todos gratuitos o con tier gratis
+# Orden auto: Pollinations FLUX → Turbo → fal.ai → HF SDXL → HF FLUX →
+#             Stability AI → Gemini → HF SD21 → Pollinations SD
 # ═══════════════════════════════════════════════════════════════════════════
 
+_HF_TOKEN      = os.environ.get('HUGGINGFACE_TOKEN', '')
+_GEMINI_KEY    = os.environ.get('GEMINI_API_KEY', '')
+_FAL_KEY       = os.environ.get('FAL_API_KEY', '')
+_STABILITY_KEY = os.environ.get('STABILITY_API_KEY', '')
+
 EXTERNAL_MOTORS = {
-    'pollinations_flux':  'Pollinations FLUX.1',
-    'pollinations_turbo': 'Pollinations Turbo',
-    'pollinations_sd':    'Pollinations Stable Diffusion',
-    'hf_sdxl':            'HuggingFace SDXL',
-    'hf_flux':            'HuggingFace FLUX.1-schnell',
-    'hf_sd21':            'HuggingFace SD 2.1',
-    'gemini_flash':       'Gemini 2.5 Flash Image',
+    'pollinations_flux':   ('Pollinations FLUX.1',          None,            '100% gratis, sin key, alta calidad'),
+    'pollinations_turbo':  ('Pollinations Turbo SD',         None,            '100% gratis, rápido'),
+    'pollinations_sd':     ('Pollinations Stable Diffusion', None,            '100% gratis, clásico'),
+    'hf_flux':             ('HuggingFace FLUX.1-schnell',    'HF_TOKEN',      'Gratis sin key, mejor con token'),
+    'hf_sdxl':             ('HuggingFace SDXL',              'HF_TOKEN',      'Alta resolución'),
+    'hf_sd21':             ('HuggingFace SD 2.1',            'HF_TOKEN',      'Confiable'),
+    'fal_flux_schnell':    ('fal.ai FLUX.1-schnell',         'FAL_KEY',       'Muy rápido ~1-3s'),
+    'fal_flux_dev':        ('fal.ai FLUX.1-dev',             'FAL_KEY',       'Mayor calidad'),
+    'stability_core':      ('Stability AI Core',             'STABILITY_KEY', 'Plan gratis disponible'),
+    'stability_sd3':       ('Stability AI SD3',              'STABILITY_KEY', 'Stable Diffusion 3'),
+    'gemini_flash':        ('Gemini 2.5 Flash Image',        'GEMINI_KEY',    '500 imgs/dia gratis'),
+    'cic_svg':             ('Cic_IA Motor SVG',              None,            'Arte vectorial propio'),
+    'cic_pil':             ('Cic_IA Motor PIL',              None,            'Arte pixeles propio'),
+    'cic_fractal':         ('Cic_IA Motor Fractal',          None,            'Arte matematico propio'),
 }
 
-_HF_TOKEN   = os.environ.get('HUGGINGFACE_TOKEN', '')
-_GEMINI_KEY = os.environ.get('GEMINI_API_KEY', '')
-
-_HF_MODEL_IDS = {
+_HF_MODELS = {
     'hf_flux':  'black-forest-labs/FLUX.1-schnell',
     'hf_sdxl':  'stabilityai/stable-diffusion-xl-base-1.0',
     'hf_sd21':  'stabilityai/stable-diffusion-2-1',
 }
 
+AUTO_CASCADE = [
+    'pollinations_flux',
+    'pollinations_turbo',
+    'fal_flux_schnell',
+    'hf_sdxl',
+    'hf_flux',
+    'stability_core',
+    'gemini_flash',
+    'fal_flux_dev',
+    'hf_sd21',
+    'pollinations_sd',
+]
+
+
+def _motor_name(key: str) -> str:
+    info = EXTERNAL_MOTORS.get(key)
+    return info[0] if info else key
+
 
 def _pollinations_fallback(prompt: str, W: int, H: int, seed: int = 0) -> dict:
-    """Alias de compatibilidad — usa FLUX."""
     return _ext_pollinations(prompt, W, H, seed, 'flux')
 
 
 def _ext_pollinations(prompt: str, W: int, H: int, seed: int, model: str = 'flux') -> dict:
-    """Pollinations.ai — gratis, sin key, múltiples modelos internos."""
+    """Pollinations.ai — gratis, sin key, sin limite."""
     if not HAS_REQUESTS:
         return None
     try:
@@ -940,56 +969,115 @@ def _ext_pollinations(prompt: str, W: int, H: int, seed: int, model: str = 'flux
         if r.status_code == 200 and 'image' in r.headers.get('Content-Type', ''):
             ct  = r.headers.get('Content-Type', 'image/jpeg')
             b64 = base64.b64encode(r.content).decode()
-            name = EXTERNAL_MOTORS.get(f'pollinations_{model}', f'Pollinations {model}')
             return {'url': f"data:{ct};base64,{b64}", 'type': 'base64',
-                    'provider': name, 'engine': f'pollinations_{model}', 'size': f"{W}x{H}"}
+                    'provider': _motor_name(f'pollinations_{model}'),
+                    'engine': f'pollinations_{model}', 'size': f"{W}x{H}"}
     except Exception as e:
         logger.warning(f"[Pollinations/{model}] {e}")
     return None
 
 
 def _ext_huggingface(prompt: str, motor_key: str) -> dict:
-    """HuggingFace Inference API — gratis sin key (con token tiene más cuota)."""
+    """HuggingFace Inference API — gratis, mas cuota con HUGGINGFACE_TOKEN."""
     if not HAS_REQUESTS:
         return None
-    model_id = _HF_MODEL_IDS.get(motor_key)
+    model_id = _HF_MODELS.get(motor_key)
     if not model_id:
         return None
     try:
         headers = {'Authorization': f'Bearer {_HF_TOKEN}'} if _HF_TOKEN else {}
-        r = requests.post(
-            f'https://api-inference.huggingface.co/models/{model_id}',
-            headers=headers,
-            json={'inputs': prompt, 'parameters': {'guidance_scale': 7.0}},
-            timeout=90,
-        )
+        payload = {'inputs': prompt, 'parameters': {'guidance_scale': 7.0}}
+        r = requests.post(f'https://api-inference.huggingface.co/models/{model_id}',
+                          headers=headers, json=payload, timeout=90)
         if r.status_code == 503:
-            import time; time.sleep(5)
-            r = requests.post(
-                f'https://api-inference.huggingface.co/models/{model_id}',
-                headers=headers, json={'inputs': prompt}, timeout=90)
+            import time; time.sleep(6)
+            r = requests.post(f'https://api-inference.huggingface.co/models/{model_id}',
+                              headers=headers, json=payload, timeout=120)
         if r.status_code == 200:
             b64 = base64.b64encode(r.content).decode()
             return {'url': f"data:image/png;base64,{b64}", 'type': 'base64',
-                    'provider': EXTERNAL_MOTORS[motor_key], 'engine': motor_key}
+                    'provider': _motor_name(motor_key), 'engine': motor_key}
     except Exception as e:
         logger.warning(f"[HuggingFace/{motor_key}] {e}")
     return None
 
 
+def _ext_fal(prompt: str, W: int, H: int, motor_key: str) -> dict:
+    """fal.ai — requiere FAL_API_KEY (~$0.003/imagen, muy rapido)."""
+    if not HAS_REQUESTS or not _FAL_KEY:
+        return None
+    endpoints = {
+        'fal_flux_schnell': 'https://fal.run/fal-ai/flux/schnell',
+        'fal_flux_dev':     'https://fal.run/fal-ai/flux/dev',
+    }
+    url = endpoints.get(motor_key)
+    if not url:
+        return None
+    try:
+        r = requests.post(
+            url,
+            headers={'Authorization': f'Key {_FAL_KEY}', 'Content-Type': 'application/json'},
+            json={'prompt': prompt,
+                  'image_size': {'width': min(W, 1024), 'height': min(H, 1024)},
+                  'num_images': 1, 'num_inference_steps': 4,
+                  'enable_safety_checker': True},
+            timeout=60,
+        )
+        body = r.json()
+        if r.status_code == 200 and body.get('images'):
+            img_url = body['images'][0]['url']
+            img_r   = requests.get(img_url, timeout=30)
+            b64     = base64.b64encode(img_r.content).decode()
+            return {'url': f"data:image/png;base64,{b64}", 'type': 'base64',
+                    'provider': _motor_name(motor_key), 'engine': motor_key}
+    except Exception as e:
+        logger.warning(f"[fal.ai/{motor_key}] {e}")
+    return None
+
+
+def _ext_stability(prompt: str, W: int, H: int, motor_key: str) -> dict:
+    """Stability AI REST API — STABILITY_API_KEY (plan gratis disponible)."""
+    if not HAS_REQUESTS or not _STABILITY_KEY:
+        return None
+    endpoints = {
+        'stability_core': 'https://api.stability.ai/v2beta/stable-image/generate/core',
+        'stability_sd3':  'https://api.stability.ai/v2beta/stable-image/generate/sd3',
+    }
+    url = endpoints.get(motor_key, endpoints['stability_core'])
+    try:
+        r = requests.post(
+            url,
+            headers={'Authorization': f'Bearer {_STABILITY_KEY}', 'Accept': 'image/*'},
+            files={'none': ''},
+            data={'prompt': prompt, 'output_format': 'png',
+                  'width': min(W, 1024), 'height': min(H, 1024)},
+            timeout=60,
+        )
+        if r.status_code == 200:
+            b64 = base64.b64encode(r.content).decode()
+            return {'url': f"data:image/png;base64,{b64}", 'type': 'base64',
+                    'provider': _motor_name(motor_key), 'engine': motor_key}
+        logger.warning(f"[Stability/{motor_key}] HTTP {r.status_code}: {r.text[:120]}")
+    except Exception as e:
+        logger.warning(f"[Stability/{motor_key}] {e}")
+    return None
+
+
 def _ext_gemini(prompt: str, W: int, H: int) -> dict:
-    """Google Gemini 2.5 Flash — 500 imágenes/día gratis con GEMINI_API_KEY."""
+    """Google Gemini 2.5 Flash — 500 imagenes/dia gratis con GEMINI_API_KEY."""
     if not HAS_REQUESTS or not _GEMINI_KEY:
         return None
     try:
         r = requests.post(
-            f'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-preview-image-generation:generateContent?key={_GEMINI_KEY}',
+            f'https://generativelanguage.googleapis.com/v1beta/models/'
+            f'gemini-2.0-flash-preview-image-generation:generateContent?key={_GEMINI_KEY}',
             json={'contents': [{'parts': [{'text': prompt}]}],
                   'generationConfig': {'responseModalities': ['TEXT', 'IMAGE']}},
             timeout=60,
         )
         if r.status_code == 200:
-            for part in r.json().get('candidates', [{}])[0].get('content', {}).get('parts', []):
+            for part in (r.json().get('candidates', [{}])[0]
+                         .get('content', {}).get('parts', [])):
                 if 'inlineData' in part:
                     b64 = part['inlineData']['data']
                     mt  = part['inlineData'].get('mimeType', 'image/png')
@@ -1000,32 +1088,42 @@ def _ext_gemini(prompt: str, W: int, H: int) -> dict:
     return None
 
 
-def _run_external_cascade(prompt: str, W: int, H: int, seed: int, count: int) -> list:
+def _ext_single(motor_key: str, prompt: str, W: int, H: int, seed: int) -> dict:
+    """Dispatcher central — llama al motor correcto por ID."""
+    if motor_key.startswith('pollinations_'):
+        return _ext_pollinations(prompt, W, H, seed, motor_key.replace('pollinations_', ''))
+    elif motor_key.startswith('hf_'):
+        return _ext_huggingface(prompt, motor_key)
+    elif motor_key.startswith('fal_'):
+        return _ext_fal(prompt, W, H, motor_key)
+    elif motor_key.startswith('stability_'):
+        return _ext_stability(prompt, W, H, motor_key)
+    elif motor_key == 'gemini_flash':
+        return _ext_gemini(prompt, W, H)
+    return None
+
+
+def _run_external_cascade(prompt: str, W: int, H: int,
+                           seed: int, count: int,
+                           force_motor: str = None) -> list:
     """
-    Cascada de motores externos en orden de prioridad.
-    Todos gratuitos. El primero que funcione gana.
+    Cascada de motores externos en orden de prioridad AUTO_CASCADE.
+    Si force_motor esta definido, usa solo ese motor.
     """
-    motors = [
-        lambda s: _ext_pollinations(prompt, W, H, s, 'flux'),
-        lambda s: _ext_pollinations(prompt, W, H, s, 'turbo'),
-        lambda s: _ext_huggingface(prompt, 'hf_sdxl'),
-        lambda s: _ext_huggingface(prompt, 'hf_flux'),
-        lambda s: _ext_gemini(prompt, W, H),
-        lambda s: _ext_pollinations(prompt, W, H, s, 'stable-diffusion'),
-    ]
-    for motor_fn in motors:
+    motors_to_try = [force_motor] if force_motor else AUTO_CASCADE
+    for motor_key in motors_to_try:
         try:
-            first = motor_fn(seed)
+            first = _ext_single(motor_key, prompt, W, H, seed)
             if first:
                 results = [first]
                 for i in range(1, count):
-                    extra = motor_fn(seed + i * 37)
-                    if extra:
-                        results.append(extra)
-                    else:
-                        results.append(first)  # duplicar si solo hay 1
+                    extra = _ext_single(motor_key, prompt, W, H, seed + i * 37)
+                    results.append(extra if extra else first)
+                logger.info(f"[Cascade] Motor usado: {motor_key} — {_motor_name(motor_key)}")
                 return results
         except Exception as e:
-            logger.warning(f"[Cascade] Motor falló: {e}")
+            logger.warning(f"[Cascade] {motor_key} fallo: {e}")
+            if force_motor:
+                break
             continue
     return []
