@@ -386,12 +386,12 @@ def _svg_cartoon(W, H, palette, rng):
                    +f'<circle cx="{ax:.1f}" cy="{ay-ht:.1f}" r="{rc:.1f}" fill="{c1}"/>'
                    +f'<circle cx="{ax-rc*0.5:.1f}" cy="{ay-ht*0.65:.1f}" r="{rc*0.78:.1f}" fill="{c2}" opacity="0.8"/>')
     sx,sy,sr = W*0.82, H*0.13, W*0.07
-    return f\'\'\'<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" viewBox="0 0 {W} {H}">
+    return f'''<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" viewBox="0 0 {W} {H}">
 <rect width="{W}" height="{sky_h:.1f}" fill="#87CEEB"/>
 <rect y="{sky_h:.1f}" width="{W}" height="{H-sky_h:.1f}" fill="#90EE90"/>
 <circle cx="{sx}" cy="{sy}" r="{sr*1.4:.1f}" fill="#FFD700" opacity="0.3"/>
 <circle cx="{sx}" cy="{sy}" r="{sr:.1f}" fill="#FFD700"/>
-{nubes}{arboles}</svg>\'\'\'
+{nubes}{arboles}</svg>'''
 
 
 def _svg_space(W, H, palette, rng):
@@ -413,13 +413,13 @@ def _svg_space(W, H, palette, rng):
     pr    = W*rng(0.05,0.12)
     pc    = _hex(palette[int(rng(1,5))])
     ring_w = pr*rng(1.6,2.2)
-    return f\'\'\'<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" viewBox="0 0 {W} {H}">
+    return f'''<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" viewBox="0 0 {W} {H}">
 <rect width="{W}" height="{H}" fill="#050816"/>
 {stars}{nebulas}
 <ellipse cx="{px:.1f}" cy="{py:.1f}" rx="{ring_w:.1f}" ry="{pr*0.25:.1f}" fill="none" stroke="{pc}" stroke-width="{pr*0.12:.1f}" opacity="0.6"/>
 <circle cx="{px:.1f}" cy="{py:.1f}" r="{pr:.1f}" fill="{pc}" opacity="0.92"/>
 <ellipse cx="{px:.1f}" cy="{py:.1f}" rx="{ring_w:.1f}" ry="{pr*0.25:.1f}" fill="none" stroke="{pc}" stroke-width="{pr*0.06:.1f}" opacity="0.3"/>
-</svg>\'\'\'
+</svg>'''
 
 
 # ═══════════════════════════════════════════════════════════════════════════
