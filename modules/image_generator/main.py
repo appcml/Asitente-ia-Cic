@@ -136,6 +136,7 @@ def generar(prompt: str, style: str = 'realistic', size: str = 'square',
     # Determinar si el usuario pidió motor propio explícitamente
     own_motors    = ('svg', 'pil', 'fractal')
     use_own       = model in own_motors
+    engine        = model if use_own else 'external'  # siempre definida
     # Motores externos = todo lo demás (auto, pollinations_*, hf_*, fal_*, etc.)
     force_external = None if model in ('auto',) + own_motors else model
 
