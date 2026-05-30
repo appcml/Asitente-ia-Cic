@@ -66,6 +66,21 @@ STYLE_TO_ENGINE = {
     'space':      'pil',
 }
 
+# Palabras clave del prompt → forzar motor SVG (tienen generadores específicos)
+SVG_KEYWORDS = [
+    'cyberpunk','cyber','neon','ciudad','city','urbano','urban',
+    'bosque','forest','árbol','tree','paisaje','landscape',
+    'fantasía','fantasy','dragón','dragon','castillo','castle',
+    'espacio','galaxy','cosmos','nebulosa','espacio','stars',
+    'cartoon','anime','dibujo','ilustración',
+    'abstracto','abstract','geométrico',
+    'minimalista','minimalist',
+]
+
+def _prompt_prefers_svg(prompt: str) -> bool:
+    p = prompt.lower()
+    return any(k in p for k in SVG_KEYWORDS)
+
 THEME_KEYWORDS = {
     'naturaleza': ['bosque','árbol','verde','naturaleza','forest','tree','grass','flower','flor'],
     'ciudad':     ['ciudad','urbano','building','city','urban','calle','street'],
@@ -102,7 +117,7 @@ def generar(prompt: str, style: str = 'realistic', size: str = 'square',
     seed = int(hashlib.md5(prompt.encode()).hexdigest()[:8], 16)
 
     # Seleccionar motor
-    engine = model if model in ('svg', 'pil', 'fractal') else _select_engine(style)
+    engine = model if model in ('svg', 'pil', 'fractal') else _select_engine(style, prompt)
 
     logger.info(f"[CicImage] engine={engine} style={style} size={W}x{H} count={count}")
 
@@ -154,8 +169,14 @@ def generar(prompt: str, style: str = 'realistic', size: str = 'square',
 
 # ─── Selector de motor ────────────────────────────────────────────────────
 
-def _select_engine(style: str) -> str:
-    return STYLE_TO_ENGINE.get(style, 'pil')
+def _select_engine(style: str, prompt: str = '') -> str:
+    """Selecciona el motor óptimo según estilo y palabras clave del prompt."""
+    # Si el estilo tiene motor específico, respetarlo
+    engine = STYLE_TO_ENGINE.get(style, 'pil')
+    # Si el prompt tiene keywords de SVG y el motor es PIL, preferir SVG
+    if engine == 'pil' and _prompt_prefers_svg(prompt):
+        return 'svg'
+    return engine
 
 def _detect_palette(prompt: str) -> list:
     p = prompt.lower()
