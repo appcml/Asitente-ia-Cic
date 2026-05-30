@@ -116,57 +116,69 @@ def generar(prompt: str, style: str = 'realistic', size: str = 'square',
     # Semilla determinística basada en prompt
     seed = int(hashlib.md5(prompt.encode()).hexdigest()[:8], 16)
 
-    # Seleccionar motor
-    engine = model if model in ('svg', 'pil', 'fractal') else _select_engine(style, prompt)
+    # Prompt enriquecido con estilo para mejores resultados externos
+    _style_hints = {
+        'realistic':  'photorealistic, 8K, sharp focus, cinematic lighting, DSLR',
+        'artistic':   'digital painting, concept art, masterpiece, ArtStation trending',
+        'anime':      'anime art style, cel-shaded, vibrant colors, Studio Ghibli',
+        'cyberpunk':  'cyberpunk aesthetic, neon lights, rain-soaked streets, holographic',
+        'fantasy':    'epic fantasy art, magical lighting, Tolkien-inspired, detailed',
+        'space':      'space nebula, stars, galaxy, cosmic, photorealistic astronomy',
+        'sketch':     'pencil sketch, detailed linework, charcoal texture, hand-drawn',
+        '3d':         '3D render, Unreal Engine 5, PBR materials, volumetric lighting',
+        'abstract':   'abstract art, vivid colors, geometric shapes, expressionist',
+        'minimalist': 'minimalist design, clean composition, flat colors, modern',
+        'cartoon':    'cartoon style, vibrant colors, clean lines, Pixar inspired',
+    }
+    suffix  = _style_hints.get(style, '')
+    enhanced = f"{prompt}, {suffix}" if suffix else prompt
 
-    logger.info(f"[CicImage] engine={engine} style={style} size={W}x{H} count={count}")
+    # Determinar si el usuario pidió motor propio explícitamente
+    own_motors    = ('svg', 'pil', 'fractal')
+    use_own       = model in own_motors
+    # Motores externos = todo lo demás (auto, pollinations_*, hf_*, fal_*, etc.)
+    force_external = None if model in ('auto',) + own_motors else model
+
+    logger.info(f"[CicImage] model={model} style={style} size={W}x{H} count={count} use_own={use_own}")
 
     images = []
-    for i in range(count):
-        img_seed = seed + i * 1337
-        try:
-            if engine == 'svg':
-                result = _engine_svg(prompt, style, W, H, img_seed)
-            elif engine == 'fractal':
-                if not HAS_NUMPY:
-                    raise ImportError("NumPy requerido para fractales")
-                result = _engine_fractal(prompt, W, H, img_seed)
-            else:
-                if not HAS_NUMPY:
-                    raise ImportError("NumPy requerido para PIL")
-                result = _engine_pil(prompt, style, W, H, img_seed, quality)
 
-            if result:
-                images.append(result)
-        except Exception as e:
-            logger.error(f"[CicImage] Error engine={engine}: {e}", exc_info=True)
-            # Fallback a SVG siempre funciona
+    # ── CASO 1: Motor propio solicitado explícitamente ───────────────────
+    if use_own:
+        engine = model  # svg | pil | fractal
+        for i in range(count):
+            img_seed = seed + i * 1337
             try:
-                images.append(_engine_svg(prompt, style, W, H, img_seed))
-            except Exception as e2:
-                logger.error(f"[CicImage] Fallback SVG también falló: {e2}")
+                if engine == 'svg':
+                    result = _engine_svg(prompt, style, W, H, img_seed)
+                elif engine == 'fractal':
+                    result = _engine_fractal(prompt, W, H, img_seed)
+                else:
+                    result = _engine_pil(prompt, style, W, H, img_seed, quality)
+                if result:
+                    images.append(result)
+            except Exception as e:
+                logger.error(f"[CicImage] Motor propio {engine} falló: {e}")
+                try:
+                    images.append(_engine_svg(prompt, style, W, H, img_seed))
+                except Exception:
+                    pass
 
-    # Motores externos — cascada automática si no hay imágenes propias
+    # ── CASO 2: Motor externo (auto o específico) — PRIORIDAD PRINCIPAL ──
+    else:
+        images = _run_external_cascade(enhanced, W, H, seed, count,
+                                        force_motor=force_external)
+
+    # ── CASO 3: Si todo falló → motor propio como último recurso ─────────
     if not images:
-        # Prompt enriquecido con estilo para mejores resultados
-        _style_hints = {
-            'realistic':  'photorealistic, 8K, sharp focus, cinematic lighting, DSLR',
-            'artistic':   'digital painting, concept art, masterpiece, ArtStation trending',
-            'anime':      'anime art style, cel-shaded, vibrant colors, Studio Ghibli',
-            'cyberpunk':  'cyberpunk aesthetic, neon lights, rain-soaked streets, holographic',
-            'fantasy':    'epic fantasy art, magical lighting, Tolkien-inspired, detailed',
-            'space':      'space nebula, stars, galaxy, cosmic, photorealistic astronomy',
-            'sketch':     'pencil sketch, detailed linework, charcoal texture, hand-drawn',
-            '3d':         '3D render, Unreal Engine 5, PBR materials, volumetric lighting',
-            'abstract':   'abstract art, vivid colors, geometric shapes, expressionist',
-            'minimalist': 'minimalist design, clean composition, flat colors, modern',
-            'cartoon':    'cartoon style, vibrant colors, clean lines, Pixar inspired',
-        }
-        suffix = _style_hints.get(style, '')
-        enhanced = f"{prompt}, {suffix}" if suffix else prompt
-        # Si el usuario especificó motor externo, forzarlo
-        force = model if model not in ('auto', 'svg', 'pil', 'fractal') else None
-        images = _run_external_cascade(enhanced, W, H, seed, count, force_motor=force)
+        logger.warning("[CicImage] Externos fallaron, usando motor SVG propio como respaldo")
+        for i in range(count):
+            try:
+                img = _engine_svg(prompt, style, W, H, seed + i * 1337)
+                if img:
+                    images.append(img)
+            except Exception:
+                pass
 
     if not images:
         return {'success': False, 'error': 'No se pudo generar ninguna imagen', 'images': []}
