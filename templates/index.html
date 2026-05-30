@@ -533,11 +533,21 @@ tr:hover td{background:rgba(91,141,238,.03);}
             <div class="form-group" style="margin:0">
               <label>Motor</label>
               <select id="devImgEngine">
-                <option value="auto">Auto (recomendado)</option>
-                <option value="svg">SVG vectorial</option>
-                <option value="pil">PIL / píxeles</option>
-                <option value="fractal">Fractal matemático</option>
-              </select>
+              <optgroup label="🌐 Externos (siguen el prompt)">
+                <option value="auto" selected>⚡ Auto — mejor disponible</option>
+                <option value="pollinations_flux">🔥 Pollinations FLUX.1 (gratis)</option>
+                <option value="pollinations_turbo">⚡ Pollinations Turbo (gratis)</option>
+                <option value="pollinations_sd">🎨 Pollinations Stable Diffusion</option>
+                <option value="hf_sdxl">🤗 HuggingFace SDXL (gratis)</option>
+                <option value="hf_flux">🤗 HuggingFace FLUX.1 (gratis)</option>
+                <option value="gemini_flash">🟣 Gemini Flash (key opcional)</option>
+              </optgroup>
+              <optgroup label="🎨 Motor propio (arte algorítmico)">
+                <option value="svg">◈ SVG vectorial</option>
+                <option value="pil">◈ PIL / píxeles</option>
+                <option value="fractal">◈ Fractal matemático</option>
+              </optgroup>
+            </select>
             </div>
 
             <div class="form-group" style="margin:0">
@@ -1100,10 +1110,17 @@ function renderUserMod(name){
           <div class="form-group" style="margin:0">
             <label>Motor</label>
             <select id="uImgEngine">
-              <option value="auto">Auto (recomendado)</option>
-              <option value="svg">SVG vectorial</option>
-              <option value="pil">PIL / píxeles</option>
-              <option value="fractal">Fractal matemático</option>
+              <optgroup label="🌐 IA generativa">
+                <option value="auto" selected>⚡ Auto — mejor disponible</option>
+                <option value="pollinations_flux">🔥 FLUX.1 (recomendado)</option>
+                <option value="pollinations_turbo">⚡ Turbo (rápido)</option>
+                <option value="hf_sdxl">🎨 Stable Diffusion XL</option>
+                <option value="gemini_flash">🟣 Gemini Flash</option>
+              </optgroup>
+              <optgroup label="🎨 Arte algorítmico">
+                <option value="svg">◈ SVG vectorial</option>
+                <option value="fractal">◈ Fractal</option>
+              </optgroup>
             </select>
           </div>
           <div class="form-group" style="margin:0">
@@ -2025,8 +2042,8 @@ function _openLightbox(src){
   let lb=document.getElementById('_imgLb');
   if(!lb){
     lb=document.createElement('div');lb.id='_imgLb';
-    lb.style.cssText='display:none;position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:9999;align-items:center;justify-content:center;cursor:zoom-out';
-    lb.innerHTML='<img id="_lbImg" style="max-width:92vw;max-height:92vh;border-radius:10px"/><button onclick="document.getElementById(\'_imgLb\').style.display=\'none\'" style="position:absolute;top:16px;right:20px;background:rgba(255,255,255,.2);border:none;color:#fff;font-size:1.4rem;cursor:pointer;width:36px;height:36px;border-radius:50%">✕</button>';
+    lb.style.cssText='display:none;position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:9999;align-items:center;justify-content:center;cursor:zoom-out;padding:16px';
+    lb.innerHTML='<img id="_lbImg" style="max-width:92vw;max-height:90vh;border-radius:10px;object-fit:contain"/><button onclick="document.getElementById(\'_imgLb\').style.display=\'none\'" style="position:absolute;top:14px;right:18px;background:rgba(255,255,255,.15);border:none;color:#fff;font-size:1.3rem;cursor:pointer;width:34px;height:34px;border-radius:50%">✕</button>';
     lb.onclick=e=>{if(e.target===lb)lb.style.display='none';};
     document.body.appendChild(lb);
   }
@@ -2038,19 +2055,20 @@ function _renderImgGallery(images, meta){
   if(!images||!images.length) return '<div class="alert alert-warn">Sin imágenes generadas</div>';
   const cards = images.map((img,i)=>{
     const src = img.url||'';
-    const prompt_short = esc((meta.original||'').substring(0,55))+(( meta.original||'').length>55?'…':'');
-    return `<div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;overflow:hidden;max-width:320px">
-      <div style="cursor:zoom-in;position:relative;overflow:hidden" onclick="_openLightbox('${src}')">
+    const pshort = esc((meta.original||'').substring(0,50))+(( meta.original||'').length>50?'…':'');
+    const engineLabel = esc(img.provider||img.engine||meta.provider||'Cic_IA');
+    return `<div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;overflow:hidden;max-width:340px;transition:border-color .15s" onmouseover="this.style.borderColor='var(--border2)'" onmouseout="this.style.borderColor='var(--border)'">
+      <div style="cursor:zoom-in;overflow:hidden" onclick="_openLightbox('${src}')">
         <img src="${src}" alt="Imagen ${i+1}"
-          style="width:100%;max-height:260px;object-fit:cover;display:block;transition:transform .2s"
-          onmouseover="this.style.transform='scale(1.02)'" onmouseout="this.style.transform='scale(1)'"
+          style="width:100%;max-height:270px;object-fit:cover;display:block;transition:transform .2s"
+          onmouseover="this.style.transform='scale(1.03)'" onmouseout="this.style.transform='scale(1)'"
           loading="lazy" onerror="this.style.display='none'"/>
       </div>
       <div style="padding:8px 10px">
-        <div style="font-size:.68rem;color:var(--text3);margin-bottom:5px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">${prompt_short}</div>
+        <div style="font-size:.68rem;color:var(--text3);margin-bottom:5px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis" title="${pshort}">${pshort}</div>
         <div style="display:flex;justify-content:space-between;align-items:center">
-          <span style="font-size:.68rem;color:var(--text2)">${esc(img.provider||meta.provider||'Cic_IA')}</span>
-          <div style="display:flex;gap:5px">
+          <span style="font-size:.68rem;color:var(--text2)">${engineLabel}</span>
+          <div style="display:flex;gap:4px">
             <button class="btn btn-outline btn-sm btn-icon" title="Ver en grande" onclick="_openLightbox('${src}')">🔍</button>
             <button class="btn btn-outline btn-sm btn-icon" title="Descargar" onclick="_imgDown(${i})">⬇</button>
           </div>
@@ -2061,14 +2079,13 @@ function _renderImgGallery(images, meta){
   const grid = images.length===1
     ? `<div style="display:flex;justify-content:center">${cards}</div>`
     : `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px">${cards}</div>`;
-  const note = meta.note ? `<div style="font-size:.7rem;color:var(--text3);margin-top:6px">${esc(meta.note)}</div>` : '';
-  return grid + note;
+  const note = meta.note?`<div style="font-size:.7rem;color:var(--text3);margin-top:6px">${esc(meta.note)}</div>`:'';
+  return grid+note;
 }
 function _imgDown(idx){
-  const imgs = document.querySelectorAll('#devImgGenRes img, #uImgRes img');
-  const src  = imgs[idx]?.src; if(!src) return;
-  const a    = document.createElement('a');
-  a.href     = src; a.download = `cic_ia_imagen_${idx+1}.png`; a.click();
+  const imgs=document.querySelectorAll('#devImgGenRes img, #uImgRes img');
+  const src=imgs[idx]?.src;if(!src)return;
+  const a=document.createElement('a');a.href=src;a.download=`cic_ia_imagen_${idx+1}.png`;a.click();
 }
 
 /* ═══ TRIGGER PASTE IMG ═══ */
