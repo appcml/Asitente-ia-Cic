@@ -2085,41 +2085,65 @@ async function _sendFeedback(genId, rating, details, tags){
 }
 
 function _renderFeedback(genId, isCicDream){
-  if(!isCicDream||!genId) return '';
-  const id = 'fb_'+genId;
+  // Mostrar feedback siempre — para CicDream guarda en BD, para externos solo UI
+  const id = 'fb_'+(genId||Math.random().toString(36).slice(2));
+  const label = isCicDream
+    ? '🧠 Ayuda a CicDream a aprender'
+    : '⭐ ¿Cómo quedó la imagen?';
   return `<div id="${id}" style="padding:10px;border-top:1px solid var(--border);background:var(--bg4)">
-    <div style="font-size:.72rem;color:var(--text2);margin-bottom:6px">🧠 Ayuda a CicDream a mejorar</div>
-    <div style="display:flex;gap:4px;margin-bottom:6px" id="${id}_stars">
-      ${[1,2,3,4,5].map(n=>`<button onclick="_rateFb('${id}',${n},${genId})"
-        style="background:none;border:none;font-size:1.2rem;cursor:pointer;opacity:.4;transition:opacity .15s"
-        id="${id}_s${n}">⭐</button>`).join('')}
+    <div style="font-size:.72rem;color:var(--text2);margin-bottom:7px">${label}</div>
+    <div style="display:flex;gap:6px;margin-bottom:8px;align-items:center">
+      ${[1,2,3,4,5].map(n=>`<button onclick="_rateFb('${id}',${n},${genId||0})"
+        style="background:none;border:none;font-size:1.5rem;cursor:pointer;opacity:.35;transition:all .15s;line-height:1"
+        id="${id}_s${n}" title="${n} estrella${n>1?'s':''}">⭐</button>`).join('')}
+      <span id="${id}_val" style="font-size:.72rem;color:var(--text3);margin-left:4px"></span>
     </div>
-    <input type="text" id="${id}_det" placeholder="¿Qué mejorarías? (opcional)"
-      style="width:100%;font-size:.75rem;padding:5px 8px;margin-bottom:5px"/>
-    <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px">
-      ${['más oscuro','más detalle','más colorido','colores incorrectos','perfecto'].map(t=>
+    <input type="text" id="${id}_det" placeholder="¿Qué mejorarías? Ej: más oscuro, más detalle..."
+      style="width:100%;font-size:.75rem;padding:6px 9px;margin-bottom:7px;border-radius:6px"/>
+    <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:7px">
+      ${['más oscuro','más detalle','más colorido','colores incorrectos','no corresponde al prompt','perfecto ✓'].map(t=>
         `<span onclick="_toggleTag(this,'${id}')" class="badge badge-blue"
-          style="cursor:pointer;padding:3px 7px;font-size:.67rem">${t}</span>`
+          style="cursor:pointer;padding:3px 8px;font-size:.67rem;transition:all .15s">${t}</span>`
       ).join('')}
     </div>
-    <div id="${id}_msg" style="font-size:.72rem;color:var(--green);min-height:16px"></div>
+    <button onclick="_submitFb('${id}',${genId||0})" class="btn btn-outline btn-sm"
+      style="font-size:.74rem">Enviar feedback</button>
+    <div id="${id}_msg" style="font-size:.72rem;color:var(--green);margin-top:6px;min-height:16px"></div>
   </div>`;
 }
 
+async function _submitFb(id, genId){
+  const rating  = parseInt(document.getElementById(id+'_rating')?.dataset?.val||'0');
+  const details = document.getElementById(id+'_det')?.value||'';
+  const tags    = [...(document.querySelectorAll(`#${id} .badge-blue`)||[])]
+    .filter(t=>t.dataset.sel==='1').map(t=>t.textContent);
+  if(!rating){ document.getElementById(id+'_msg').textContent='Selecciona una calificación'; return; }
+  const r = await _sendFeedback(genId, rating, details, tags);
+  const msg = document.getElementById(id+'_msg');
+  if(msg) msg.textContent = r?.message || '✓ ¡Gracias! CicDream aprendió.';
+}
+
 function _rateFb(id, rating, genId){
+  // Guardar rating seleccionado
+  let ratingEl = document.getElementById(id+'_rating');
+  if(!ratingEl){
+    ratingEl = document.createElement('span');
+    ratingEl.id = id+'_rating';
+    ratingEl.style.display = 'none';
+    document.getElementById(id)?.appendChild(ratingEl);
+  }
+  ratingEl.dataset.val = rating;
   // Iluminar estrellas
   for(let i=1;i<=5;i++){
     const s=document.getElementById(id+'_s'+i);
-    if(s) s.style.opacity = i<=rating ? '1' : '.3';
+    if(s){
+      s.style.opacity  = i<=rating ? '1' : '.25';
+      s.style.transform= i<=rating ? 'scale(1.2)' : 'scale(1)';
+    }
   }
-  const details = document.getElementById(id+'_det')?.value||'';
-  const tags = [...(document.querySelectorAll(`#${id} .badge-blue`)||[])]
-    .filter(t=>t.style.background==='var(--accent)'||t.dataset.sel==='1')
-    .map(t=>t.textContent);
-  _sendFeedback(genId, rating, details, tags).then(r=>{
-    const msg = document.getElementById(id+'_msg');
-    if(msg) msg.textContent = r?.message || '✓ Gracias por el feedback';
-  });
+  const labels = ['','Muy mala','Mala','Regular','Buena','¡Excelente!'];
+  const val = document.getElementById(id+'_val');
+  if(val) val.textContent = labels[rating]||'';
 }
 
 function _toggleTag(el, id){
@@ -2133,6 +2157,7 @@ function _renderImgGallery(images, meta){
   if(!images||!images.length) return '<div class="alert alert-warn">Sin imágenes generadas</div>';
   const isCicDream = (meta.engine==='cicdream'||images[0]?.engine==='cicdream');
   const genId = meta.generation_id||images[0]?.generation_id||0;
+  const showFeedback = true;  // siempre mostrar feedback
   const cards = images.map((img,i)=>{
     const src = img.url||'';
     const eng = esc(img.provider||meta.provider||'Cic_IA');
@@ -2151,7 +2176,7 @@ function _renderImgGallery(images, meta){
           </div>
         </div>
       </div>
-      ${i===0 ? _renderFeedback(genId, isCicDream) : ''}
+      ${i===0 ? _renderFeedback(genId, isCicDream||showFeedback) : ''}
     </div>`;
   }).join('');
   const grid = images.length===1
