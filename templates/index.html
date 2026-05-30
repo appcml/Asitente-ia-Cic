@@ -536,31 +536,34 @@ tr:hover td{background:rgba(91,141,238,.03);}
               <optgroup label="⚡ Auto">
                 <option value="auto" selected>⚡ Auto — mejor disponible</option>
               </optgroup>
+              <optgroup label="🧠 Motor propio CicDream">
+                <option value="cicdream">🧠 CicDream v1.0 — aprende con feedback</option>
+              </optgroup>
               <optgroup label="🌐 Pollinations.ai (gratis, sin key)">
                 <option value="pollinations_flux">🔥 FLUX.1 — alta calidad</option>
                 <option value="pollinations_turbo">⚡ Turbo SD — rápido</option>
-                <option value="pollinations_sd">🎨 Stable Diffusion clásico</option>
+                <option value="pollinations_sd">🎨 Stable Diffusion</option>
               </optgroup>
               <optgroup label="🤗 HuggingFace (gratis)">
-                <option value="hf_sdxl">SDXL — alta resolución</option>
+                <option value="hf_sdxl">SDXL</option>
                 <option value="hf_flux">FLUX.1-schnell</option>
-                <option value="hf_sd21">Stable Diffusion 2.1</option>
+                <option value="hf_sd21">SD 2.1</option>
               </optgroup>
               <optgroup label="🚀 fal.ai (key opcional)">
                 <option value="fal_flux_schnell">FLUX.1-schnell (~1-3s)</option>
-                <option value="fal_flux_dev">FLUX.1-dev (mayor calidad)</option>
+                <option value="fal_flux_dev">FLUX.1-dev</option>
               </optgroup>
               <optgroup label="🔷 Stability AI (key opcional)">
                 <option value="stability_core">Stability Core</option>
-                <option value="stability_sd3">Stable Diffusion 3</option>
+                <option value="stability_sd3">SD3</option>
               </optgroup>
               <optgroup label="🟣 Google (key opcional)">
-                <option value="gemini_flash">Gemini 2.5 Flash (500/día gratis)</option>
+                <option value="gemini_flash">Gemini Flash</option>
               </optgroup>
-              <optgroup label="🎨 Motor propio Cic_IA">
-                <option value="svg">◈ SVG vectorial</option>
-                <option value="pil">◈ PIL / píxeles</option>
-                <option value="fractal">◈ Fractal matemático</option>
+              <optgroup label="🎨 Arte algorítmico propio">
+                <option value="svg">SVG vectorial</option>
+                <option value="pil">PIL / píxeles</option>
+                <option value="fractal">Fractal matemático</option>
               </optgroup>
             </select>
             </div>
@@ -1126,20 +1129,17 @@ function renderUserMod(name){
             <label>Motor</label>
             <select id="uImgEngine">
               <option value="auto" selected>⚡ Auto — mejor disponible</option>
+              <optgroup label="🧠 Motor propio">
+                <option value="cicdream">🧠 CicDream v1.0</option>
+              </optgroup>
               <optgroup label="🌐 Gratis, sin key">
-                <option value="pollinations_flux">🔥 FLUX.1 (recomendado)</option>
-                <option value="pollinations_turbo">⚡ Turbo (rápido)</option>
-                <option value="hf_sdxl">SDXL (HuggingFace)</option>
-                <option value="hf_flux">FLUX.1 (HuggingFace)</option>
+                <option value="pollinations_flux">🔥 FLUX.1</option>
+                <option value="pollinations_turbo">⚡ Turbo</option>
+                <option value="hf_sdxl">SDXL</option>
               </optgroup>
-              <optgroup label="🔑 Con API key">
-                <option value="fal_flux_schnell">fal.ai FLUX.1</option>
-                <option value="stability_core">Stability AI Core</option>
-                <option value="gemini_flash">Gemini Flash</option>
-              </optgroup>
-              <optgroup label="🎨 Arte propio">
+              <optgroup label="🎨 Arte algorítmico">
                 <option value="svg">SVG vectorial</option>
-                <option value="fractal">Fractal matemático</option>
+                <option value="fractal">Fractal</option>
               </optgroup>
             </select>
           </div>
@@ -2070,26 +2070,88 @@ function _openLightbox(src){
   document.getElementById('_lbImg').src=src;
   lb.style.display='flex';
 }
+
+/* ── Feedback CicDream ── */
+async function _sendFeedback(genId, rating, details, tags){
+  if(!genId) return;
+  try{
+    const r = await req('/api/image/feedback','POST',{
+      generation_id: genId, rating, details, tags
+    });
+    return r;
+  }catch(e){
+    console.warn('Feedback error:', e.message);
+  }
+}
+
+function _renderFeedback(genId, isCicDream){
+  if(!isCicDream||!genId) return '';
+  const id = 'fb_'+genId;
+  return `<div id="${id}" style="padding:10px;border-top:1px solid var(--border);background:var(--bg4)">
+    <div style="font-size:.72rem;color:var(--text2);margin-bottom:6px">🧠 Ayuda a CicDream a mejorar</div>
+    <div style="display:flex;gap:4px;margin-bottom:6px" id="${id}_stars">
+      ${[1,2,3,4,5].map(n=>`<button onclick="_rateFb('${id}',${n},${genId})"
+        style="background:none;border:none;font-size:1.2rem;cursor:pointer;opacity:.4;transition:opacity .15s"
+        id="${id}_s${n}">⭐</button>`).join('')}
+    </div>
+    <input type="text" id="${id}_det" placeholder="¿Qué mejorarías? (opcional)"
+      style="width:100%;font-size:.75rem;padding:5px 8px;margin-bottom:5px"/>
+    <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px">
+      ${['más oscuro','más detalle','más colorido','colores incorrectos','perfecto'].map(t=>
+        `<span onclick="_toggleTag(this,'${id}')" class="badge badge-blue"
+          style="cursor:pointer;padding:3px 7px;font-size:.67rem">${t}</span>`
+      ).join('')}
+    </div>
+    <div id="${id}_msg" style="font-size:.72rem;color:var(--green);min-height:16px"></div>
+  </div>`;
+}
+
+function _rateFb(id, rating, genId){
+  // Iluminar estrellas
+  for(let i=1;i<=5;i++){
+    const s=document.getElementById(id+'_s'+i);
+    if(s) s.style.opacity = i<=rating ? '1' : '.3';
+  }
+  const details = document.getElementById(id+'_det')?.value||'';
+  const tags = [...(document.querySelectorAll(`#${id} .badge-blue`)||[])]
+    .filter(t=>t.style.background==='var(--accent)'||t.dataset.sel==='1')
+    .map(t=>t.textContent);
+  _sendFeedback(genId, rating, details, tags).then(r=>{
+    const msg = document.getElementById(id+'_msg');
+    if(msg) msg.textContent = r?.message || '✓ Gracias por el feedback';
+  });
+}
+
+function _toggleTag(el, id){
+  const on = el.dataset.sel==='1';
+  el.dataset.sel = on?'0':'1';
+  el.style.background = on ? '' : 'var(--accent)';
+  el.style.color      = on ? '' : '#fff';
+}
+
 function _renderImgGallery(images, meta){
   if(!images||!images.length) return '<div class="alert alert-warn">Sin imágenes generadas</div>';
+  const isCicDream = (meta.engine==='cicdream'||images[0]?.engine==='cicdream');
+  const genId = meta.generation_id||images[0]?.generation_id||0;
   const cards = images.map((img,i)=>{
     const src = img.url||'';
+    const eng = esc(img.provider||meta.provider||'Cic_IA');
     const pshort = esc((meta.original||'').substring(0,50))+((meta.original||'').length>50?'…':'');
-    const eng = esc(img.provider||img.engine||meta.provider||'Cic_IA');
     return `<div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;overflow:hidden;transition:border-color .15s" onmouseover="this.style.borderColor='var(--border2)'" onmouseout="this.style.borderColor='var(--border)'">
       <div style="cursor:zoom-in;overflow:hidden" onclick="_openLightbox('${src}')">
         <img src="${src}" alt="Imagen ${i+1}" style="width:100%;max-height:260px;object-fit:cover;display:block;transition:transform .2s" onmouseover="this.style.transform='scale(1.03)'" onmouseout="this.style.transform='scale(1)'" loading="lazy" onerror="this.style.display='none'"/>
       </div>
       <div style="padding:8px 10px">
-        <div style="font-size:.68rem;color:var(--text3);margin-bottom:5px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">${pshort}</div>
+        <div style="font-size:.68rem;color:var(--text3);margin-bottom:4px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">${pshort}</div>
         <div style="display:flex;justify-content:space-between;align-items:center">
-          <span style="font-size:.68rem;color:var(--text2)">${eng}</span>
+          <span style="font-size:.68rem;color:var(--text2)">${isCicDream?'🧠 ':''}${eng}</span>
           <div style="display:flex;gap:4px">
             <button class="btn btn-outline btn-sm btn-icon" title="Ver en grande" onclick="_openLightbox('${src}')">🔍</button>
             <button class="btn btn-outline btn-sm btn-icon" title="Descargar" onclick="_imgDown(${i})">⬇</button>
           </div>
         </div>
       </div>
+      ${i===0 ? _renderFeedback(genId, isCicDream) : ''}
     </div>`;
   }).join('');
   const grid = images.length===1
@@ -2097,6 +2159,7 @@ function _renderImgGallery(images, meta){
     : `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px">${cards}</div>`;
   return grid + (meta.note?`<div style="font-size:.7rem;color:var(--text3);margin-top:6px">${esc(meta.note)}</div>`:'');
 }
+
 function _imgDown(idx){
   const imgs=document.querySelectorAll('#devImgGenRes img, #uImgRes img');
   const src=imgs[idx]?.src;if(!src)return;
