@@ -533,16 +533,31 @@ tr:hover td{background:rgba(91,141,238,.03);}
             <div class="form-group" style="margin:0">
               <label>Motor</label>
               <select id="devImgEngine">
-              <optgroup label="🌐 Externos (siguen el prompt)">
+              <optgroup label="⚡ Auto">
                 <option value="auto" selected>⚡ Auto — mejor disponible</option>
-                <option value="pollinations_flux">🔥 Pollinations FLUX.1 (gratis)</option>
-                <option value="pollinations_turbo">⚡ Pollinations Turbo (gratis)</option>
-                <option value="pollinations_sd">🎨 Pollinations Stable Diffusion</option>
-                <option value="hf_sdxl">🤗 HuggingFace SDXL (gratis)</option>
-                <option value="hf_flux">🤗 HuggingFace FLUX.1 (gratis)</option>
-                <option value="gemini_flash">🟣 Gemini Flash (key opcional)</option>
               </optgroup>
-              <optgroup label="🎨 Motor propio (arte algorítmico)">
+              <optgroup label="🌐 Pollinations.ai (gratis, sin key)">
+                <option value="pollinations_flux">🔥 FLUX.1 — alta calidad</option>
+                <option value="pollinations_turbo">⚡ Turbo SD — rápido</option>
+                <option value="pollinations_sd">🎨 Stable Diffusion clásico</option>
+              </optgroup>
+              <optgroup label="🤗 HuggingFace (gratis)">
+                <option value="hf_sdxl">SDXL — alta resolución</option>
+                <option value="hf_flux">FLUX.1-schnell</option>
+                <option value="hf_sd21">Stable Diffusion 2.1</option>
+              </optgroup>
+              <optgroup label="🚀 fal.ai (key opcional)">
+                <option value="fal_flux_schnell">FLUX.1-schnell (~1-3s)</option>
+                <option value="fal_flux_dev">FLUX.1-dev (mayor calidad)</option>
+              </optgroup>
+              <optgroup label="🔷 Stability AI (key opcional)">
+                <option value="stability_core">Stability Core</option>
+                <option value="stability_sd3">Stable Diffusion 3</option>
+              </optgroup>
+              <optgroup label="🟣 Google (key opcional)">
+                <option value="gemini_flash">Gemini 2.5 Flash (500/día gratis)</option>
+              </optgroup>
+              <optgroup label="🎨 Motor propio Cic_IA">
                 <option value="svg">◈ SVG vectorial</option>
                 <option value="pil">◈ PIL / píxeles</option>
                 <option value="fractal">◈ Fractal matemático</option>
@@ -1110,16 +1125,21 @@ function renderUserMod(name){
           <div class="form-group" style="margin:0">
             <label>Motor</label>
             <select id="uImgEngine">
-              <optgroup label="🌐 IA generativa">
-                <option value="auto" selected>⚡ Auto — mejor disponible</option>
+              <option value="auto" selected>⚡ Auto — mejor disponible</option>
+              <optgroup label="🌐 Gratis, sin key">
                 <option value="pollinations_flux">🔥 FLUX.1 (recomendado)</option>
                 <option value="pollinations_turbo">⚡ Turbo (rápido)</option>
-                <option value="hf_sdxl">🎨 Stable Diffusion XL</option>
-                <option value="gemini_flash">🟣 Gemini Flash</option>
+                <option value="hf_sdxl">SDXL (HuggingFace)</option>
+                <option value="hf_flux">FLUX.1 (HuggingFace)</option>
               </optgroup>
-              <optgroup label="🎨 Arte algorítmico">
-                <option value="svg">◈ SVG vectorial</option>
-                <option value="fractal">◈ Fractal</option>
+              <optgroup label="🔑 Con API key">
+                <option value="fal_flux_schnell">fal.ai FLUX.1</option>
+                <option value="stability_core">Stability AI Core</option>
+                <option value="gemini_flash">Gemini Flash</option>
+              </optgroup>
+              <optgroup label="🎨 Arte propio">
+                <option value="svg">SVG vectorial</option>
+                <option value="fractal">Fractal matemático</option>
               </optgroup>
             </select>
           </div>
@@ -2050,24 +2070,20 @@ function _openLightbox(src){
   document.getElementById('_lbImg').src=src;
   lb.style.display='flex';
 }
-
 function _renderImgGallery(images, meta){
   if(!images||!images.length) return '<div class="alert alert-warn">Sin imágenes generadas</div>';
   const cards = images.map((img,i)=>{
     const src = img.url||'';
-    const pshort = esc((meta.original||'').substring(0,50))+(( meta.original||'').length>50?'…':'');
-    const engineLabel = esc(img.provider||img.engine||meta.provider||'Cic_IA');
-    return `<div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;overflow:hidden;max-width:340px;transition:border-color .15s" onmouseover="this.style.borderColor='var(--border2)'" onmouseout="this.style.borderColor='var(--border)'">
+    const pshort = esc((meta.original||'').substring(0,50))+((meta.original||'').length>50?'…':'');
+    const eng = esc(img.provider||img.engine||meta.provider||'Cic_IA');
+    return `<div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;overflow:hidden;transition:border-color .15s" onmouseover="this.style.borderColor='var(--border2)'" onmouseout="this.style.borderColor='var(--border)'">
       <div style="cursor:zoom-in;overflow:hidden" onclick="_openLightbox('${src}')">
-        <img src="${src}" alt="Imagen ${i+1}"
-          style="width:100%;max-height:270px;object-fit:cover;display:block;transition:transform .2s"
-          onmouseover="this.style.transform='scale(1.03)'" onmouseout="this.style.transform='scale(1)'"
-          loading="lazy" onerror="this.style.display='none'"/>
+        <img src="${src}" alt="Imagen ${i+1}" style="width:100%;max-height:260px;object-fit:cover;display:block;transition:transform .2s" onmouseover="this.style.transform='scale(1.03)'" onmouseout="this.style.transform='scale(1)'" loading="lazy" onerror="this.style.display='none'"/>
       </div>
       <div style="padding:8px 10px">
-        <div style="font-size:.68rem;color:var(--text3);margin-bottom:5px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis" title="${pshort}">${pshort}</div>
+        <div style="font-size:.68rem;color:var(--text3);margin-bottom:5px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">${pshort}</div>
         <div style="display:flex;justify-content:space-between;align-items:center">
-          <span style="font-size:.68rem;color:var(--text2)">${engineLabel}</span>
+          <span style="font-size:.68rem;color:var(--text2)">${eng}</span>
           <div style="display:flex;gap:4px">
             <button class="btn btn-outline btn-sm btn-icon" title="Ver en grande" onclick="_openLightbox('${src}')">🔍</button>
             <button class="btn btn-outline btn-sm btn-icon" title="Descargar" onclick="_imgDown(${i})">⬇</button>
@@ -2079,8 +2095,7 @@ function _renderImgGallery(images, meta){
   const grid = images.length===1
     ? `<div style="display:flex;justify-content:center">${cards}</div>`
     : `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px">${cards}</div>`;
-  const note = meta.note?`<div style="font-size:.7rem;color:var(--text3);margin-top:6px">${esc(meta.note)}</div>`:'';
-  return grid+note;
+  return grid + (meta.note?`<div style="font-size:.7rem;color:var(--text3);margin-top:6px">${esc(meta.note)}</div>`:'');
 }
 function _imgDown(idx){
   const imgs=document.querySelectorAll('#devImgGenRes img, #uImgRes img');
