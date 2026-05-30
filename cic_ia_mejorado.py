@@ -23,16 +23,10 @@ import numpy as np
 from functools import wraps
 from sqlalchemy import text, inspect
 
-# Motor de imágenes propio (SVG + PIL + Fractal, sin APIs de pago)
-try:
-    from modules.image_generator.main import generar as generar_imagen
-    _image_engine_ok = True
-except ImportError as e:
-    _image_engine_ok = False
-    import logging as _log
-    _log.getLogger('cic_ia').warning(f"Motor de imágenes no disponible: {e}")
-    def generar_imagen(**kwargs):
-        return {'success': False, 'error': 'Motor de imágenes no instalado. Verifica modules/image_generator/main.py'}
+# Registro automático de módulos independientes
+# Para agregar un módulo nuevo: solo edita modules/__init__.py
+# NO es necesario modificar este archivo
+from modules import register_all as _register_modules
 
 # ========== CONFIGURACIÓN ==========
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(name)s: %(message)s')
@@ -1060,6 +1054,11 @@ Luego responde directamente sin mostrar este proceso al usuario.""")
 # Instancia global
 cic_ia = CicIA()
 
+# ========== MÓDULOS INDEPENDIENTES ==========
+# Cada módulo registra sus propias rutas via Blueprint
+# Agregar módulos: edita modules/__init__.py únicamente
+_register_modules(app)
+
 # ========== RUTAS PÚBLICAS ==========
 
 @app.route('/')
@@ -1451,81 +1450,6 @@ def analyze_image(current_user):
     except Exception as e:
         logger.error(f"Error análisis imagen: {e}")
         return jsonify({'error': str(e)}), 500
-
-# ========== MÓDULO: GENERACIÓN DE IMÁGENES ==========
-
-@app.route('/api/image/generate', methods=['POST'])
-@token_required
-def generate_image(current_user):
-    """
-    Motor propio de imágenes — SVG, PIL, Fractal. Sin APIs de pago.
-    Body JSON:
-        prompt   (str)  — descripción de la imagen [requerido]
-        style    (str)  — realistic|artistic|anime|sketch|3d|minimalist|fantasy|cyberpunk|cartoon|abstract|space|fractal
-        size     (str)  — square|landscape|portrait|512
-        quality  (str)  — standard|hd
-        count    (int)  — 1-4 variantes
-        model    (str)  — auto|svg|pil|fractal|pollinations
-    """
-    try:
-        data    = request.json or {}
-        prompt  = data.get('prompt', '').strip()
-        style   = data.get('style',   'realistic')
-        size    = data.get('size',    'square')
-        quality = data.get('quality', 'standard')
-        count   = int(data.get('count', data.get('n', 1)))
-        model   = data.get('model',   'auto')
-
-        if not prompt:
-            return jsonify({'success': False, 'error': 'El prompt es requerido'}), 400
-        if len(prompt) > 4000:
-            return jsonify({'success': False, 'error': 'Prompt muy largo (máx 4000 chars)'}), 400
-
-        valid_styles  = {'realistic','artistic','anime','sketch','3d','minimalist','fantasy',
-                         'cyberpunk','cartoon','abstract','space','fractal','landscape'}
-        valid_sizes   = {'square','landscape','portrait','512'}
-        valid_quality = {'standard','hd'}
-        valid_models  = {'auto','svg','pil','fractal','pollinations'}
-
-        if style   not in valid_styles:   style   = 'realistic'
-        if size    not in valid_sizes:    size    = 'square'
-        if quality not in valid_quality:  quality = 'standard'
-        if model   not in valid_models:   model   = 'auto'
-        count = max(1, min(4, count))
-
-        logger.info(f"[/api/image/generate] user={current_user.username} "
-                    f"prompt={prompt[:60]!r} style={style} size={size} count={count} model={model}")
-
-        result = generar_imagen(
-            prompt  = prompt,
-            style   = style,
-            size    = size,
-            quality = quality,
-            count   = count,
-            model   = model,
-        )
-        return jsonify(result)
-
-    except Exception as e:
-        logger.error(f"[/api/image/generate] {e}", exc_info=True)
-        return jsonify({'success': False, 'error': str(e)}), 500
-
-
-@app.route('/api/image/models', methods=['GET'])
-@token_required
-def image_models_list(current_user):
-    """Devuelve los motores disponibles y su estado."""
-    return jsonify({
-        'engine_ok': _image_engine_ok,
-        'motors': [
-            {'id':'svg',         'name':'SVG vectorial',        'free':True,  'available':True},
-            {'id':'pil',         'name':'PIL / píxeles reales', 'free':True,  'available':True},
-            {'id':'fractal',     'name':'Fractal matemático',   'free':True,  'available':True},
-            {'id':'pollinations','name':'Pollinations.ai',      'free':True,  'available':True,
-             'note':'Fallback — requiere internet'},
-        ]
-    })
-
 
 # ========== MÓDULOS (compatibilidad) ==========
 
