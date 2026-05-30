@@ -117,7 +117,8 @@ SIZES = {
 # ═══════════════════════════════════════════════════════════════════════════
 
 def generar(prompt: str, style: str = 'realistic', size: str = 'square',
-            quality: str = 'standard', count: int = 1, model: str = 'auto') -> dict:
+            quality: str = 'standard', count: int = 1, model: str = 'auto',
+            user_id: int = None) -> dict:
     """
     Genera imágenes con el motor propio de Cic_IA.
     No requiere ninguna API de pago.
