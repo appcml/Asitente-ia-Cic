@@ -960,8 +960,7 @@ _HF_MODELS = {
 }
 
 AUTO_CASCADE = [
-    'cicdream',             # Motor propio — aprende con cada feedback
-    'pollinations_flux',
+    'pollinations_flux',    # Externos primero en auto (mejor calidad visual)
     'pollinations_turbo',
     'fal_flux_schnell',
     'hf_sdxl',
