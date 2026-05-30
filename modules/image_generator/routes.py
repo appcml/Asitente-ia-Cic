@@ -2,10 +2,9 @@
 modules/image_generator/routes.py
 ===================================
 Blueprint del módulo de generación de imágenes.
-Usa el mismo sistema de autenticación que cic_ia_mejorado.py
-(tokens en BD, no JWT).
+Sin import circular — usa flask.current_app y db directamente.
 """
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, current_app, g
 from datetime import datetime
 import logging
 
@@ -33,41 +32,72 @@ VALID_MODELS  = {'auto','svg','pil','fractal','pollinations'}
 
 def _get_current_user():
     """
-    Verifica el token usando el mismo sistema que token_required en cic_ia_mejorado.py:
-    busca el token en la tabla UserSession de la base de datos.
+    Verifica el token contra la BD usando el mismo mecanismo que
+    token_required en cic_ia_mejorado.py.
+    Evita import circular usando db y modelos desde el contexto de la app.
     """
-    from cic_ia_mejorado import db, UserSession, User
-
+    # Extraer token del header
     auth = request.headers.get('Authorization', '')
     if auth.startswith('Bearer '):
         token = auth[7:]
     else:
         parts = auth.split()
         token = parts[1] if len(parts) == 2 else None
-
     if not token:
         token = request.args.get('token')
-
     if not token:
         raise PermissionError('Token requerido')
 
-    session = UserSession.query.filter_by(token=token).first()
-    if not session:
+    # Acceder a db y modelos desde el contexto Flask (sin import circular)
+    from flask_sqlalchemy import SQLAlchemy
+    db    = current_app.extensions['sqlalchemy']
+
+    # Usar SQL directo para evitar referencias a clases del módulo principal
+    from sqlalchemy import text
+    engine = db.engine
+
+    with engine.connect() as conn:
+        row = conn.execute(
+            text("SELECT id, user_id, expires_at FROM user_session WHERE token = :token LIMIT 1"),
+            {'token': token}
+        ).fetchone()
+
+    if not row:
         raise PermissionError('Token inválido')
 
-    if session.expires_at and session.expires_at < datetime.utcnow():
-        db.session.delete(session)
-        db.session.commit()
+    session_id, user_id, expires_at = row[0], row[1], row[2]
+
+    if expires_at and datetime.utcnow() > expires_at:
+        with engine.connect() as conn:
+            conn.execute(text("DELETE FROM user_session WHERE id = :sid"), {'sid': session_id})
+            conn.commit()
         raise PermissionError('Token expirado')
 
-    session.last_access = datetime.utcnow()
-    db.session.commit()
+    # Actualizar last_access
+    with engine.connect() as conn:
+        conn.execute(
+            text("UPDATE user_session SET last_access = :now WHERE id = :sid"),
+            {'now': datetime.utcnow(), 'sid': session_id}
+        )
+        conn.commit()
 
-    user = User.query.get(session.user_id)
-    if not user or not user.is_active:
+    # Obtener usuario
+    with engine.connect() as conn:
+        user_row = conn.execute(
+            text("SELECT id, username, is_active FROM \"user\" WHERE id = :uid LIMIT 1"),
+            {'uid': user_id}
+        ).fetchone()
+
+    if not user_row or not user_row[2]:
         raise PermissionError('Usuario inactivo')
 
-    return user
+    # Retornar objeto simple con los datos necesarios
+    class SimpleUser:
+        def __init__(self, id, username):
+            self.id       = id
+            self.username = username
+
+    return SimpleUser(user_row[0], user_row[1])
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -76,22 +106,13 @@ def _get_current_user():
 
 @bp.route('/generate', methods=['POST'])
 def generate_image():
-    """
-    Genera imágenes con el motor propio de Cic_IA.
-
-    Body JSON:
-        prompt   (str, requerido)
-        style    (str)  realistic|artistic|anime|sketch|3d|minimalist|
-                        fantasy|cyberpunk|cartoon|abstract|space|fractal|landscape
-        size     (str)  square|landscape|portrait|512
-        quality  (str)  standard|hd
-        count    (int)  1-4
-        model    (str)  auto|svg|pil|fractal|pollinations
-    """
     try:
         user = _get_current_user()
     except PermissionError as e:
         return jsonify({'success': False, 'error': str(e)}), 401
+    except Exception as e:
+        logger.error(f'[auth] Error inesperado: {e}', exc_info=True)
+        return jsonify({'success': False, 'error': 'Error de autenticación'}), 500
 
     data    = request.json or {}
     prompt  = data.get('prompt', '').strip()
@@ -112,22 +133,20 @@ def generate_image():
     if model   not in VALID_MODELS:   model   = 'auto'
     count = max(1, min(4, count))
 
-    logger.info(
-        f"[generate] user={user.username} "
-        f"prompt={prompt[:50]!r} style={style} size={size} "
-        f"quality={quality} count={count} model={model}"
-    )
+    logger.info(f"[generate] user={user.username} prompt={prompt[:50]!r} "
+                f"style={style} size={size} quality={quality} count={count} model={model}")
 
-    result = generar(
-        prompt=prompt, style=style, size=size,
-        quality=quality, count=count, model=model,
-    )
-    return jsonify(result)
+    try:
+        result = generar(prompt=prompt, style=style, size=size,
+                         quality=quality, count=count, model=model)
+        return jsonify(result)
+    except Exception as e:
+        logger.error(f'[generate] Error motor: {e}', exc_info=True)
+        return jsonify({'success': False, 'error': f'Error generando imagen: {str(e)}'}), 500
 
 
 @bp.route('/models', methods=['GET'])
 def list_models():
-    """Lista los motores disponibles."""
     return jsonify({
         'engine_ok': _ok,
         'motors': [
@@ -142,20 +161,12 @@ def list_models():
 
 @bp.route('/status', methods=['GET'])
 def status():
-    """Estado del módulo."""
     return jsonify({
-        'module':    'image_generator',
-        'version':   '1.0',
-        'engine_ok': _ok,
-        'routes': [
-            'POST /api/image/generate',
-            'GET  /api/image/models',
-            'GET  /api/image/status',
-        ]
+        'module': 'image_generator', 'version': '1.0', 'engine_ok': _ok,
+        'routes': ['POST /api/image/generate', 'GET /api/image/models', 'GET /api/image/status']
     })
 
 
 def register(app):
-    """Registra el Blueprint. Llamado desde modules/__init__.py"""
     app.register_blueprint(bp)
     logger.info('Rutas /api/image/* registradas')
