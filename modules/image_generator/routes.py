@@ -140,6 +140,22 @@ def generate_image():
     try:
         result = generar(prompt=prompt, style=style, size=size,
                          quality=quality, count=count, model=model)
+
+        # Comprimir respuesta si es grande (base64 puede ser pesado)
+        import json, gzip
+        payload = json.dumps(result).encode('utf-8')
+
+        if len(payload) > 500_000:  # > 500KB → comprimir
+            from flask import Response
+            compressed = gzip.compress(payload, compresslevel=6)
+            logger.info(f"[generate] Respuesta comprimida: {len(payload)//1024}KB → {len(compressed)//1024}KB")
+            return Response(
+                compressed,
+                status=200,
+                mimetype='application/json',
+                headers={'Content-Encoding': 'gzip', 'Content-Type': 'application/json'}
+            )
+
         return jsonify(result)
     except Exception as e:
         logger.error(f'[generate] Error motor: {e}', exc_info=True)
