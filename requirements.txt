@@ -17,7 +17,7 @@ requests==2.32.3
 beautifulsoup4==4.13.4
 lxml==5.4.0
 
-# Data Analysis — versiones recientes sin dependencia de pkg_resources
+# Data Analysis
 pandas>=2.2.0
 numpy>=1.26.0
 openpyxl==3.1.5
@@ -31,9 +31,49 @@ duckduckgo-search>=6.3.0
 # Machine Learning (opcional — comentar si build falla)
 scikit-learn>=1.4.0
 
+# Auth — requerido por módulos independientes (JWT)
+PyJWT==2.8.0
+
 # ════════════════════════════════════════════════════════════
 # MOTOR DE IMÁGENES Cic_IA — Sin APIs de pago
-# Pillow y numpy ya están arriba, requests también.
-# Solo agregamos conversor SVG→PNG opcional
 # ════════════════════════════════════════════════════════════
-cairosvg>=2.7.0        # Opcional: convierte SVG a PNG real
+cairosvg>=2.7.0# ============================================================
+# Cic_IA v8.0 - Requirements (Compatible con Python 3.12+/3.14)
+# Sin versiones pinned que rompan en Python nuevo
+# ============================================================
+
+# Web Framework
+Flask==3.1.3
+Flask-SQLAlchemy==3.1.1
+Werkzeug==3.1.3
+gunicorn==23.0.0
+
+# Database
+psycopg2-binary==2.9.10
+
+# HTTP & Parsing
+requests==2.32.3
+beautifulsoup4==4.13.4
+lxml==5.4.0
+
+# Data Analysis
+pandas>=2.2.0
+numpy>=1.26.0
+openpyxl==3.1.5
+
+# Image Processing
+Pillow>=10.4.0
+
+# Search
+duckduckgo-search>=6.3.0
+
+# Machine Learning (opcional — comentar si build falla)
+scikit-learn>=1.4.0
+
+# Auth — requerido por módulos independientes (JWT)
+PyJWT==2.8.0
+
+# ════════════════════════════════════════════════════════════
+# MOTOR DE IMÁGENES Cic_IA — Sin APIs de pago
+# ════════════════════════════════════════════════════════════
+cairosvg>=2.7.0
