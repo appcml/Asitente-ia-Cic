@@ -17,11 +17,12 @@ try:
     from .main import generar
     _ok = True
     logger.info('Motor de imágenes cargado (SVG + PIL + Fractal)')
-except Exception as e:
+except Exception as _motor_err:
     _ok = False
-    logger.warning(f'Motor no disponible: {e}')
+    _motor_err_msg = str(_motor_err)
+    logger.warning(f'Motor no disponible: {_motor_err_msg}')
     def generar(**kw):
-        return {'success': False, 'error': f'Motor no disponible: {e}'}
+        return {'success': False, 'error': f'Motor no disponible: {_motor_err_msg}'}
 
 VALID_STYLES  = {'realistic','artistic','anime','sketch','3d','minimalist',
                  'fantasy','cyberpunk','cartoon','abstract','space','fractal','landscape'}
