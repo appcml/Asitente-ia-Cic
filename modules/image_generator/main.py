@@ -181,7 +181,9 @@ def generar(prompt: str, style: str = 'realistic', size: str = 'square',
     # ── CASO 2: Motor externo (auto o específico) — PRIORIDAD PRINCIPAL ──
     else:
         images = _run_external_cascade(enhanced, W, H, seed, count,
-                                        force_motor=force_external)
+                                        force_motor=force_external,
+                                        style=style, quality=quality,
+                                        user_id=user_id)
 
     # ── CASO 3: Si todo falló → motor propio como último recurso ─────────
     if not images:
@@ -960,15 +962,15 @@ _HF_MODELS = {
 }
 
 AUTO_CASCADE = [
-    'pollinations_flux',    # Externos primero en auto (mejor calidad visual)
-    'pollinations_turbo',
+    'hf_flux',              # Prioridad principal: HuggingFace FLUX
+    'hf_sdxl',              # Luego SDXL
+    'hf_sd21',              # Luego Stable Diffusion 2.1
     'fal_flux_schnell',
-    'hf_sdxl',
-    'hf_flux',
     'stability_core',
     'gemini_flash',
     'fal_flux_dev',
-    'hf_sd21',
+    'pollinations_flux',    # Pollinations al final como respaldo gratis
+    'pollinations_turbo',
     'pollinations_sd',
 ]
 
@@ -1011,21 +1013,43 @@ def _ext_huggingface(prompt: str, motor_key: str) -> dict:
     model_id = _HF_MODELS.get(motor_key)
     if not model_id:
         return None
-    try:
-        headers = {'Authorization': f'Bearer {_HF_TOKEN}'} if _HF_TOKEN else {}
-        payload = {'inputs': prompt, 'parameters': {'guidance_scale': 7.0}}
-        r = requests.post(f'https://api-inference.huggingface.co/models/{model_id}',
-                          headers=headers, json=payload, timeout=90)
-        if r.status_code == 503:
-            import time; time.sleep(6)
-            r = requests.post(f'https://api-inference.huggingface.co/models/{model_id}',
-                              headers=headers, json=payload, timeout=120)
-        if r.status_code == 200:
-            b64 = base64.b64encode(r.content).decode()
-            return {'url': f"data:image/png;base64,{b64}", 'type': 'base64',
-                    'provider': _motor_name(motor_key), 'engine': motor_key}
-    except Exception as e:
-        logger.warning(f"[HuggingFace/{motor_key}] {e}")
+
+    headers = {'Authorization': f'Bearer {_HF_TOKEN}'} if _HF_TOKEN else {}
+    payload = {'inputs': prompt, 'parameters': {'guidance_scale': 7.0}}
+    url = f'https://api-inference.huggingface.co/models/{model_id}'
+    timeouts = (60, 90)
+
+    for attempt, timeout in enumerate(timeouts, start=1):
+        try:
+            r = requests.post(url, headers=headers, json=payload, timeout=timeout)
+            if r.status_code == 503 and attempt < len(timeouts):
+                import time
+                wait_for = 6
+                try:
+                    body = r.json()
+                    wait_for = max(wait_for, int(float(body.get('estimated_time', wait_for))))
+                except Exception:
+                    pass
+                logger.warning(f"[HuggingFace/{motor_key}] 503, reintentando en {wait_for}s")
+                time.sleep(wait_for)
+                continue
+
+            if r.status_code == 200:
+                content_type = r.headers.get('Content-Type', '')
+                if 'image' not in content_type.lower():
+                    logger.warning(
+                        f"[HuggingFace/{motor_key}] respuesta no es imagen: {content_type}"
+                    )
+                    return None
+                mime = content_type.split(';', 1)[0] or 'image/png'
+                b64 = base64.b64encode(r.content).decode()
+                return {'url': f"data:{mime};base64,{b64}", 'type': 'base64',
+                        'provider': _motor_name(motor_key), 'engine': motor_key}
+
+            logger.warning(f"[HuggingFace/{motor_key}] status={r.status_code}")
+            return None
+        except Exception as e:
+            logger.warning(f"[HuggingFace/{motor_key}] intento {attempt}: {e}")
     return None
 
 
@@ -1151,7 +1175,10 @@ def _ext_single(motor_key: str, prompt: str, W: int, H: int, seed: int,
 
 def _run_external_cascade(prompt: str, W: int, H: int,
                            seed: int, count: int,
-                           force_motor: str = None) -> list:
+                           force_motor: str = None,
+                           style: str = 'realistic',
+                           quality: str = 'standard',
+                           user_id: int = None) -> list:
     """
     Cascada de motores externos en orden de prioridad AUTO_CASCADE.
     Si force_motor esta definido, usa solo ese motor.
@@ -1159,11 +1186,13 @@ def _run_external_cascade(prompt: str, W: int, H: int,
     motors_to_try = [force_motor] if force_motor else AUTO_CASCADE
     for motor_key in motors_to_try:
         try:
-            first = _ext_single(motor_key, prompt, W, H, seed)
+            first = _ext_single(motor_key, prompt, W, H, seed,
+                                style=style, quality=quality, user_id=user_id)
             if first:
                 results = [first]
                 for i in range(1, count):
-                    extra = _ext_single(motor_key, prompt, W, H, seed + i * 37)
+                    extra = _ext_single(motor_key, prompt, W, H, seed + i * 37,
+                                        style=style, quality=quality, user_id=user_id)
                     results.append(extra if extra else first)
                 logger.info(f"[Cascade] Motor usado: {motor_key} — {_motor_name(motor_key)}")
                 return results
