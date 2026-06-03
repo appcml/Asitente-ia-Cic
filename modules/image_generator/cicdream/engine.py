@@ -81,6 +81,25 @@ class CicDreamEngine:
         if not _imports_ok:
             raise ImportError("Componentes de CicDream no disponibles")
 
+        # ── Cargar modelo propio entrenado (si existe) ────────────────────
+        hf_model = os.environ.get('HF_CICDREAM_MODEL', '')
+        if hf_model:
+            try:
+                from diffusers import StableDiffusionPipeline
+                self._custom_pipe = StableDiffusionPipeline.from_pretrained(
+                    hf_model,
+                    use_auth_token=os.environ.get('HUGGINGFACE_TOKEN', '')
+                )
+                self._has_custom_model = True
+                logger.info(f"[CicDream] Modelo propio cargado: {hf_model}")
+            except Exception as e:
+                self._has_custom_model = False
+                self._custom_pipe = None
+                logger.warning(f"[CicDream] No se pudo cargar modelo propio: {e}")
+        else:
+            self._has_custom_model = False
+            self._custom_pipe = None
+
         # Inicializar componentes
         self.embeddings = CicDreamEmbeddings()
         self.palette    = CicDreamPalette()
