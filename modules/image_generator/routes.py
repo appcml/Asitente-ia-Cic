@@ -127,7 +127,10 @@ def generate_image():
     style   = data.get('style',   'realistic')
     size    = data.get('size',    'square')
     quality = data.get('quality', 'standard')
-    count   = int(data.get('count', data.get('n', 1)))
+    try:
+        count = int(data.get('count', data.get('n', 1)))
+    except (TypeError, ValueError):
+        return jsonify({'success': False, 'error': 'count debe ser un entero'}), 400
     model   = data.get('model',   'auto')
 
     if not prompt:
@@ -172,11 +175,17 @@ def image_feedback():
     except PermissionError as e:
         return jsonify({'success': False, 'error': str(e)}), 401
 
-    data          = request.json or {}
-    generation_id = int(data.get('generation_id', 0))
-    rating        = float(data.get('rating', 3.0))
-    details       = data.get('details', '').strip()[:500]
-    tags          = data.get('tags', [])
+    data = request.json or {}
+    try:
+        generation_id = int(data.get('generation_id', 0))
+    except (TypeError, ValueError):
+        return jsonify({'success': False, 'error': 'generation_id debe ser un entero'}), 400
+    try:
+        rating = float(data.get('rating', 3.0))
+    except (TypeError, ValueError):
+        return jsonify({'success': False, 'error': 'rating debe ser numerico'}), 400
+    details = data.get('details', '').strip()[:500]
+    tags    = data.get('tags', [])
 
     if not generation_id:
         return jsonify({'success': False, 'error': 'generation_id requerido'}), 400
