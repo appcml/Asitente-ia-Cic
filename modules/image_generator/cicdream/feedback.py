@@ -392,6 +392,81 @@ class CicDreamFeedback:
             logger.error(f"[Feedback] Error obteniendo historial: {e}")
             return []
 
+    def export_dataset(self, limit: int = 5000) -> list:
+        """
+        Exporta dataset de generaciones con feedback para entrenamiento
+        de CicDream en Google Colab.
+
+        Retorna lista de dicts con:
+          - prompt, style, engine, rating, tags, details, created_at
+
+        Solo incluye generaciones con feedback (rating > 0).
+        Ordenado por rating DESC — los mejores ejemplos primero.
+        """
+        limit = max(1, min(int(limit or 5000), 20000))
+
+        if self.db is None:
+            rows = []
+            for item in self._memory.values():
+                generation = item.get('generation') or {}
+                feedback   = item.get('feedback') or {}
+                rating = float(feedback.get('rating') or 0)
+                if rating <= 0:
+                    continue
+                rows.append({
+                    'prompt':     generation.get('prompt', ''),
+                    'style':      generation.get('style', 'realistic'),
+                    'engine':     generation.get('engine_version', 'CicDream v1.0'),
+                    'rating':     rating,
+                    'tags':       feedback.get('tags', []),
+                    'details':    feedback.get('details', ''),
+                    'created_at': generation.get('created_at'),
+                })
+            return sorted(rows, key=lambda x: x['rating'], reverse=True)[:limit]
+
+        try:
+            from sqlalchemy import text
+            with self.db.connect() as conn:
+                result = conn.execute(
+                    text("""
+                        SELECT
+                            g.prompt,
+                            g.style,
+                            g.engine_version,
+                            f.rating,
+                            f.tags,
+                            f.details,
+                            COALESCE(f.created_at, g.created_at) AS created_at
+                        FROM cicdream_generation g
+                        JOIN cicdream_feedback f ON f.generation_id = g.id
+                        WHERE f.rating > 0
+                        ORDER BY f.rating DESC, f.created_at DESC
+                        LIMIT :limit
+                    """),
+                    {'limit': limit}
+                ).fetchall()
+
+            dataset = []
+            for row in result or []:
+                try:
+                    tags = json.loads(row[4]) if row[4] else []
+                except Exception:
+                    tags = []
+                created_at = row[6]
+                dataset.append({
+                    'prompt':     row[0],
+                    'style':      row[1] or 'realistic',
+                    'engine':     row[2] or 'CicDream v1.0',
+                    'rating':     float(row[3] or 0),
+                    'tags':       tags,
+                    'details':    row[5] or '',
+                    'created_at': created_at.isoformat() if hasattr(created_at, 'isoformat') else created_at,
+                })
+            return dataset
+        except Exception as e:
+            logger.error(f"[Feedback] Error exportando dataset: {e}")
+            return []
+
     # ── Helpers privados ──────────────────────────────────────────────────
 
     def _save_feedback_db(self, generation_id: int, user_id: int,
