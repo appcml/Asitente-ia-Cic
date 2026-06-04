@@ -410,6 +410,153 @@ def manual_training():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@bp.route('/training/analyze', methods=['POST'])
+def analyze_training_image():
+    """
+    Analiza automáticamente una imagen con visión IA y extrae:
+    - Prompt descriptivo
+    - Colores dominantes
+    - Composición y estructura
+    - Parámetros técnicos
+    Luego guarda todo como dato de entrenamiento para CicDream.
+    """
+    try:
+        user = _get_current_user()
+    except PermissionError as e:
+        return jsonify({'success': False, 'error': str(e)}), 401
+
+    # Solo desarrolladores
+    try:
+        from flask import current_app
+        from sqlalchemy import text
+        db = current_app.extensions['sqlalchemy'].engine
+        with db.connect() as conn:
+            row = conn.execute(
+                text('SELECT is_developer FROM "user" WHERE id = :uid LIMIT 1'),
+                {'uid': user.id}
+            ).fetchone()
+        if not row or not row[0]:
+            return jsonify({'success': False, 'error': 'Solo desarrolladores'}), 403
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+    data     = request.json or {}
+    b64      = data.get('image_base64', '')
+    filename = data.get('filename', 'imagen')
+    style    = data.get('style', 'realistic')
+    try:
+        rating = float(data.get('rating', 4.0))
+    except (ValueError, TypeError):
+        rating = 4.0
+
+    if not b64:
+        return jsonify({'success': False, 'error': 'imagen requerida'}), 400
+
+    # Analizar imagen con visión IA (Groq o Anthropic)
+    try:
+        from flask import current_app as _app
+        prompt_generado = None
+        notas_tecnicas  = None
+
+        # Intentar análisis con Groq Vision
+        import os, requests as _req
+        groq_key = os.environ.get('GROQ_API_KEY', '')
+        if groq_key:
+            try:
+                r = _req.post(
+                    'https://api.groq.com/openai/v1/chat/completions',
+                    headers={'Authorization': f'Bearer {groq_key}', 'Content-Type': 'application/json'},
+                    json={
+                        'model': 'meta-llama/llama-4-scout-17b-16e-instruct',
+                        'messages': [{
+                            'role': 'user',
+                            'content': [
+                                {
+                                    'type': 'text',
+                                    'text': '''Analiza esta imagen en detalle para entrenamiento de IA generativa.
+Responde en JSON con este formato exacto:
+{
+  "prompt": "descripción detallada de la imagen para generar algo similar",
+  "tags": ["tag1", "tag2", "tag3"],
+  "colores": ["color1", "color2"],
+  "composicion": "descripción de la composición visual",
+  "notas_tecnicas": "parámetros matemáticos, gradientes, texturas, iluminación, estructura visual"
+}'''
+                                },
+                                {
+                                    'type': 'image_url',
+                                    'image_url': {'url': f'data:image/jpeg;base64,{b64}'}
+                                }
+                            ]
+                        }],
+                        'max_tokens': 600,
+                    },
+                    timeout=30
+                )
+                if r.status_code == 200:
+                    import json as _json
+                    content = r.json()['choices'][0]['message']['content']
+                    # Extraer JSON de la respuesta
+                    start = content.find('{')
+                    end   = content.rfind('}') + 1
+                    if start >= 0 and end > start:
+                        parsed = _json.loads(content[start:end])
+                        prompt_generado = parsed.get('prompt', '')
+                        tags_ia         = parsed.get('tags', [])
+                        notas_tecnicas  = f"Colores: {', '.join(parsed.get('colores', []))}. Composición: {parsed.get('composicion', '')}. {parsed.get('notas_tecnicas', '')}"
+            except Exception as ve:
+                logger.warning(f'[training/analyze] Groq Vision error: {ve}')
+
+        # Si no se pudo analizar, usar nombre de archivo como prompt base
+        if not prompt_generado:
+            prompt_generado = filename.rsplit('.', 1)[0].replace('_', ' ').replace('-', ' ')
+            notas_tecnicas  = f'Imagen subida manualmente: {filename}'
+            tags_ia = []
+
+        # Guardar en BD
+        from .cicdream import get_feedback
+        from flask import current_app
+        db = current_app.extensions['sqlalchemy'].engine
+        fb = get_feedback(db)
+
+        full_prompt = prompt_generado
+        if notas_tecnicas:
+            full_prompt = f"{prompt_generado}. Notas: {notas_tecnicas[:300]}"
+
+        gen_id = fb.save_generation(
+            user_id  = user.id,
+            prompt   = full_prompt,
+            style    = style,
+            size     = 'square',
+            quality  = 'standard',
+            generation_result = {
+                'provider': 'Mass Training',
+                'engine':   'manual',
+                'seed': 0, 'steps': 0, 'guidance': 7.5, 'time_ms': 0,
+            },
+        )
+
+        if gen_id:
+            fb.submit(
+                generation_id = gen_id,
+                user_id       = user.id,
+                rating        = rating,
+                details       = notas_tecnicas or '',
+                tags          = tags_ia,
+            )
+
+        return jsonify({
+            'success':        True,
+            'generation_id':  gen_id,
+            'prompt_extraido': prompt_generado,
+            'filename':       filename,
+        })
+
+    except Exception as e:
+        logger.error(f'[training/analyze] Error: {e}', exc_info=True)
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 def register(app):
     app.register_blueprint(bp)
     logger.info('Rutas /api/image/* registradas (v2 con CicDream)')
