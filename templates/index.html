@@ -1016,21 +1016,11 @@ function startDev(){
   const n=currentUser.username;
   document.getElementById('devUserName').textContent=n;
   document.getElementById('devAvLetter').textContent=n[0].toUpperCase();
-  // Ocultar TODAS las secciones primero
-  document.querySelectorAll('#devApp .section').forEach(s=>s.classList.remove('active'));
-  document.querySelectorAll('#devSidebar .nav-item').forEach(n=>n.classList.remove('active'));
-  // Mostrar solo Dashboard
-  const dashSec = document.getElementById('dev-dashboard');
-  if(dashSec) dashSec.classList.add('active');
-  // Marcar Dashboard como activo en sidebar
-  // Marcar Dashboard activo (primer item de PLATAFORMA)
-  document.querySelectorAll('#devSidebar .nav-item').forEach(item=>{
-    if(item.getAttribute('onclick')&&item.getAttribute('onclick').includes('dashboard'))
-      item.classList.add('active');
-  });
-  loadDashboard();
+  // Restaurar última sección o ir a dashboard
+  const lastSection = localStorage.getItem('cic_dev_section') || 'dashboard';
+  devGo(lastSection, null);
   const iaPanel=document.getElementById("iaPanelRight");
-  if(iaPanel) iaPanel.style.display="flex";
+  if(iaPanel) iaPanel.style.display = lastSection==='dashboard' ? "flex" : "none";
 }
 function startUser(){
   document.getElementById('userApp').style.display='flex';
@@ -1041,6 +1031,9 @@ function startUser(){
   // Show hamburger for user on mobile
   if(window.innerWidth<=768)document.getElementById('userHamburger').style.display='flex';
   loadUserHistory();
+  // Restaurar última sección o ir a chat
+  const lastSection = localStorage.getItem('cic_user_section') || 'chat';
+  userGo(lastSection, null);
 }
 
 /* ═══ SIDEBAR ═══ */
@@ -1062,7 +1055,15 @@ function devGo(name,el){
   const sec=document.getElementById('dev-'+name);
   if(sec)sec.classList.add('active');
   if(el)el.classList.add('active');
+  else{
+    // Restaurar nav-item activo sin referencia al elemento
+    document.querySelectorAll('#devSidebar .nav-item').forEach(n=>{
+      if(n.getAttribute('onclick')&&n.getAttribute('onclick').includes("'"+name+"'"))n.classList.add('active');
+    });
+  }
   closeSidebar();
+  // Guardar sección activa para restaurar en refresh
+  localStorage.setItem('cic_dev_section', name);
   // Mostrar panel IA solo en Dashboard
   const iaPanel=document.getElementById('iaPanelRight');
   if(iaPanel) iaPanel.style.display = name==='dashboard'?'flex':'none';
@@ -1080,7 +1081,14 @@ function devGo(name,el){
 function userGo(name,el){
   document.querySelectorAll('#userSidebar .nav-item').forEach(n=>n.classList.remove('active'));
   if(el)el.classList.add('active');
+  else{
+    document.querySelectorAll('#userSidebar .nav-item').forEach(n=>{
+      if(n.getAttribute('onclick')&&n.getAttribute('onclick').includes("'"+name+"'"))n.classList.add('active');
+    });
+  }
   closeSidebar();
+  // Guardar sección activa para restaurar en refresh
+  localStorage.setItem('cic_user_section', name);
   const cv=document.getElementById('userChatView');
   const mv=document.getElementById('userModView');
   if(name==='chat'){cv.style.display='flex';mv.style.display='none';}
@@ -1129,23 +1137,13 @@ function renderUserMod(name){
             <label>Motor</label>
             <select id="uImgEngine">
               <option value="auto" selected>⚡ Auto — mejor disponible</option>
-              <optgroup label="🤗 HuggingFace (gratis)">
-                <option value="hf_flux">🔥 FLUX.1-schnell</option>
-                <option value="hf_sdxl">🖼️ SDXL — alta resolución</option>
-                <option value="hf_sd21">🎨 Stable Diffusion 2.1</option>
-              </optgroup>
-              <optgroup label="🟣 Google Gemini (key opcional)">
-                <option value="gemini_flash">✨ Gemini Flash</option>
-              </optgroup>
-              <optgroup label="🔷 Stability AI (key opcional)">
-                <option value="stability_core">💎 Stability Core</option>
-              </optgroup>
-              <optgroup label="🌐 Pollinations (gratis, puede fallar)">
-                <option value="pollinations_flux">🔥 FLUX.1</option>
-                <option value="pollinations_turbo">⚡ Turbo</option>
-              </optgroup>
               <optgroup label="🧠 Motor propio">
                 <option value="cicdream">🧠 CicDream v1.0</option>
+              </optgroup>
+              <optgroup label="🌐 Gratis, sin key">
+                <option value="pollinations_flux">🔥 FLUX.1</option>
+                <option value="pollinations_turbo">⚡ Turbo</option>
+                <option value="hf_sdxl">SDXL</option>
               </optgroup>
               <optgroup label="🎨 Arte algorítmico">
                 <option value="svg">SVG vectorial</option>
