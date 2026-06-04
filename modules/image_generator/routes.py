@@ -318,6 +318,98 @@ def status():
     })
 
 
+@bp.route('/training/manual', methods=['POST'])
+def manual_training():
+    """
+    Permite al desarrollador enseñar a CicDream manualmente.
+    Recibe imagen + descripción + metadatos y los guarda como
+    dato de entrenamiento en la BD.
+    """
+    try:
+        user = _get_current_user()
+    except PermissionError as e:
+        return jsonify({'success': False, 'error': str(e)}), 401
+
+    # Solo desarrolladores
+    try:
+        from flask import current_app
+        from sqlalchemy import text
+        db = current_app.extensions['sqlalchemy'].engine
+        with db.connect() as conn:
+            row = conn.execute(
+                text('SELECT is_developer FROM "user" WHERE id = :uid LIMIT 1'),
+                {'uid': user.id}
+            ).fetchone()
+        if not row or not row[0]:
+            return jsonify({'success': False, 'error': 'Solo desarrolladores'}), 403
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+    data   = request.json or {}
+    prompt = data.get('prompt', '').strip()
+    style  = data.get('style', 'realistic')
+    notes  = data.get('notes', '').strip()
+    tags   = data.get('tags', [])
+    try:
+        rating = float(data.get('rating', 5.0))
+    except (ValueError, TypeError):
+        rating = 5.0
+
+    if not prompt:
+        return jsonify({'success': False, 'error': 'El prompt es obligatorio'}), 400
+
+    # Enriquecer prompt con notas si existen
+    full_prompt = prompt
+    if notes:
+        full_prompt = f"{prompt}. Notas técnicas: {notes}"
+
+    try:
+        from flask import current_app
+        from .cicdream import get_feedback
+        db = current_app.extensions['sqlalchemy'].engine
+        fb = get_feedback(db)
+
+        # Guardar como generación manual
+        gen_result = {
+            'provider': 'Manual Training',
+            'engine':   'manual',
+            'seed':     0,
+            'steps':    0,
+            'guidance': 7.5,
+            'time_ms':  0,
+        }
+        gen_id = fb.save_generation(
+            user_id          = user.id,
+            prompt           = full_prompt,
+            style            = style,
+            size             = 'square',
+            quality          = 'standard',
+            generation_result = gen_result,
+        )
+
+        if gen_id:
+            # Guardar feedback con la calificación dada
+            fb.submit(
+                generation_id = gen_id,
+                user_id       = user.id,
+                rating        = rating,
+                details       = notes,
+                tags          = tags,
+            )
+            logger.info(f'[training/manual] gen_id={gen_id} prompt={prompt[:50]!r} rating={rating}')
+            return jsonify({
+                'success':       True,
+                'generation_id': gen_id,
+                'message':       f'CicDream aprendió: "{prompt[:60]}..."',
+            })
+        else:
+            return jsonify({'success': False, 'error': 'No se pudo guardar en la BD'}), 500
+
+    except Exception as e:
+        logger.error(f'[training/manual] Error: {e}', exc_info=True)
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 def register(app):
     app.register_blueprint(bp)
     logger.info('Rutas /api/image/* registradas (v2 con CicDream)')
