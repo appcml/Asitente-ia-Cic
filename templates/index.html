@@ -607,6 +607,103 @@ tr:hover td{background:rgba(91,141,238,.03);}
           <div id="devImgGenRes" style="margin-top:16px"></div>
 
         </div>
+
+        <!-- ── ENTRENAR CICDREAM MANUALMENTE ─────────────────────────── -->
+        <div class="panel" style="margin-top:16px;border:1px solid var(--accent);border-radius:12px">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
+            <span style="font-size:1.4rem">🧠</span>
+            <div>
+              <h3 style="margin:0;font-size:1rem">Entrenar CicDream manualmente</h3>
+              <p style="margin:0;font-size:.78rem;color:var(--text2)">Enseña al motor con imágenes de referencia y descripciones</p>
+            </div>
+          </div>
+
+          <!-- Subir imagen de referencia -->
+          <div style="display:grid;grid-template-columns:200px 1fr;gap:16px;margin-bottom:16px">
+            <div>
+              <label style="font-size:.8rem;color:var(--text2);display:block;margin-bottom:6px">Imagen de referencia</label>
+              <div id="trainImgDrop" onclick="document.getElementById('trainImgInput').click()"
+                style="border:2px dashed var(--border);border-radius:10px;height:160px;display:flex;flex-direction:column;
+                       align-items:center;justify-content:center;cursor:pointer;background:var(--bg2);transition:.2s;overflow:hidden"
+                ondragover="event.preventDefault();this.style.borderColor='var(--accent)'"
+                ondragleave="this.style.borderColor='var(--border)'"
+                ondrop="handleTrainImgDrop(event)">
+                <img id="trainImgPreview" style="display:none;width:100%;height:100%;object-fit:cover;border-radius:8px"/>
+                <div id="trainImgPlaceholder" style="text-align:center;padding:10px">
+                  <div style="font-size:2rem">🖼️</div>
+                  <div style="font-size:.75rem;color:var(--text2)">Clic o arrastra imagen</div>
+                  <div style="font-size:.7rem;color:var(--text3)">JPG, PNG, WebP</div>
+                </div>
+              </div>
+              <input type="file" id="trainImgInput" accept="image/*" style="display:none" onchange="handleTrainImgSelect(this)"/>
+              <button class="btn btn-ghost btn-sm" style="width:100%;margin-top:6px" onclick="clearTrainImg()">✕ Quitar imagen</button>
+            </div>
+
+            <div style="display:flex;flex-direction:column;gap:10px">
+              <div class="form-group" style="margin:0">
+                <label>Descripción / Prompt de referencia *</label>
+                <textarea id="trainPrompt" rows="3"
+                  placeholder="Ej: Nebulosa galáctica en el espacio profundo, nubes púrpuras y azules, estrellas brillantes, fondo negro"></textarea>
+              </div>
+
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+                <div class="form-group" style="margin:0">
+                  <label>Estilo visual</label>
+                  <select id="trainStyle">
+                    <option value="realistic">📷 Fotorrealista</option>
+                    <option value="artistic">🎨 Arte digital</option>
+                    <option value="anime">⛩ Anime</option>
+                    <option value="cyberpunk">⚡ Cyberpunk</option>
+                    <option value="fantasy">🐉 Fantasía</option>
+                    <option value="space">🌌 Espacio</option>
+                    <option value="abstract">🌀 Abstracto</option>
+                    <option value="sketch">✏️ Boceto</option>
+                    <option value="3d">🧊 Render 3D</option>
+                    <option value="minimalist">◻️ Minimalista</option>
+                  </select>
+                </div>
+                <div class="form-group" style="margin:0">
+                  <label>Calidad de referencia</label>
+                  <select id="trainRating">
+                    <option value="5">⭐⭐⭐⭐⭐ Excelente</option>
+                    <option value="4">⭐⭐⭐⭐ Muy buena</option>
+                    <option value="3">⭐⭐⭐ Buena</option>
+                    <option value="2">⭐⭐ Regular</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="form-group" style="margin:0">
+                <label>Tags (separados por coma)</label>
+                <input type="text" id="trainTags" placeholder="Ej: espacio, nebulosa, púrpura, fotorrealista, alta calidad"/>
+              </div>
+            </div>
+          </div>
+
+          <!-- Información adicional (modelo matemático, notas técnicas) -->
+          <div class="form-group">
+            <label>Información adicional para el modelo <span style="color:var(--text2);font-weight:normal;font-size:.78rem">(opcional — modelo matemático, notas técnicas, estructura, composición)</span></label>
+            <textarea id="trainNotes" rows="3"
+              placeholder="Ej: La imagen usa una paleta fría dominada por azules y púrpuras. El centro tiene mayor luminosidad. Las estrellas son puntos blancos de tamaño variable. Composición circular con gradiente radial desde el centro..."></textarea>
+          </div>
+
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <button class="btn btn-primary" onclick="submitTrainingData()" id="trainBtn">
+              🧠 Enseñar a CicDream
+            </button>
+            <button class="btn btn-outline btn-sm" onclick="clearTrainingForm()">Limpiar</button>
+            <span id="trainStatus" style="font-size:.78rem;color:var(--text2)"></span>
+          </div>
+
+          <!-- Dataset acumulado -->
+          <div id="trainDatasetInfo" style="margin-top:14px;padding:10px;background:var(--bg2);border-radius:8px;display:none">
+            <div style="font-size:.8rem;color:var(--text2)">
+              📊 Dataset acumulado: <strong id="trainDatasetCount">0</strong> ejemplos con feedback
+              <span id="trainReadyBadge" style="display:none;margin-left:8px" class="badge badge-green">✅ Listo para entrenar en Colab</span>
+            </div>
+          </div>
+        </div>
+
       </div>
 
       <!-- VIDEO GEN (dev preview) -->
@@ -2015,6 +2112,110 @@ function updateSizeHint(elId, val){
 }
 
 /* ── Panel DEV ── */
+// ── ENTRENAMIENTO MANUAL CICDREAM ────────────────────────────────────────
+
+let _trainImgBase64 = null;
+
+function handleTrainImgSelect(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    _trainImgBase64 = e.target.result.split(',')[1];
+    document.getElementById('trainImgPreview').src = e.target.result;
+    document.getElementById('trainImgPreview').style.display = 'block';
+    document.getElementById('trainImgPlaceholder').style.display = 'none';
+  };
+  reader.readAsDataURL(file);
+}
+
+function handleTrainImgDrop(e) {
+  e.preventDefault();
+  document.getElementById('trainImgDrop').style.borderColor = 'var(--border)';
+  const file = e.dataTransfer.files[0];
+  if (!file || !file.type.startsWith('image/')) return;
+  const fakeInput = { files: [file] };
+  handleTrainImgSelect(fakeInput);
+}
+
+function clearTrainImg() {
+  _trainImgBase64 = null;
+  document.getElementById('trainImgPreview').style.display = 'none';
+  document.getElementById('trainImgPlaceholder').style.display = 'block';
+  document.getElementById('trainImgInput').value = '';
+}
+
+function clearTrainingForm() {
+  clearTrainImg();
+  document.getElementById('trainPrompt').value = '';
+  document.getElementById('trainTags').value = '';
+  document.getElementById('trainNotes').value = '';
+  document.getElementById('trainStatus').textContent = '';
+}
+
+async function submitTrainingData() {
+  const prompt = document.getElementById('trainPrompt').value.trim();
+  const style  = document.getElementById('trainStyle').value;
+  const rating = parseFloat(document.getElementById('trainRating').value);
+  const tags   = document.getElementById('trainTags').value.split(',').map(t => t.trim()).filter(Boolean);
+  const notes  = document.getElementById('trainNotes').value.trim();
+
+  if (!prompt) {
+    document.getElementById('trainStatus').textContent = '⚠️ La descripción es obligatoria';
+    document.getElementById('trainStatus').style.color = 'var(--error)';
+    return;
+  }
+
+  const btn = document.getElementById('trainBtn');
+  btn.disabled = true;
+  btn.textContent = 'Guardando...';
+  document.getElementById('trainStatus').textContent = '';
+
+  try {
+    // Guardar como generación + feedback en CicDream
+    // Primero guardamos la generación
+    const genRes = await req('/api/image/training/manual', 'POST', {
+      prompt,
+      style,
+      rating,
+      tags,
+      notes,
+      image_base64: _trainImgBase64,
+    });
+
+    if (genRes.success) {
+      document.getElementById('trainStatus').textContent = '✅ CicDream aprendió de esta imagen';
+      document.getElementById('trainStatus').style.color = 'var(--success)';
+      // Actualizar contador de dataset
+      loadTrainDatasetInfo();
+      // Limpiar formulario después de 2 segundos
+      setTimeout(() => clearTrainingForm(), 2000);
+    } else {
+      document.getElementById('trainStatus').textContent = '❌ ' + (genRes.error || 'Error al guardar');
+      document.getElementById('trainStatus').style.color = 'var(--error)';
+    }
+  } catch(e) {
+    document.getElementById('trainStatus').textContent = '❌ Error: ' + e.message;
+    document.getElementById('trainStatus').style.color = 'var(--error)';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '🧠 Enseñar a CicDream';
+  }
+}
+
+async function loadTrainDatasetInfo() {
+  try {
+    const r = await req('/api/image/dataset/export?limit=1', 'GET');
+    if (r && r.total !== undefined) {
+      document.getElementById('trainDatasetInfo').style.display = 'block';
+      document.getElementById('trainDatasetCount').textContent = r.total;
+      if (r.ready_for_training) {
+        document.getElementById('trainReadyBadge').style.display = 'inline';
+      }
+    }
+  } catch(e) {}
+}
+
 async function generateImage(){
   const prompt=(document.getElementById('devImgPrompt')?.value||'').trim();
   if(!prompt){alert('Escribe una descripción');return;}
