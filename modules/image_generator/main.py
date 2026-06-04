@@ -185,19 +185,14 @@ def generar(prompt: str, style: str = 'realistic', size: str = 'square',
                                         style=style, quality=quality,
                                         user_id=user_id)
 
-    # ── CASO 3: Si todo falló → motor propio como último recurso ─────────
+    # ── CASO 3: Si externos fallaron → error claro, sin fallback a motor propio ──
     if not images:
-        logger.warning("[CicImage] Externos fallaron, usando motor SVG propio como respaldo")
-        for i in range(count):
-            try:
-                img = _engine_svg(prompt, style, W, H, seed + i * 1337)
-                if img:
-                    images.append(img)
-            except Exception:
-                pass
-
-    if not images:
-        return {'success': False, 'error': 'No se pudo generar ninguna imagen', 'images': []}
+        logger.warning("[CicImage] Todos los motores externos fallaron")
+        return {
+            'success': False,
+            'error': 'No se pudo conectar con ningún motor de imágenes. Intenta de nuevo en unos segundos.',
+            'images': []
+        }
 
     return {
         'success':      True,
