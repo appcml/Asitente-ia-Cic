@@ -962,16 +962,16 @@ _HF_MODELS = {
 }
 
 AUTO_CASCADE = [
-    'gemini_flash',         # Google Gemini — 500/día gratis, funciona desde Render
+    'pollinations_flux',    # Pollinations FLUX — motor principal
+    'pollinations_turbo',   # Pollinations Turbo — rápido
+    'gemini_flash',         # Google Gemini — 500/día gratis
     'stability_core',       # Stability AI — requiere STABILITY_API_KEY
-    'fal_flux_schnell',     # fal.ai — requiere FAL_API_KEY (~0.003 USD/img)
+    'fal_flux_schnell',     # fal.ai — requiere FAL_API_KEY
     'fal_flux_dev',         # fal.ai dev — mayor calidad
-    'hf_flux',              # HuggingFace FLUX (puede estar bloqueado en Render free)
+    'hf_flux',              # HuggingFace FLUX
     'hf_sdxl',              # HuggingFace SDXL
     'hf_sd21',              # HuggingFace SD 2.1
-    'pollinations_flux',    # Pollinations (bloqueado en servidores datacenter)
-    'pollinations_turbo',
-    'pollinations_sd',
+    'pollinations_sd',      # Pollinations SD — último recurso
 ]
 
 
@@ -994,7 +994,12 @@ def _ext_pollinations(prompt: str, W: int, H: int, seed: int, model: str = 'flux
         url = (f"https://image.pollinations.ai/prompt/{enc}"
                f"?width={W}&height={H}&seed={seed}"
                f"&model={model}&nologo=true&enhance=true")
-        r = requests.get(url, timeout=45, stream=True)
+        headers_poll = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Referer': 'https://pollinations.ai/',
+            'Accept': 'image/webp,image/apng,image/*,*/*;q=0.8',
+        }
+        r = requests.get(url, timeout=60, stream=True, headers=headers_poll)
         if r.status_code == 200 and 'image' in r.headers.get('Content-Type', ''):
             ct  = r.headers.get('Content-Type', 'image/jpeg')
             b64 = base64.b64encode(r.content).decode()
