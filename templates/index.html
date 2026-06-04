@@ -1508,6 +1508,23 @@ async function readGitHub(){
   }catch(e){document.getElementById('devInfo').textContent='❌ '+e.message;}
 }
 
+// ── Variables y funciones faltantes ──────────────────────────────────────
+const LONG_TEXT_THRESHOLD = 3000;
+let devPendingTxt  = null;
+let userPendingTxt = null;
+
+function buildMessageWithTxt(msg, pendingTxt) {
+  if (!pendingTxt) return msg;
+  return (msg ? msg + '\n\n' : '') + '[ARCHIVO: ' + pendingTxt.filename + ']\n' + pendingTxt.content;
+}
+
+function removeTxtAttachment(containerId, scope) {
+  const el = document.getElementById(containerId);
+  if (el) el.style.display = 'none';
+  if (scope === 'dev') devPendingTxt = null;
+  else userPendingTxt = null;
+}
+
 async function sendDevMsg(){
   const el=document.getElementById('devInput');
   const msg=el.value.trim();if(!msg&&!devPendImg)return;
