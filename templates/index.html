@@ -631,7 +631,8 @@ tr:hover td{background:rgba(91,141,238,.03);}
                 <img id="trainImgPreview" style="display:none;width:100%;height:100%;object-fit:cover;border-radius:8px"/>
                 <div id="trainImgPlaceholder" style="text-align:center;padding:10px">
                   <div style="font-size:2rem">🖼️</div>
-                  <div style="font-size:.75rem;color:var(--text2)">Clic o arrastra imagen</div>
+                  <div style="font-size:.75rem;color:var(--text2)">Clic, arrastra o</div>
+                  <div style="font-size:.75rem;font-weight:600;color:var(--accent)">Ctrl+V para pegar</div>
                   <div style="font-size:.7rem;color:var(--text3)">JPG, PNG, WebP</div>
                 </div>
               </div>
@@ -650,6 +651,7 @@ tr:hover td{background:rgba(91,141,238,.03);}
                 <div class="form-group" style="margin:0">
                   <label>Estilo visual</label>
                   <select id="trainStyle">
+                    <option value="auto">🤖 Auto — CicDream decide</option>
                     <option value="realistic">📷 Fotorrealista</option>
                     <option value="artistic">🎨 Arte digital</option>
                     <option value="anime">⛩ Anime</option>
@@ -702,6 +704,77 @@ tr:hover td{background:rgba(91,141,238,.03);}
               <span id="trainReadyBadge" style="display:none;margin-left:8px" class="badge badge-green">✅ Listo para entrenar en Colab</span>
             </div>
           </div>
+        </div>
+
+        <!-- ── CARGA MASIVA ────────────────────────────────────────────── -->
+        <div class="panel" style="margin-top:12px;border:1px solid var(--border);border-radius:12px">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
+            <span style="font-size:1.4rem">📦</span>
+            <div>
+              <h3 style="margin:0;font-size:1rem">Carga masiva de imágenes</h3>
+              <p style="margin:0;font-size:.78rem;color:var(--text2)">CicDream analiza automáticamente cada imagen y extrae prompts, colores, composición y parámetros matemáticos</p>
+            </div>
+          </div>
+
+          <!-- Zona de drop masivo -->
+          <div onclick="document.getElementById('massImgInput').click()"
+            style="border:2px dashed var(--border);border-radius:10px;padding:24px;text-align:center;
+                   cursor:pointer;background:var(--bg2);margin-bottom:12px;transition:.2s"
+            ondragover="event.preventDefault();this.style.borderColor='var(--accent)'"
+            ondragleave="this.style.borderColor='var(--border)'"
+            ondrop="event.preventDefault();this.style.borderColor='var(--border)';
+                    document.getElementById('massImgInput').files=event.dataTransfer.files;
+                    handleMassImgSelect(document.getElementById('massImgInput'))">
+            <div style="font-size:2rem;margin-bottom:6px">📁</div>
+            <div style="font-size:.85rem;font-weight:500">Clic para seleccionar múltiples imágenes</div>
+            <div style="font-size:.75rem;color:var(--text2);margin-top:4px">O arrastra un lote completo aquí • JPG, PNG, WebP</div>
+            <div style="font-size:.7rem;color:var(--text3);margin-top:2px">También puedes pegar imágenes con Ctrl+V en el formulario individual</div>
+          </div>
+          <input type="file" id="massImgInput" accept="image/*" multiple style="display:none" onchange="handleMassImgSelect(this)"/>
+
+          <!-- Preview del lote -->
+          <div id="massInfo" style="display:none;margin-bottom:12px">
+            <div style="font-size:.82rem;color:var(--text2);margin-bottom:8px">
+              📸 <strong id="massCount">0</strong> imágenes seleccionadas — CicDream las analizará con visión IA
+            </div>
+            <div id="massPreview" style="display:flex;flex-wrap:wrap;gap:6px"></div>
+          </div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
+            <div class="form-group" style="margin:0">
+              <label>Estilo general del lote</label>
+              <select id="massStyle">
+                <option value="auto">🤖 Auto — CicDream decide</option>
+                <option value="realistic">📷 Fotorrealista</option>
+                <option value="artistic">🎨 Arte digital</option>
+                <option value="anime">⛩ Anime</option>
+                <option value="cyberpunk">⚡ Cyberpunk</option>
+                <option value="fantasy">🐉 Fantasía</option>
+                <option value="space">🌌 Espacio</option>
+                <option value="abstract">🌀 Abstracto</option>
+              </select>
+            </div>
+            <div class="form-group" style="margin:0">
+              <label>Calidad de referencia del lote</label>
+              <select id="massRating">
+                <option value="5">⭐⭐⭐⭐⭐ Excelente</option>
+                <option value="4">⭐⭐⭐⭐ Muy buena</option>
+                <option value="3">⭐⭐⭐ Buena</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Barra de progreso -->
+          <div id="massProgress" style="display:none;margin-bottom:12px">
+            <div style="background:var(--bg2);border-radius:6px;height:8px;overflow:hidden;margin-bottom:6px">
+              <div id="massProgressBar" style="background:var(--accent);height:100%;width:0%;transition:width .3s"></div>
+            </div>
+            <div id="massProgressText" style="font-size:.78rem;color:var(--text2)"></div>
+          </div>
+
+          <button class="btn btn-primary" id="massBtn" onclick="processMassUpload()">
+            📦 Analizar y entrenar con lote
+          </button>
         </div>
 
       </div>
@@ -2115,6 +2188,35 @@ function updateSizeHint(elId, val){
 // ── ENTRENAMIENTO MANUAL CICDREAM ────────────────────────────────────────
 
 let _trainImgBase64 = null;
+let _massQueue = [];
+let _massProcessing = false;
+
+// ── Ctrl+V para pegar imagen directamente ────────────────────────────────
+document.addEventListener('paste', function(e) {
+  const trainSection = document.getElementById('dev-img-gen');
+  if (!trainSection || !trainSection.classList.contains('active')) return;
+  const items = e.clipboardData?.items;
+  if (!items) return;
+  for (const item of items) {
+    if (item.type.startsWith('image/')) {
+      const file = item.getAsFile();
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = ev => {
+          _trainImgBase64 = ev.target.result.split(',')[1];
+          document.getElementById('trainImgPreview').src = ev.target.result;
+          document.getElementById('trainImgPreview').style.display = 'block';
+          document.getElementById('trainImgPlaceholder').style.display = 'none';
+          document.getElementById('trainImgDrop').style.borderColor = 'var(--accent)';
+          setTimeout(() => document.getElementById('trainImgDrop').style.borderColor = 'var(--border)', 1500);
+        };
+        reader.readAsDataURL(file);
+        e.preventDefault();
+        break;
+      }
+    }
+  }
+});
 
 function handleTrainImgSelect(input) {
   const file = input.files[0];
@@ -2134,8 +2236,7 @@ function handleTrainImgDrop(e) {
   document.getElementById('trainImgDrop').style.borderColor = 'var(--border)';
   const file = e.dataTransfer.files[0];
   if (!file || !file.type.startsWith('image/')) return;
-  const fakeInput = { files: [file] };
-  handleTrainImgSelect(fakeInput);
+  handleTrainImgSelect({files:[file]});
 }
 
 function clearTrainImg() {
@@ -2157,7 +2258,7 @@ async function submitTrainingData() {
   const prompt = document.getElementById('trainPrompt').value.trim();
   const style  = document.getElementById('trainStyle').value;
   const rating = parseFloat(document.getElementById('trainRating').value);
-  const tags   = document.getElementById('trainTags').value.split(',').map(t => t.trim()).filter(Boolean);
+  const tags   = document.getElementById('trainTags').value.split(',').map(t=>t.trim()).filter(Boolean);
   const notes  = document.getElementById('trainNotes').value.trim();
 
   if (!prompt) {
@@ -2172,23 +2273,15 @@ async function submitTrainingData() {
   document.getElementById('trainStatus').textContent = '';
 
   try {
-    // Guardar como generación + feedback en CicDream
-    // Primero guardamos la generación
     const genRes = await req('/api/image/training/manual', 'POST', {
-      prompt,
-      style,
-      rating,
-      tags,
-      notes,
+      prompt, style, rating, tags, notes,
       image_base64: _trainImgBase64,
     });
 
     if (genRes.success) {
       document.getElementById('trainStatus').textContent = '✅ CicDream aprendió de esta imagen';
       document.getElementById('trainStatus').style.color = 'var(--success)';
-      // Actualizar contador de dataset
       loadTrainDatasetInfo();
-      // Limpiar formulario después de 2 segundos
       setTimeout(() => clearTrainingForm(), 2000);
     } else {
       document.getElementById('trainStatus').textContent = '❌ ' + (genRes.error || 'Error al guardar');
@@ -2203,14 +2296,80 @@ async function submitTrainingData() {
   }
 }
 
+// ── CARGA MASIVA ──────────────────────────────────────────────────────────
+function handleMassImgSelect(input) {
+  const files = Array.from(input.files);
+  if (!files.length) return;
+  _massQueue = files;
+  document.getElementById('massCount').textContent = files.length;
+  document.getElementById('massPreview').innerHTML = files.slice(0,8).map(f => {
+    const url = URL.createObjectURL(f);
+    return `<img src="${url}" style="width:56px;height:56px;object-fit:cover;border-radius:6px;border:2px solid var(--border)"/>`;
+  }).join('') + (files.length > 8 ? `<span style="display:flex;align-items:center;padding:0 8px;font-size:.8rem;color:var(--text2)">+${files.length-8} más</span>` : '');
+  document.getElementById('massInfo').style.display = 'block';
+}
+
+async function processMassUpload() {
+  if (!_massQueue.length) { alert('Selecciona imágenes primero'); return; }
+  if (_massProcessing) return;
+  _massProcessing = true;
+
+  const style  = document.getElementById('massStyle').value;
+  const rating = parseFloat(document.getElementById('massRating').value);
+  const btn    = document.getElementById('massBtn');
+  btn.disabled = true;
+
+  document.getElementById('massProgress').style.display = 'block';
+  const bar  = document.getElementById('massProgressBar');
+  const txt  = document.getElementById('massProgressText');
+
+  let success = 0, errors = 0;
+
+  for (let i = 0; i < _massQueue.length; i++) {
+    const file = _massQueue[i];
+    txt.textContent = `Analizando ${i+1}/${_massQueue.length}: ${file.name}`;
+    bar.style.width = `${Math.round((i/_massQueue.length)*100)}%`;
+
+    try {
+      const b64 = await new Promise((res,rej) => {
+        const r = new FileReader();
+        r.onload = e => res(e.target.result.split(',')[1]);
+        r.onerror = rej;
+        r.readAsDataURL(file);
+      });
+
+      const result = await req('/api/image/training/analyze', 'POST', {
+        image_base64: b64,
+        filename: file.name,
+        style, rating,
+      });
+
+      if (result.success) success++;
+      else errors++;
+    } catch(e) { errors++; }
+  }
+
+  bar.style.width = '100%';
+  txt.textContent = `✅ Completado: ${success} aprendidas${errors > 0 ? `, ${errors} errores` : ''}`;
+  loadTrainDatasetInfo();
+  _massProcessing = false;
+  btn.disabled = false;
+  _massQueue = [];
+  document.getElementById('massImgInput').value = '';
+}
+
 async function loadTrainDatasetInfo() {
   try {
     const r = await req('/api/image/dataset/export?limit=1', 'GET');
     if (r && r.total !== undefined) {
-      document.getElementById('trainDatasetInfo').style.display = 'block';
-      document.getElementById('trainDatasetCount').textContent = r.total;
-      if (r.ready_for_training) {
-        document.getElementById('trainReadyBadge').style.display = 'inline';
+      const info = document.getElementById('trainDatasetInfo');
+      if (info) {
+        info.style.display = 'block';
+        document.getElementById('trainDatasetCount').textContent = r.total;
+        if (r.ready_for_training) {
+          const badge = document.getElementById('trainReadyBadge');
+          if (badge) badge.style.display = 'inline';
+        }
       }
     }
   } catch(e) {}
