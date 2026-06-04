@@ -618,30 +618,51 @@ tr:hover td{background:rgba(91,141,238,.03);}
             </div>
           </div>
 
-          <!-- Subir imagen de referencia -->
-          <div style="display:grid;grid-template-columns:200px 1fr;gap:16px;margin-bottom:16px">
-            <div>
-              <label style="font-size:.8rem;color:var(--text2);display:block;margin-bottom:6px">Imagen de referencia</label>
-              <div id="trainImgDrop" onclick="document.getElementById('trainImgInput').click()"
-                style="border:2px dashed var(--border);border-radius:10px;height:160px;display:flex;flex-direction:column;
-                       align-items:center;justify-content:center;cursor:pointer;background:var(--bg2);transition:.2s;overflow:hidden"
-                ondragover="event.preventDefault();this.style.borderColor='var(--accent)'"
-                ondragleave="this.style.borderColor='var(--border)'"
-                ondrop="handleTrainImgDrop(event)">
-                <img id="trainImgPreview" style="display:none;width:100%;height:100%;object-fit:cover;border-radius:8px"/>
-                <div id="trainImgPlaceholder" style="text-align:center;padding:10px">
-                  <div style="font-size:2rem">🖼️</div>
-                  <div style="font-size:.75rem;color:var(--text2)">Clic, arrastra o</div>
-                  <div style="font-size:.75rem;font-weight:600;color:var(--accent)">Ctrl+V para pegar</div>
-                  <div style="font-size:.7rem;color:var(--text3)">JPG, PNG, WebP</div>
+          <!-- Subir imagen(es) de referencia -->
+          <div style="margin-bottom:16px">
+            <label style="font-size:.8rem;color:var(--text2);display:block;margin-bottom:6px">
+              Imágenes de referencia 
+              <span style="color:var(--accent);font-weight:600">— Ctrl+V, arrastra o selecciona varias</span>
+            </label>
+
+            <!-- Zona de drop -->
+            <div id="trainImgDrop" onclick="document.getElementById('trainImgInput').click()"
+              style="border:2px dashed var(--border);border-radius:10px;padding:16px;display:flex;flex-direction:column;
+                     align-items:center;justify-content:center;cursor:pointer;background:var(--bg2);transition:.2s;min-height:80px"
+              ondragover="event.preventDefault();this.style.borderColor='var(--accent)'"
+              ondragleave="this.style.borderColor='var(--border)'"
+              ondrop="handleTrainImgDrop(event)">
+              <div id="trainImgPlaceholder" style="text-align:center">
+                <div style="font-size:1.8rem">🖼️</div>
+                <div style="font-size:.75rem;color:var(--text2)">Clic, arrastra o <strong style="color:var(--accent)">Ctrl+V</strong> para pegar</div>
+                <div style="font-size:.7rem;color:var(--text3)">Puedes pegar o subir múltiples imágenes</div>
+              </div>
+            </div>
+            <input type="file" id="trainImgInput" accept="image/*" multiple style="display:none" onchange="handleTrainImgSelect(this)"/>
+
+            <!-- Carrusel de imágenes -->
+            <div id="trainCarousel" style="display:none;margin-top:10px">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+                <span style="font-size:.78rem;color:var(--text2)">
+                  <span id="trainCarouselCount">0</span> imagen(es) — 
+                  <span id="trainCarouselIdx">1</span>/<span id="trainCarouselTotal">1</span>
+                </span>
+                <div style="display:flex;gap:6px">
+                  <button class="btn btn-ghost btn-sm" onclick="trainCarouselPrev()">◀</button>
+                  <button class="btn btn-ghost btn-sm" onclick="trainCarouselNext()">▶</button>
+                  <button class="btn btn-ghost btn-sm" style="color:var(--error)" onclick="trainCarouselRemoveCurrent()">✕ Quitar esta</button>
                 </div>
               </div>
-              <input type="file" id="trainImgInput" accept="image/*" style="display:none" onchange="handleTrainImgSelect(this)"/>
-              <button class="btn btn-ghost btn-sm" style="width:100%;margin-top:6px" onclick="clearTrainImg()">✕ Quitar imagen</button>
+              <!-- Miniaturas -->
+              <div id="trainThumbs" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px"></div>
+              <!-- Imagen actual -->
+              <img id="trainImgPreview" style="width:100%;max-height:220px;object-fit:contain;border-radius:8px;border:2px solid var(--border);background:#000"/>
             </div>
+          </div>
 
-            <div style="display:flex;flex-direction:column;gap:10px">
-              <div class="form-group" style="margin:0">
+          <!-- Campos del formulario -->
+          <div style="display:flex;flex-direction:column;gap:10px">
+            <div class="form-group" style="margin:0">
                 <label>Descripción / Prompt de referencia *</label>
                 <textarea id="trainPrompt" rows="3"
                   placeholder="Ej: Nebulosa galáctica en el espacio profundo, nubes púrpuras y azules, estrellas brillantes, fondo negro"></textarea>
@@ -679,11 +700,10 @@ tr:hover td{background:rgba(91,141,238,.03);}
                 <label>Tags (separados por coma)</label>
                 <input type="text" id="trainTags" placeholder="Ej: espacio, nebulosa, púrpura, fotorrealista, alta calidad"/>
               </div>
-            </div>
           </div>
 
-          <!-- Información adicional (modelo matemático, notas técnicas) -->
-          <div class="form-group">
+          <!-- Información adicional -->
+          <div class="form-group" style="margin-top:10px">
             <label>Información adicional para el modelo <span style="color:var(--text2);font-weight:normal;font-size:.78rem">(opcional — modelo matemático, notas técnicas, estructura, composición)</span></label>
             <textarea id="trainNotes" rows="3"
               placeholder="Ej: La imagen usa una paleta fría dominada por azules y púrpuras. El centro tiene mayor luminosidad. Las estrellas son puntos blancos de tamaño variable. Composición circular con gradiente radial desde el centro..."></textarea>
@@ -693,7 +713,7 @@ tr:hover td{background:rgba(91,141,238,.03);}
             <button class="btn btn-primary" onclick="submitTrainingData()" id="trainBtn">
               🧠 Enseñar a CicDream
             </button>
-            <button class="btn btn-outline btn-sm" onclick="clearTrainingForm()">Limpiar</button>
+            <button class="btn btn-outline btn-sm" onclick="clearTrainingForm()">Limpiar todo</button>
             <span id="trainStatus" style="font-size:.78rem;color:var(--text2)"></span>
           </div>
 
@@ -2187,62 +2207,109 @@ function updateSizeHint(elId, val){
 /* ── Panel DEV ── */
 // ── ENTRENAMIENTO MANUAL CICDREAM ────────────────────────────────────────
 
-let _trainImgBase64 = null;
+let _trainImages = []; // [{b64, dataUrl, name}]
+let _trainCarouselIdx = 0;
 let _massQueue = [];
 let _massProcessing = false;
 
-// ── Ctrl+V para pegar imagen directamente ────────────────────────────────
+function _trainUpdateCarousel() {
+  const n = _trainImages.length;
+  if (n === 0) {
+    document.getElementById('trainCarousel').style.display = 'none';
+    document.getElementById('trainImgPlaceholder').style.display = 'block';
+    return;
+  }
+  document.getElementById('trainCarousel').style.display = 'block';
+  document.getElementById('trainImgPlaceholder').style.display = 'none';
+  document.getElementById('trainCarouselCount').textContent = n;
+  document.getElementById('trainCarouselTotal').textContent = n;
+  document.getElementById('trainCarouselIdx').textContent = _trainCarouselIdx + 1;
+  document.getElementById('trainImgPreview').src = _trainImages[_trainCarouselIdx].dataUrl;
+
+  // Miniaturas
+  const thumbs = document.getElementById('trainThumbs');
+  thumbs.innerHTML = _trainImages.map((img, i) => `
+    <img src="${img.dataUrl}" onclick="trainCarouselGoTo(${i})"
+      style="width:48px;height:48px;object-fit:cover;border-radius:6px;cursor:pointer;
+             border:2px solid ${i === _trainCarouselIdx ? 'var(--accent)' : 'var(--border)'}"/>
+  `).join('');
+}
+
+function trainCarouselGoTo(i) {
+  _trainCarouselIdx = i;
+  _trainUpdateCarousel();
+}
+
+function trainCarouselPrev() {
+  if (_trainImages.length === 0) return;
+  _trainCarouselIdx = (_trainCarouselIdx - 1 + _trainImages.length) % _trainImages.length;
+  _trainUpdateCarousel();
+}
+
+function trainCarouselNext() {
+  if (_trainImages.length === 0) return;
+  _trainCarouselIdx = (_trainCarouselIdx + 1) % _trainImages.length;
+  _trainUpdateCarousel();
+}
+
+function trainCarouselRemoveCurrent() {
+  if (_trainImages.length === 0) return;
+  _trainImages.splice(_trainCarouselIdx, 1);
+  _trainCarouselIdx = Math.min(_trainCarouselIdx, _trainImages.length - 1);
+  _trainUpdateCarousel();
+}
+
+function _trainAddImages(files) {
+  const readers = Array.from(files).map(file => new Promise(res => {
+    const r = new FileReader();
+    r.onload = e => res({ b64: e.target.result.split(',')[1], dataUrl: e.target.result, name: file.name });
+    r.readAsDataURL(file);
+  }));
+  Promise.all(readers).then(imgs => {
+    _trainImages.push(...imgs);
+    _trainCarouselIdx = _trainImages.length - imgs.length;
+    _trainUpdateCarousel();
+    // Animar borde
+    document.getElementById('trainImgDrop').style.borderColor = 'var(--accent)';
+    setTimeout(() => document.getElementById('trainImgDrop').style.borderColor = 'var(--border)', 1000);
+  });
+}
+
+// ── Ctrl+V para pegar imagen(es) ─────────────────────────────────────────
 document.addEventListener('paste', function(e) {
   const trainSection = document.getElementById('dev-img-gen');
   if (!trainSection || !trainSection.classList.contains('active')) return;
   const items = e.clipboardData?.items;
   if (!items) return;
+  const imgFiles = [];
   for (const item of items) {
     if (item.type.startsWith('image/')) {
       const file = item.getAsFile();
-      if (file) {
-        const reader = new FileReader();
-        reader.onload = ev => {
-          _trainImgBase64 = ev.target.result.split(',')[1];
-          document.getElementById('trainImgPreview').src = ev.target.result;
-          document.getElementById('trainImgPreview').style.display = 'block';
-          document.getElementById('trainImgPlaceholder').style.display = 'none';
-          document.getElementById('trainImgDrop').style.borderColor = 'var(--accent)';
-          setTimeout(() => document.getElementById('trainImgDrop').style.borderColor = 'var(--border)', 1500);
-        };
-        reader.readAsDataURL(file);
-        e.preventDefault();
-        break;
-      }
+      if (file) imgFiles.push(file);
     }
+  }
+  if (imgFiles.length > 0) {
+    _trainAddImages(imgFiles);
+    e.preventDefault();
   }
 });
 
 function handleTrainImgSelect(input) {
-  const file = input.files[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = e => {
-    _trainImgBase64 = e.target.result.split(',')[1];
-    document.getElementById('trainImgPreview').src = e.target.result;
-    document.getElementById('trainImgPreview').style.display = 'block';
-    document.getElementById('trainImgPlaceholder').style.display = 'none';
-  };
-  reader.readAsDataURL(file);
+  if (!input.files?.length) return;
+  _trainAddImages(input.files);
 }
 
 function handleTrainImgDrop(e) {
   e.preventDefault();
   document.getElementById('trainImgDrop').style.borderColor = 'var(--border)';
-  const file = e.dataTransfer.files[0];
-  if (!file || !file.type.startsWith('image/')) return;
-  handleTrainImgSelect({files:[file]});
+  if (!e.dataTransfer.files?.length) return;
+  _trainAddImages(e.dataTransfer.files);
 }
 
 function clearTrainImg() {
-  _trainImgBase64 = null;
-  document.getElementById('trainImgPreview').style.display = 'none';
-  document.getElementById('trainImgPlaceholder').style.display = 'block';
+  _trainImages = [];
+  _trainCarouselIdx = 0;
+  _trainUpdateCarousel();
   document.getElementById('trainImgInput').value = '';
 }
 
@@ -2269,31 +2336,34 @@ async function submitTrainingData() {
 
   const btn = document.getElementById('trainBtn');
   btn.disabled = true;
-  btn.textContent = 'Guardando...';
   document.getElementById('trainStatus').textContent = '';
 
-  try {
-    const genRes = await req('/api/image/training/manual', 'POST', {
-      prompt, style, rating, tags, notes,
-      image_base64: _trainImgBase64,
-    });
+  const total = Math.max(1, _trainImages.length);
+  let success = 0;
 
-    if (genRes.success) {
-      document.getElementById('trainStatus').textContent = '✅ CicDream aprendió de esta imagen';
-      document.getElementById('trainStatus').style.color = 'var(--success)';
-      loadTrainDatasetInfo();
-      setTimeout(() => clearTrainingForm(), 2000);
-    } else {
-      document.getElementById('trainStatus').textContent = '❌ ' + (genRes.error || 'Error al guardar');
-      document.getElementById('trainStatus').style.color = 'var(--error)';
-    }
-  } catch(e) {
-    document.getElementById('trainStatus').textContent = '❌ Error: ' + e.message;
-    document.getElementById('trainStatus').style.color = 'var(--error)';
-  } finally {
-    btn.disabled = false;
-    btn.textContent = '🧠 Enseñar a CicDream';
+  for (let i = 0; i < total; i++) {
+    btn.textContent = total > 1 ? `Guardando ${i+1}/${total}...` : 'Guardando...';
+    try {
+      const genRes = await req('/api/image/training/manual', 'POST', {
+        prompt, style, rating, tags, notes,
+        image_base64: _trainImages[i]?.b64 || null,
+      });
+      if (genRes.success) success++;
+    } catch(e) {}
   }
+
+  if (success > 0) {
+    document.getElementById('trainStatus').textContent = `✅ CicDream aprendió de ${success} imagen${success > 1 ? 'es' : ''}`;
+    document.getElementById('trainStatus').style.color = 'var(--success)';
+    loadTrainDatasetInfo();
+    setTimeout(() => clearTrainingForm(), 2000);
+  } else {
+    document.getElementById('trainStatus').textContent = '❌ Error al guardar';
+    document.getElementById('trainStatus').style.color = 'var(--error)';
+  }
+
+  btn.disabled = false;
+  btn.textContent = '🧠 Enseñar a CicDream';
 }
 
 // ── CARGA MASIVA ──────────────────────────────────────────────────────────
