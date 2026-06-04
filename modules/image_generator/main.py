@@ -962,14 +962,14 @@ _HF_MODELS = {
 }
 
 AUTO_CASCADE = [
-    'hf_flux',              # Prioridad principal: HuggingFace FLUX
-    'hf_sdxl',              # Luego SDXL
-    'hf_sd21',              # Luego Stable Diffusion 2.1
-    'fal_flux_schnell',
-    'stability_core',
-    'gemini_flash',
-    'fal_flux_dev',
-    'pollinations_flux',    # Pollinations al final como respaldo gratis
+    'gemini_flash',         # Google Gemini — funciona desde Render, 500/día gratis
+    'stability_core',       # Stability AI — requiere STABILITY_API_KEY
+    'fal_flux_schnell',     # fal.ai — requiere FAL_API_KEY
+    'fal_flux_dev',         # fal.ai dev — requiere FAL_API_KEY
+    'hf_flux',              # HuggingFace FLUX — puede estar bloqueado en Render free
+    'hf_sdxl',              # HuggingFace SDXL
+    'hf_sd21',              # HuggingFace SD 2.1
+    'pollinations_flux',    # Pollinations — bloqueado en Render datacenter IPs
     'pollinations_turbo',
     'pollinations_sd',
 ]
