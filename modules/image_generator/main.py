@@ -927,10 +927,11 @@ def _fractal_julia(W: int, H: int, palette: list, rng) -> Image.Image:
 #             Stability AI → Gemini → HF SD21 → Pollinations SD
 # ═══════════════════════════════════════════════════════════════════════════
 
-_HF_TOKEN      = os.environ.get('HUGGINGFACE_TOKEN', '')
-_GEMINI_KEY    = os.environ.get('GEMINI_API_KEY', '')
-_FAL_KEY       = os.environ.get('FAL_API_KEY', '')
-_STABILITY_KEY = os.environ.get('STABILITY_API_KEY', '')
+_HF_TOKEN         = os.environ.get('HUGGINGFACE_TOKEN', '')
+_GEMINI_KEY       = os.environ.get('GEMINI_API_KEY', '')
+_FAL_KEY          = os.environ.get('FAL_API_KEY', '')
+_STABILITY_KEY    = os.environ.get('STABILITY_API_KEY', '')
+_POLLINATIONS_KEY = os.environ.get('POLLINATIONS_API_KEY', '')
 
 EXTERNAL_MOTORS = {
     'pollinations_flux':   ('Pollinations FLUX.1',          None,            '100% gratis, sin key, alta calidad'),
@@ -980,20 +981,27 @@ def _pollinations_fallback(prompt: str, W: int, H: int, seed: int = 0) -> dict:
 
 
 def _ext_pollinations(prompt: str, W: int, H: int, seed: int, model: str = 'flux') -> dict:
-    """Pollinations.ai — gratis, sin key, sin limite."""
+    """Pollinations.ai — nueva API gen.pollinations.ai con autenticación."""
     if not HAS_REQUESTS:
         return None
     try:
         import urllib.parse as _up
         enc = _up.quote(prompt[:800])
-        url = (f"https://image.pollinations.ai/prompt/{enc}"
+
+        # Nueva URL con dominio gen.pollinations.ai
+        url = (f"https://gen.pollinations.ai/image/{enc}"
                f"?width={W}&height={H}&seed={seed}"
                f"&model={model}&nologo=true&enhance=true")
+
         headers_poll = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Referer': 'https://pollinations.ai/',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
             'Accept': 'image/webp,image/apng,image/*,*/*;q=0.8',
         }
+
+        # Agregar autenticación si hay API key configurada
+        if _POLLINATIONS_KEY:
+            headers_poll['Authorization'] = f'Bearer {_POLLINATIONS_KEY}'
+
         r = requests.get(url, timeout=60, stream=True, headers=headers_poll)
         if r.status_code == 200 and 'image' in r.headers.get('Content-Type', ''):
             ct  = r.headers.get('Content-Type', 'image/jpeg')
@@ -1001,6 +1009,8 @@ def _ext_pollinations(prompt: str, W: int, H: int, seed: int, model: str = 'flux
             return {'url': f"data:{ct};base64,{b64}", 'type': 'base64',
                     'provider': _motor_name(f'pollinations_{model}'),
                     'engine': f'pollinations_{model}', 'size': f"{W}x{H}"}
+        else:
+            logger.warning(f"[Pollinations/{model}] HTTP {r.status_code}: {r.text[:100]}")
     except Exception as e:
         logger.warning(f"[Pollinations/{model}] {e}")
     return None
