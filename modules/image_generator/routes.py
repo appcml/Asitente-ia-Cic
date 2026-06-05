@@ -588,8 +588,9 @@ def dataset_export():
             rows = conn.execute(text("""
                 SELECT
                     g.id, g.prompt, g.style, g.size, g.quality,
-                    g.provider, g.engine, g.created_at,
-                    f.rating, f.details, f.tags
+                    g.created_at,
+                    COALESCE(f.rating, 0) as rating,
+                    COALESCE(f.details, '') as details
                 FROM cicdream_generation g
                 LEFT JOIN cicdream_feedback f ON f.generation_id = g.id
                 ORDER BY g.created_at DESC
@@ -604,12 +605,10 @@ def dataset_export():
                 'style':    row[2],
                 'size':     row[3],
                 'quality':  row[4],
-                'provider': row[5],
-                'engine':   row[6],
-                'created_at': str(row[7]),
-                'rating':   row[8] or 0,
-                'details':  row[9] or '',
-                'tags':     row[10] or [],
+                'created_at': str(row[5]),
+                'rating':   float(row[6]) if row[6] else 0,
+                'details':  row[7] or '',
+                'tags':     [],
             })
 
         total = len(dataset)
