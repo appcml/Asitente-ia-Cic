@@ -1131,7 +1131,7 @@ def _ext_gemini(prompt: str, W: int, H: int) -> dict:
     try:
         r = requests.post(
             f'https://generativelanguage.googleapis.com/v1beta/models/'
-            f'gemini-2.0-flash-preview-image-generation:generateContent?key={_GEMINI_KEY}',
+            f'gemini-3.1-flash-image:generateContent?key={_GEMINI_KEY}',
             json={'contents': [{'parts': [{'text': prompt}]}],
                   'generationConfig': {'responseModalities': ['TEXT', 'IMAGE']}},
             timeout=60,
