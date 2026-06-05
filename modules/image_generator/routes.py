@@ -557,6 +557,80 @@ Responde en JSON con este formato exacto:
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@bp.route('/dataset/export', methods=['GET'])
+def dataset_export():
+    """
+    Exporta el dataset de imágenes con feedback para entrenar CicDream.
+    Usado por el notebook de Colab.
+    """
+    try:
+        user = _get_current_user()
+
+        # Solo desarrolladores pueden exportar el dataset
+        from flask import current_app
+        from sqlalchemy import text
+        db = current_app.extensions['sqlalchemy'].engine
+
+        with db.connect() as conn:
+            is_dev = conn.execute(
+                text('SELECT is_developer FROM "user" WHERE id = :uid LIMIT 1'),
+                {'uid': user.id}
+            ).scalar()
+
+        if not is_dev:
+            return jsonify({'error': 'Solo desarrolladores pueden exportar el dataset'}), 403
+
+        from .cicdream import get_feedback
+        fb = get_feedback(db)
+
+        # Obtener todas las generaciones con feedback
+        with db.connect() as conn:
+            rows = conn.execute(text("""
+                SELECT
+                    g.id, g.prompt, g.style, g.size, g.quality,
+                    g.provider, g.engine, g.created_at,
+                    f.rating, f.details, f.tags
+                FROM cicdream_generation g
+                LEFT JOIN cicdream_feedback f ON f.generation_id = g.id
+                ORDER BY g.created_at DESC
+                LIMIT 2000
+            """)).fetchall()
+
+        dataset = []
+        for row in rows:
+            dataset.append({
+                'id':       row[0],
+                'prompt':   row[1],
+                'style':    row[2],
+                'size':     row[3],
+                'quality':  row[4],
+                'provider': row[5],
+                'engine':   row[6],
+                'created_at': str(row[7]),
+                'rating':   row[8] or 0,
+                'details':  row[9] or '',
+                'tags':     row[10] or [],
+            })
+
+        total = len(dataset)
+        good  = [d for d in dataset if d['rating'] >= 3.5]
+        ready = len(good) >= 10
+
+        return jsonify({
+            'success':          True,
+            'total':            total,
+            'ready_for_training': ready,
+            'dataset':          dataset,
+            'message':          f'{total} imágenes encontradas, {len(good)} con buena calificación',
+        })
+
+    except PermissionError as e:
+        return jsonify({'error': str(e)}), 401
+    except Exception as e:
+        logger.error(f'[dataset/export] Error: {e}', exc_info=True)
+        return jsonify({'error': str(e)}), 500
+
+
 def register(app):
     app.register_blueprint(bp)
     logger.info('Rutas /api/image/* registradas (v2 con CicDream)')
