@@ -958,15 +958,15 @@ _HF_MODELS = {
 }
 
 AUTO_CASCADE = [
-    'pollinations_flux',    # Pollinations FLUX — motor principal
-    'pollinations_turbo',   # Pollinations Turbo — rápido
-    'gemini_flash',         # Google Gemini — 500/día gratis
+    'gemini_flash',         # Google Gemini 2.5 Flash — 500/día gratis, PRINCIPAL
+    'hf_sdxl',              # HuggingFace SDXL — alta resolución
+    'hf_sd21',              # HuggingFace SD 2.1 — confiable
+    'hf_flux',              # HuggingFace FLUX
+    'pollinations_flux',    # Pollinations FLUX — requiere pollen
+    'pollinations_turbo',   # Pollinations Turbo
     'stability_core',       # Stability AI — requiere STABILITY_API_KEY
     'fal_flux_schnell',     # fal.ai — requiere FAL_API_KEY
     'fal_flux_dev',         # fal.ai dev — mayor calidad
-    'hf_flux',              # HuggingFace FLUX
-    'hf_sdxl',              # HuggingFace SDXL
-    'hf_sd21',              # HuggingFace SD 2.1
     'pollinations_sd',      # Pollinations SD — último recurso
 ]
 
