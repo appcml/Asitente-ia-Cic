@@ -993,8 +993,8 @@ def _ext_hf_space(prompt: str, W: int, H: int, seed: int) -> dict:
     try:
         _W = min(W, 768)
         _H = min(H, 768)
-        # Gradio endpoint correcto
-        url = f"{_HF_SPACE_URL.rstrip('/')}/run/predict"
+        # Endpoint correcto del Space Gradio
+        url = f"{_HF_SPACE_URL.rstrip('/')}/run/generate_and_preview"
         payload = {"data": [prompt, _W, _H, seed]}
         headers = {"Content-Type": "application/json"}
         r = requests.post(url, json=payload, headers=headers, timeout=120)
