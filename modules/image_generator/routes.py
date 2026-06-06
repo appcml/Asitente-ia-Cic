@@ -632,4 +632,5 @@ def dataset_export():
 
 def register(app):
     app.register_blueprint(bp)
-    logger.info('Rutas /api/image/* registradas (v2 con CicDream)')v
+    logger.info('Rutas /api/image/* registradas (v2 con CicDream)')
+  
