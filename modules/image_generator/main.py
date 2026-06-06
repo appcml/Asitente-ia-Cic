@@ -185,9 +185,20 @@ def generar(prompt: str, style: str = 'realistic', size: str = 'square',
                                         style=style, quality=quality,
                                         user_id=user_id)
 
-    # ── CASO 3: Si externos fallaron → error claro, sin fallback a motor propio ──
+    # ── CASO 3: Si externos fallaron → usar motor SVG propio como fallback ──
     if not images:
-        logger.warning("[CicImage] Todos los motores externos fallaron")
+        logger.warning("[CicImage] Externos fallaron — usando SVG como fallback")
+        try:
+            for i in range(count):
+                img_seed = seed + i * 1337
+                result = _engine_svg(prompt, style, W, H, img_seed)
+                if result:
+                    result['provider'] = 'CicDream Arte (modo offline)'
+                    images.append(result)
+        except Exception as e:
+            logger.error(f"[CicImage] SVG fallback también falló: {e}")
+
+    if not images:
         return {
             'success': False,
             'error': 'No se pudo conectar con ningún motor de imágenes. Intenta de nuevo en unos segundos.',
@@ -958,13 +969,13 @@ _HF_MODELS = {
 }
 
 AUTO_CASCADE = [
-    'gemini_flash',         # Google Gemini Flash — PRINCIPAL, no bloqueado en Render
-    'pollinations_flux',    # Pollinations FLUX — con API key funciona sin límite
-    'pollinations_turbo',   # Pollinations Turbo — rápido
-    'pollinations_sd',      # Pollinations SD — último recurso
-    'stability_core',       # Stability AI — requiere STABILITY_API_KEY
-    'fal_flux_schnell',     # fal.ai — requiere FAL_API_KEY
-    'fal_flux_dev',         # fal.ai dev — mayor calidad
+    'gemini_flash',         # Google Gemini Flash — PRINCIPAL
+    'pollinations_flux',    # Pollinations FLUX
+    'pollinations_turbo',   # Pollinations Turbo
+    'pollinations_sd',      # Pollinations SD
+    'stability_core',       # Stability AI
+    'fal_flux_schnell',     # fal.ai
+    'fal_flux_dev',         # fal.ai dev
 ]
 
 
@@ -1124,38 +1135,47 @@ def _ext_stability(prompt: str, W: int, H: int, motor_key: str) -> dict:
 
 
 def _ext_gemini(prompt: str, W: int, H: int) -> dict:
-    """Google Gemini Flash Image Generation — gratis con GEMINI_API_KEY."""
+    """Google Gemini imagen — gratis con GEMINI_API_KEY."""
     if not HAS_REQUESTS or not _GEMINI_KEY:
         return None
-    # Modelos de generación de imagen de Gemini en orden de preferencia
+
+    # Gemini 2.0 Flash con generación de imágenes (API correcta 2026)
     gemini_models = [
-        'gemini-2.0-flash-preview-image-generation',
-        'gemini-2.0-flash-exp',
-        'imagen-3.0-generate-002',
+        ('gemini-2.0-flash-exp-image-generation', 'v1beta'),
+        ('gemini-2.0-flash', 'v1beta'),
     ]
-    for model_id in gemini_models:
+
+    for model_id, api_ver in gemini_models:
         try:
             r = requests.post(
-                f'https://generativelanguage.googleapis.com/v1beta/models/'
+                f'https://generativelanguage.googleapis.com/{api_ver}/models/'
                 f'{model_id}:generateContent?key={_GEMINI_KEY}',
                 json={
-                    'contents': [{'parts': [{'text': prompt}]}],
-                    'generationConfig': {'responseModalities': ['TEXT', 'IMAGE']}
+                    'contents': [{'parts': [{'text': f"Generate an image: {prompt}"}]}],
+                    'generationConfig': {
+                        'responseModalities': ['IMAGE', 'TEXT'],
+                        'responseMimeType': 'text/plain',
+                    }
                 },
                 timeout=60,
             )
             if r.status_code == 200:
-                for part in (r.json().get('candidates', [{}])[0]
-                             .get('content', {}).get('parts', [])):
-                    if 'inlineData' in part:
-                        b64 = part['inlineData']['data']
-                        mt  = part['inlineData'].get('mimeType', 'image/png')
-                        logger.info(f"[Gemini] Imagen generada con {model_id}")
-                        return {'url': f"data:{mt};base64,{b64}", 'type': 'base64',
-                                'provider': 'Gemini Flash Image', 'engine': 'gemini_flash',
-                                'size': f"{W}x{H}"}
+                candidates = r.json().get('candidates', [])
+                for candidate in candidates:
+                    for part in candidate.get('content', {}).get('parts', []):
+                        if 'inlineData' in part:
+                            b64 = part['inlineData']['data']
+                            mt  = part['inlineData'].get('mimeType', 'image/png')
+                            logger.info(f"[Gemini] Imagen generada con {model_id}")
+                            return {
+                                'url': f"data:{mt};base64,{b64}",
+                                'type': 'base64',
+                                'provider': 'Gemini Flash Image',
+                                'engine': 'gemini_flash',
+                                'size': f"{W}x{H}"
+                            }
             else:
-                logger.warning(f"[Gemini/{model_id}] HTTP {r.status_code}: {r.text[:150]}")
+                logger.warning(f"[Gemini/{model_id}] HTTP {r.status_code}: {r.text[:200]}")
         except Exception as e:
             logger.warning(f"[Gemini/{model_id}] {e}")
     return None
