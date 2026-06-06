@@ -943,6 +943,7 @@ _GEMINI_KEY       = os.environ.get('GEMINI_API_KEY', '')
 _FAL_KEY          = os.environ.get('FAL_API_KEY', '')
 _STABILITY_KEY    = os.environ.get('STABILITY_API_KEY', '')
 _POLLINATIONS_KEY = os.environ.get('POLLINATIONS_API_KEY', '')
+_HF_SPACE_URL     = os.environ.get('HF_SPACE_URL', 'https://cmarinanlincopan-cicdream-api.hf.space')
 
 EXTERNAL_MOTORS = {
     'pollinations_flux':   ('Pollinations FLUX.1',          None,            '100% gratis, sin key, alta calidad'),
@@ -969,7 +970,8 @@ _HF_MODELS = {
 }
 
 AUTO_CASCADE = [
-    'gemini_flash',         # Google Gemini Flash — PRINCIPAL
+    'hf_space',             # HuggingFace Space propio — FLUX real, sin bloqueo DNS
+    'gemini_flash',         # Google Gemini Flash
     'pollinations_flux',    # Pollinations FLUX
     'pollinations_turbo',   # Pollinations Turbo
     'pollinations_sd',      # Pollinations SD
@@ -982,6 +984,40 @@ AUTO_CASCADE = [
 def _motor_name(key: str) -> str:
     info = EXTERNAL_MOTORS.get(key)
     return info[0] if info else key
+
+
+def _ext_hf_space(prompt: str, W: int, H: int, seed: int) -> dict:
+    """HuggingFace Space propio — FLUX.1 real sin bloqueo DNS."""
+    if not HAS_REQUESTS or not _HF_SPACE_URL:
+        return None
+    try:
+        _W = min(W, 768)
+        _H = min(H, 768)
+        url = f"{_HF_SPACE_URL.rstrip('/')}/api/predict"
+        payload = {"data": [prompt, _W, _H, seed]}
+        r = requests.post(url, json=payload, timeout=120)
+        if r.status_code == 200:
+            data = r.json()
+            result_str = data.get('data', [None])[0]
+            if result_str:
+                import json as _json
+                result = _json.loads(result_str)
+                if result.get('success') and result.get('image_b64'):
+                    b64 = result['image_b64']
+                    return {
+                        'url':      f"data:image/png;base64,{b64}",
+                        'type':     'base64',
+                        'provider': f"CicDream FLUX ({result.get('model', 'HF Space')})",
+                        'engine':   'hf_space',
+                        'size':     f"{_W}x{_H}",
+                    }
+                else:
+                    logger.warning(f"[HFSpace] Error en respuesta: {result.get('error')}")
+        else:
+            logger.warning(f"[HFSpace] HTTP {r.status_code}: {r.text[:100]}")
+    except Exception as e:
+        logger.warning(f"[HFSpace] {e}")
+    return None
 
 
 def _pollinations_fallback(prompt: str, W: int, H: int, seed: int = 0) -> dict:
@@ -1191,7 +1227,9 @@ def _ext_single(motor_key: str, prompt: str, W: int, H: int, seed: int,
                 style: str = 'realistic', quality: str = 'standard',
                 user_id: int = None) -> dict:
     """Dispatcher central — llama al motor correcto por ID."""
-    if motor_key == 'cicdream':
+    if motor_key == 'hf_space':
+        return _ext_hf_space(prompt, W, H, seed)
+    elif motor_key == 'cicdream':
         if not _CICDREAM_OK:
             return None
         r = cicdream_generate(
