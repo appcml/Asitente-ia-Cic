@@ -989,8 +989,11 @@ def _ext_pollinations(prompt: str, W: int, H: int, seed: int, model: str = 'flux
         enc = _up.quote(prompt[:800])
 
         # URL correcta de Pollinations
+        # Limitar a 512x512 para evitar timeouts en Render free tier
+        _W = min(W, 512)
+        _H = min(H, 512)
         url = (f"https://image.pollinations.ai/prompt/{enc}"
-               f"?width={W}&height={H}&seed={seed}"
+               f"?width={_W}&height={_H}&seed={seed}"
                f"&model={model}&nologo=true&enhance=false")
 
         headers_poll = {
@@ -1002,7 +1005,7 @@ def _ext_pollinations(prompt: str, W: int, H: int, seed: int, model: str = 'flux
         if _POLLINATIONS_KEY:
             headers_poll['Authorization'] = f'Bearer {_POLLINATIONS_KEY}'
 
-        r = requests.get(url, timeout=60, stream=True, headers=headers_poll)
+        r = requests.get(url, timeout=120, stream=True, headers=headers_poll)
         if r.status_code == 200 and 'image' in r.headers.get('Content-Type', ''):
             ct  = r.headers.get('Content-Type', 'image/jpeg')
             b64 = base64.b64encode(r.content).decode()
