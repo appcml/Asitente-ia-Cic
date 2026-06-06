@@ -987,34 +987,36 @@ def _motor_name(key: str) -> str:
 
 
 def _ext_hf_space(prompt: str, W: int, H: int, seed: int) -> dict:
-    """HuggingFace Space propio — FLUX.1 real sin bloqueo DNS."""
+    """HuggingFace Space propio — FLUX.1 real, endpoint HTTP directo puerto 7861."""
     if not HAS_REQUESTS or not _HF_SPACE_URL:
         return None
     try:
         _W = min(W, 768)
         _H = min(H, 768)
-        # Endpoint correcto del Space Gradio
-        url = f"{_HF_SPACE_URL.rstrip('/')}/run/generate_and_preview"
-        payload = {"data": [prompt, _W, _H, seed]}
+        # Puerto 7861 — servidor HTTP propio del Space (no Gradio)
+        base = _HF_SPACE_URL.rstrip('/')
+        # HF Spaces expone puertos adicionales como subdominios
+        # cmarinanlincopan-cicdream-api.hf.space → cmarinanlincopan-cicdream-api-7861.hf.space
+        if '.hf.space' in base:
+            api_url = base.replace('.hf.space', '-7861.hf.space') + '/generate'
+        else:
+            api_url = base + ':7861/generate'
+        payload = {"prompt": prompt, "width": _W, "height": _H, "seed": seed}
         headers = {"Content-Type": "application/json"}
-        r = requests.post(url, json=payload, headers=headers, timeout=120)
+        r = requests.post(api_url, json=payload, headers=headers, timeout=120)
         if r.status_code == 200:
-            data = r.json()
-            result_str = data.get('data', [None])[0]
-            if result_str:
-                import json as _json
-                result = _json.loads(result_str)
-                if result.get('success') and result.get('image_b64'):
-                    b64 = result['image_b64']
-                    return {
-                        'url':      f"data:image/png;base64,{b64}",
-                        'type':     'base64',
-                        'provider': f"CicDream FLUX ({result.get('model', 'HF Space')})",
-                        'engine':   'hf_space',
-                        'size':     f"{_W}x{_H}",
-                    }
-                else:
-                    logger.warning(f"[HFSpace] Error en respuesta: {result.get('error')}")
+            result = r.json()
+            if result.get('success') and result.get('image_b64'):
+                b64 = result['image_b64']
+                return {
+                    'url':      f"data:image/png;base64,{b64}",
+                    'type':     'base64',
+                    'provider': f"CicDream FLUX ({result.get('model', 'HF Space')})",
+                    'engine':   'hf_space',
+                    'size':     f"{_W}x{_H}",
+                }
+            else:
+                logger.warning(f"[HFSpace] Error: {result.get('error')}")
         else:
             logger.warning(f"[HFSpace] HTTP {r.status_code}: {r.text[:100]}")
     except Exception as e:
