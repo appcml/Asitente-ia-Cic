@@ -39,7 +39,6 @@ VALID_SIZES   = {'square','landscape','portrait','512'}
 VALID_QUALITY = {'standard','hd'}
 VALID_MODELS  = {
     'auto','svg','pil','fractal','cicdream',
-    'hf_space',
     'pollinations_flux','pollinations_turbo','pollinations_sd',
     'hf_flux','hf_sdxl','hf_sd21',
     'fal_flux_schnell','fal_flux_dev',
@@ -346,7 +345,7 @@ def manual_training():
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
-    data   = request.json or {}
+    data   = request.get_json(force=True, silent=True) or {}
     prompt = data.get('prompt', '').strip()
     style  = data.get('style', 'realistic')
     notes  = data.get('notes', '').strip()
