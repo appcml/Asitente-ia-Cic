@@ -988,10 +988,10 @@ def _ext_pollinations(prompt: str, W: int, H: int, seed: int, model: str = 'flux
         import urllib.parse as _up
         enc = _up.quote(prompt[:800])
 
-        # Nueva URL con dominio gen.pollinations.ai
-        url = (f"https://gen.pollinations.ai/image/{enc}"
+        # URL correcta de Pollinations
+        url = (f"https://image.pollinations.ai/prompt/{enc}"
                f"?width={W}&height={H}&seed={seed}"
-               f"&model={model}&nologo=true&enhance=true")
+               f"&model={model}&nologo=true&enhance=false")
 
         headers_poll = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
