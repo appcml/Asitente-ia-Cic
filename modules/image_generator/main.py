@@ -958,16 +958,13 @@ _HF_MODELS = {
 }
 
 AUTO_CASCADE = [
-    'gemini_flash',         # Google Gemini 2.5 Flash — 500/día gratis, PRINCIPAL
-    'hf_sdxl',              # HuggingFace SDXL — alta resolución
-    'hf_sd21',              # HuggingFace SD 2.1 — confiable
-    'hf_flux',              # HuggingFace FLUX
-    'pollinations_flux',    # Pollinations FLUX — requiere pollen
-    'pollinations_turbo',   # Pollinations Turbo
+    'gemini_flash',         # Google Gemini Flash — PRINCIPAL, no bloqueado en Render
+    'pollinations_flux',    # Pollinations FLUX — con API key funciona sin límite
+    'pollinations_turbo',   # Pollinations Turbo — rápido
+    'pollinations_sd',      # Pollinations SD — último recurso
     'stability_core',       # Stability AI — requiere STABILITY_API_KEY
     'fal_flux_schnell',     # fal.ai — requiere FAL_API_KEY
     'fal_flux_dev',         # fal.ai dev — mayor calidad
-    'pollinations_sd',      # Pollinations SD — último recurso
 ]
 
 
@@ -988,8 +985,7 @@ def _ext_pollinations(prompt: str, W: int, H: int, seed: int, model: str = 'flux
         import urllib.parse as _up
         enc = _up.quote(prompt[:800])
 
-        # URL correcta de Pollinations
-        # Limitar a 512x512 para evitar timeouts en Render free tier
+        # Limitar tamaño y aumentar timeout para Render free tier
         _W = min(W, 512)
         _H = min(H, 512)
         url = (f"https://image.pollinations.ai/prompt/{enc}"
@@ -1128,27 +1124,40 @@ def _ext_stability(prompt: str, W: int, H: int, motor_key: str) -> dict:
 
 
 def _ext_gemini(prompt: str, W: int, H: int) -> dict:
-    """Google Gemini 2.5 Flash — 500 imagenes/dia gratis con GEMINI_API_KEY."""
+    """Google Gemini Flash Image Generation — gratis con GEMINI_API_KEY."""
     if not HAS_REQUESTS or not _GEMINI_KEY:
         return None
-    try:
-        r = requests.post(
-            f'https://generativelanguage.googleapis.com/v1beta/models/'
-            f'gemini-3.1-flash-image:generateContent?key={_GEMINI_KEY}',
-            json={'contents': [{'parts': [{'text': prompt}]}],
-                  'generationConfig': {'responseModalities': ['TEXT', 'IMAGE']}},
-            timeout=60,
-        )
-        if r.status_code == 200:
-            for part in (r.json().get('candidates', [{}])[0]
-                         .get('content', {}).get('parts', [])):
-                if 'inlineData' in part:
-                    b64 = part['inlineData']['data']
-                    mt  = part['inlineData'].get('mimeType', 'image/png')
-                    return {'url': f"data:{mt};base64,{b64}", 'type': 'base64',
-                            'provider': 'Gemini 2.5 Flash Image', 'engine': 'gemini_flash'}
-    except Exception as e:
-        logger.warning(f"[Gemini] {e}")
+    # Modelos de generación de imagen de Gemini en orden de preferencia
+    gemini_models = [
+        'gemini-2.0-flash-preview-image-generation',
+        'gemini-2.0-flash-exp',
+        'imagen-3.0-generate-002',
+    ]
+    for model_id in gemini_models:
+        try:
+            r = requests.post(
+                f'https://generativelanguage.googleapis.com/v1beta/models/'
+                f'{model_id}:generateContent?key={_GEMINI_KEY}',
+                json={
+                    'contents': [{'parts': [{'text': prompt}]}],
+                    'generationConfig': {'responseModalities': ['TEXT', 'IMAGE']}
+                },
+                timeout=60,
+            )
+            if r.status_code == 200:
+                for part in (r.json().get('candidates', [{}])[0]
+                             .get('content', {}).get('parts', [])):
+                    if 'inlineData' in part:
+                        b64 = part['inlineData']['data']
+                        mt  = part['inlineData'].get('mimeType', 'image/png')
+                        logger.info(f"[Gemini] Imagen generada con {model_id}")
+                        return {'url': f"data:{mt};base64,{b64}", 'type': 'base64',
+                                'provider': 'Gemini Flash Image', 'engine': 'gemini_flash',
+                                'size': f"{W}x{H}"}
+            else:
+                logger.warning(f"[Gemini/{model_id}] HTTP {r.status_code}: {r.text[:150]}")
+        except Exception as e:
+            logger.warning(f"[Gemini/{model_id}] {e}")
     return None
 
 
