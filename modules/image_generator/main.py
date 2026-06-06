@@ -1139,22 +1139,23 @@ def _ext_gemini(prompt: str, W: int, H: int) -> dict:
     if not HAS_REQUESTS or not _GEMINI_KEY:
         return None
 
-    # Gemini 2.0 Flash con generación de imágenes (API correcta 2026)
+    # Modelos de imagen reales disponibles con esta API key
     gemini_models = [
-        ('gemini-2.0-flash-exp-image-generation', 'v1beta'),
-        ('gemini-2.0-flash', 'v1beta'),
+        'gemini-3.1-flash-image',
+        'gemini-2.5-flash-image',
+        'gemini-3-pro-image',
+        'gemini-3.1-flash-image-preview',
     ]
 
-    for model_id, api_ver in gemini_models:
+    for model_id in gemini_models:
         try:
             r = requests.post(
-                f'https://generativelanguage.googleapis.com/{api_ver}/models/'
+                f'https://generativelanguage.googleapis.com/v1beta/models/'
                 f'{model_id}:generateContent?key={_GEMINI_KEY}',
                 json={
-                    'contents': [{'parts': [{'text': f"Generate an image: {prompt}"}]}],
+                    'contents': [{'parts': [{'text': prompt}]}],
                     'generationConfig': {
                         'responseModalities': ['IMAGE', 'TEXT'],
-                        'responseMimeType': 'text/plain',
                     }
                 },
                 timeout=60,
@@ -1170,7 +1171,7 @@ def _ext_gemini(prompt: str, W: int, H: int) -> dict:
                             return {
                                 'url': f"data:{mt};base64,{b64}",
                                 'type': 'base64',
-                                'provider': 'Gemini Flash Image',
+                                'provider': 'Gemini Image',
                                 'engine': 'gemini_flash',
                                 'size': f"{W}x{H}"
                             }
