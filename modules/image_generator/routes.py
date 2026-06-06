@@ -39,6 +39,7 @@ VALID_SIZES   = {'square','landscape','portrait','512'}
 VALID_QUALITY = {'standard','hd'}
 VALID_MODELS  = {
     'auto','svg','pil','fractal','cicdream',
+    'hf_space',
     'pollinations_flux','pollinations_turbo','pollinations_sd',
     'hf_flux','hf_sdxl','hf_sd21',
     'fal_flux_schnell','fal_flux_dev',
@@ -632,4 +633,4 @@ def dataset_export():
 
 def register(app):
     app.register_blueprint(bp)
-    logger.info('Rutas /api/image/* registradas (v2 con CicDream)')
+    logger.info('Rutas /api/image/* registradas (v2 con CicDream)')v
