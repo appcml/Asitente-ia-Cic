@@ -987,77 +987,36 @@ def _motor_name(key: str) -> str:
 
 
 def _ext_hf_space(prompt: str, W: int, H: int, seed: int) -> dict:
-    """HuggingFace Space — FLUX.1 via Gradio 6 SSE protocol."""
+    """HuggingFace Space Flask — POST /generate directo."""
     if not HAS_REQUESTS or not _HF_SPACE_URL:
         return None
     try:
         import json as _json
-        import time as _time
         _W = min(W, 768)
         _H = min(H, 768)
         base = _HF_SPACE_URL.rstrip('/')
-
-        # Paso 1: unirse a la cola con fn_index=1 (generate_api)
-        join_url = f"{base}/gradio_api/queue/join"
-        session_hash = "render" + str(abs(hash(prompt)) % 100000)
-        payload = {
-            "data": [prompt],
-            "fn_index": 1,
-            "session_hash": session_hash
-        }
+        url = f"{base}/generate"
+        payload = {"prompt": prompt, "width": _W, "height": _H, "seed": seed}
         headers = {"Content-Type": "application/json"}
-        r = requests.post(join_url, json=payload, headers=headers, timeout=30)
-        if r.status_code != 200:
-            logger.warning(f"[HFSpace] join fallo: {r.status_code} {r.text[:100]}")
-            return None
-
-        event_id = r.json().get("event_id")
-        if not event_id:
-            logger.warning(f"[HFSpace] sin event_id: {r.text[:100]}")
-            return None
-
-        # Paso 2: escuchar el stream SSE hasta recibir el resultado
-        stream_url = f"{base}/gradio_api/queue/data?session_hash={session_hash}"
-        result_data = None
-        deadline = _time.time() + 120
-
-        with requests.get(stream_url, stream=True, timeout=120) as stream:
-            for line in stream.iter_lines():
-                if _time.time() > deadline:
-                    break
-                if not line:
-                    continue
-                line = line.decode('utf-8') if isinstance(line, bytes) else line
-                if line.startswith('data:'):
-                    try:
-                        msg = _json.loads(line[5:].strip())
-                        if msg.get('msg') == 'process_completed':
-                            output = msg.get('output', {})
-                            result_data = output.get('data', [None])[0]
-                            break
-                    except Exception:
-                        continue
-
-        if not result_data:
-            logger.warning(f"[HFSpace] sin resultado del stream")
-            return None
-
-        result = _json.loads(result_data) if isinstance(result_data, str) else result_data
-        if result.get('success') and result.get('image_b64'):
-            b64 = result['image_b64']
-            return {
-                'url':      f"data:image/png;base64,{b64}",
-                'type':     'base64',
-                'provider': f"CicDream FLUX ({result.get('model', 'HF Space')})",
-                'engine':   'hf_space',
-                'size':     f"{_W}x{_H}",
-            }
+        r = requests.post(url, json=payload, headers=headers, timeout=90)
+        if r.status_code == 200:
+            result = r.json()
+            if result.get('success') and result.get('image_b64'):
+                b64 = result['image_b64']
+                return {
+                    'url':      f"data:image/png;base64,{b64}",
+                    'type':     'base64',
+                    'provider': f"CicDream FLUX ({result.get('model', 'HF Space')})",
+                    'engine':   'hf_space',
+                    'size':     f"{_W}x{_H}",
+                }
+            else:
+                logger.warning(f"[HFSpace] Error: {result.get('error')}")
         else:
-            logger.warning(f"[HFSpace] Error: {result.get('error')}")
+            logger.warning(f"[HFSpace] HTTP {r.status_code}: {r.text[:100]}")
     except Exception as e:
         logger.warning(f"[HFSpace] {e}")
     return None
-
 
 def _pollinations_fallback(prompt: str, W: int, H: int, seed: int = 0) -> dict:
     return _ext_pollinations(prompt, W, H, seed, 'flux')
