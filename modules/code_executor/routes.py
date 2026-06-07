@@ -1,16 +1,75 @@
-# routes.py
-
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 from pydantic import BaseModel
 
-# Define la ruta para la ejecución de código
-router = APIRouter()
+from .main import CodeExecutor
 
-class CodeExecutionRequest(BaseModel):
-    code: str
-    language: str
+router = APIRouter(
+    prefix="/code-executor",
+    tags=["Code Executor"]
+)
 
-@router.post("/execute")
-async def execute_code(request: CodeExecutionRequest):
-    # Lógica para ejecutar el código aquí
-    return {"message": "Código ejecutado con éxito"}
+executor = CodeExecutor()
+
+
+class RepositoryRequest(BaseModel):
+    path: str
+
+
+class ProjectRequest(BaseModel):
+    name: str
+    data: dict
+
+
+class KnowledgeRequest(BaseModel):
+    problem: str
+    solution: str
+
+
+@router.get("/status")
+async def status():
+
+    return executor.status()
+
+
+@router.post("/analyze")
+async def analyze_repository(
+    request: RepositoryRequest
+):
+
+    return executor.analyze_repository(
+        request.path
+    )
+
+
+@router.post("/project/save")
+async def save_project(
+    request: ProjectRequest
+):
+
+    return executor.save_project(
+        request.name,
+        request.data
+    )
+
+
+@router.get("/projects")
+async def list_projects():
+
+    return executor.list_projects()
+
+
+@router.post("/knowledge")
+async def save_knowledge(
+    request: KnowledgeRequest
+):
+
+    return executor.remember_solution(
+        request.problem,
+        request.solution
+    )
+
+
+@router.get("/knowledge")
+async def get_knowledge():
+
+    return executor.get_knowledge()
