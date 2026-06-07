@@ -16,7 +16,11 @@ from datetime import datetime
 from PIL import Image, ImageEnhance, ImageFilter
 
 logger = logging.getLogger('cicdream.engine')
-
+# Agregar después de los imports existentes
+try:
+    from peft import PeftModel
+except ImportError:
+    logger.warning("Peft no instalado. Instalalo con: pip install peft")
 try:
     from .embeddings import CicDreamEmbeddings, get_embeddings
     from .palette    import CicDreamPalette,    get_palette
