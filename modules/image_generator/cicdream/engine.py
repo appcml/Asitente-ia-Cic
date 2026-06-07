@@ -159,17 +159,35 @@ class CicDreamEngine:
         if not _imports_ok:
             raise ImportError("Componentes de CicDream no disponibles")
 
-        hf_model = os.environ.get('HF_CICDREAM_MODEL', '')
-        if hf_model:
-            try:
-                from diffusers import StableDiffusionPipeline
-                self._custom_pipe = StableDiffusionPipeline.from_pretrained(
-                    hf_model,
-                    use_auth_token=os.environ.get('HUGGINGFACE_TOKEN', '')
-                )
-                self._has_custom_model = True
-                logger.info(f"[CicDream] Modelo propio cargado: {hf_model}")
-            except Exception as e:
+        # === Cargar modelo CicDream v1 con LoRA ===
+        try:
+            from diffusers import StableDiffusionPipeline
+            from peft import PeftModel
+            import torch
+
+            logger.info("[CicDream] Cargando modelo base + LoRA entrenado...")
+
+            self._custom_pipe = StableDiffusionPipeline.from_pretrained(
+                "runwayml/stable-diffusion-v1-5",
+                torch_dtype=torch.float16,
+                safety_checker=None,
+                use_auth_token=os.environ.get('HUGGINGFACE_TOKEN', '')
+            )
+            self._custom_pipe = self._custom_pipe.to("cuda" if torch.cuda.is_available() else "cpu")
+
+            # Cargar tu LoRA entrenado
+            self._custom_pipe.unet = PeftModel.from_pretrained(
+                self._custom_pipe.unet,
+                "cmarinanlincopan/cicdream-v1"
+            )
+
+            self._has_custom_model = True
+            logger.info("[CicDream] ✅ CicDream v1 (LoRA) cargado correctamente desde Hugging Face")
+            
+        except Exception as e:
+            self._has_custom_model = False
+            self._custom_pipe = None
+            logger.error(f"[CicDream] Error cargando modelo LoRA: {e}")
                 self._has_custom_model = False
                 self._custom_pipe = None
                 logger.warning(f"[CicDream] No se pudo cargar modelo propio: {e}")
