@@ -500,6 +500,18 @@ class CicDreamPalette:
 
     # ── Info de paleta ─────────────────────────────────────────────────────
 
+
+    def build_from_colors(self, colors: list, width: int, height: int) -> np.ndarray:
+        """
+        Construye un gradiente desde una lista de colores RGB aprendidos del dataset.
+        colors: lista de tuplas (R, G, B) en rango 0-255
+        """
+        if not colors:
+            return self.build_gradient_fast(
+                self.get_palette('neutral'), width, height
+            )
+        return self.build_gradient_fast(colors, width, height)
+
     def describe(self, prompt: str) -> dict:
         """Describe la paleta seleccionada para un prompt."""
         name   = self.select_palette_name(prompt)
