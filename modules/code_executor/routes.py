@@ -1,75 +1,83 @@
-from fastapi import APIRouter
-from pydantic import BaseModel
+from flask import Blueprint, jsonify, request
 
 from .main import CodeExecutor
 
-router = APIRouter(
-    prefix="/code-executor",
-    tags=["Code Executor"]
+code_executor_bp = Blueprint(
+    "code_executor",
+    __name__,
+    url_prefix="/code-executor"
 )
 
 executor = CodeExecutor()
 
 
-class RepositoryRequest(BaseModel):
-    path: str
+@code_executor_bp.route("/status", methods=["GET"])
+def status():
 
-
-class ProjectRequest(BaseModel):
-    name: str
-    data: dict
-
-
-class KnowledgeRequest(BaseModel):
-    problem: str
-    solution: str
-
-
-@router.get("/status")
-async def status():
-
-    return executor.status()
-
-
-@router.post("/analyze")
-async def analyze_repository(
-    request: RepositoryRequest
-):
-
-    return executor.analyze_repository(
-        request.path
+    return jsonify(
+        executor.status()
     )
 
 
-@router.post("/project/save")
-async def save_project(
-    request: ProjectRequest
-):
+@code_executor_bp.route("/projects", methods=["GET"])
+def list_projects():
 
-    return executor.save_project(
-        request.name,
-        request.data
+    return jsonify(
+        executor.list_projects()
     )
 
 
-@router.get("/projects")
-async def list_projects():
+@code_executor_bp.route("/knowledge", methods=["GET"])
+def knowledge():
 
-    return executor.list_projects()
-
-
-@router.post("/knowledge")
-async def save_knowledge(
-    request: KnowledgeRequest
-):
-
-    return executor.remember_solution(
-        request.problem,
-        request.solution
+    return jsonify(
+        executor.get_knowledge()
     )
 
 
-@router.get("/knowledge")
-async def get_knowledge():
+@code_executor_bp.route("/analyze", methods=["POST"])
+def analyze():
 
-    return executor.get_knowledge()
+    data = request.get_json()
+
+    repo_path = data.get("path")
+
+    result = executor.analyze_repository(
+        repo_path
+    )
+
+    return jsonify(result)
+
+
+@code_executor_bp.route(
+    "/project/save",
+    methods=["POST"]
+)
+def save_project():
+
+    data = request.get_json()
+
+    result = executor.save_project(
+        data["name"],
+        data["data"]
+    )
+
+    return jsonify({
+        "success": result
+    })
+
+
+@code_executor_bp.route(
+    "/knowledge",
+    methods=["POST"]
+)
+def save_knowledge():
+
+    data = request.get_json()
+
+    result = executor.remember_solution(
+        data["problem"],
+        data["solution"]
+    )
+
+    return jsonify(result)
