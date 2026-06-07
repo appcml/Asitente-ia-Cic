@@ -1,5 +1,8 @@
-from .main import CodeExecutor
+from .routes import code_executor_bp
 
-__all__ = [
-    "CodeExecutor"
-]
+
+def register(app):
+
+    app.register_blueprint(
+        code_executor_bp
+    )
