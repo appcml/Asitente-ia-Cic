@@ -407,7 +407,6 @@ tr:hover td{background:rgba(91,141,238,.03);}
         <div class="nav-item" onclick="devGo('memories',this)"><span class="ni">💾</span><span class="nl">Memorias</span><button onclick="event.stopPropagation();openKnowledgeDrawer('recent')" style="margin-left:auto;background:rgba(91,141,238,.15);border:none;color:var(--accent);border-radius:4px;padding:1px 5px;font-size:.6rem;cursor:pointer" title="Vista rápida">👁</button></div>
         <div class="nav-item" onclick="devGo('config',this)"><span class="ni">⚙️</span><span class="nl">Configuración</span></div>
         <div class="nav-item" onclick="devGo('users',this)"><span class="ni">👥</span><span class="nl">Usuarios</span></div>
-        <div class="nav-item" onclick="devGo('dataset',this)"><span class="ni">🗄️</span><span class="nl">Datasets</span></div>
       </div>
     </div>
     <div class="sb-foot">
@@ -971,70 +970,6 @@ tr:hover td{background:rgba(91,141,238,.03);}
         </div>
       </div>
 
-      <!-- DATASETS -->
-      <div id="dev-dataset" class="section">
-        <div class="page-hd"><h2>🗄️ Importar Dataset</h2><p>Carga prompts externos para entrenar CicDream</p></div>
-
-        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:20px;">
-          <div class="sw-stat"><div class="ss-val" id="ds-total">—</div><div class="ss-lbl">Prompts en BD</div></div>
-          <div class="sw-stat green"><div class="ss-val" id="ds-sources">—</div><div class="ss-lbl">Fuentes</div></div>
-          <div class="sw-stat yellow"><div class="ss-val" id="ds-cats">—</div><div class="ss-lbl">Categorías</div></div>
-        </div>
-
-        <div class="card mb16">
-          <div class="card-hd"><h3>📤 Cargar archivo</h3></div>
-          <p style="color:var(--text2);font-size:.83rem;margin-bottom:14px;">
-            Formatos: <strong style="color:var(--text)">.parquet · .csv · .jsonl · .json · .txt</strong> —
-            Columna detectada: <code>prompt</code>, <code>text</code>, <code>caption</code>
-          </p>
-          <div id="dsDropZone" style="border:2px dashed var(--border2);border-radius:10px;padding:26px;text-align:center;cursor:pointer;transition:all .2s;margin-bottom:14px;"
-            onclick="document.getElementById('dsFileInput').click()"
-            ondragover="event.preventDefault();this.style.borderColor='var(--accent)';this.style.background='rgba(91,141,238,.07)'"
-            ondragleave="this.style.borderColor='var(--border2)';this.style.background=''"
-            ondrop="handleDsDrop(event)">
-            <div style="font-size:1.8rem;margin-bottom:6px">📁</div>
-            <div style="color:var(--text2);font-size:.88rem">Arrastra tu archivo aquí o haz clic</div>
-            <div id="dsFileName" style="margin-top:6px;color:var(--accent);font-size:.83rem;font-weight:600"></div>
-          </div>
-          <input type="file" id="dsFileInput" accept=".parquet,.csv,.jsonl,.json,.txt" style="display:none" onchange="onDsFileSelect(this)">
-          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:14px;">
-            <div class="form-group" style="margin:0">
-              <label>Nombre de fuente</label>
-              <input id="dsSource" type="text" value="sd_prompts_gustavosta">
-            </div>
-            <div class="form-group" style="margin:0">
-              <label>Categoría</label>
-              <input id="dsCategory" type="text" value="sd_prompts">
-            </div>
-            <div class="form-group" style="margin:0">
-              <label>Máx. prompts</label>
-              <input id="dsLimit" type="number" value="5000" min="100" max="50000">
-            </div>
-          </div>
-          <div id="dsProgress" style="display:none;margin-bottom:12px;">
-            <div style="height:5px;background:var(--bg3);border-radius:4px;overflow:hidden;">
-              <div id="dsProgressBar" style="height:100%;background:var(--accent);width:0%;transition:width .4s;border-radius:4px;"></div>
-            </div>
-            <div id="dsProgressText" style="font-size:.78rem;color:var(--text2);margin-top:5px;text-align:center"></div>
-          </div>
-          <div id="dsAlert" style="display:none;padding:9px 13px;border-radius:8px;font-size:.83rem;margin-bottom:12px;"></div>
-          <button id="dsImportBtn" onclick="importDataset()" class="btn btn-primary">⬆️ Importar Dataset</button>
-        </div>
-
-        <div class="card mb16">
-          <div class="card-hd" style="display:flex;justify-content:space-between;align-items:center;">
-            <h3>🔍 Muestra de prompts</h3>
-            <button onclick="loadDsSample()" class="btn btn-ghost btn-sm">🔄 Actualizar</button>
-          </div>
-          <div id="dsSampleList"><p style="color:var(--text2);font-size:.83rem">Importa un dataset para ver los prompts aquí.</p></div>
-        </div>
-
-        <div class="card">
-          <div class="card-hd"><h3>🗑️ Gestionar fuentes</h3></div>
-          <div id="dsSourcesList"><p style="color:var(--text2);font-size:.83rem">Cargando fuentes...</p></div>
-        </div>
-      </div>
-
     </div><!-- /main-pad -->
 
     <!-- IA PANEL: hermano de main-pad, fijo en altura, scroll propio -->
@@ -1330,7 +1265,6 @@ function devGo(name,el){
   if(name==='learn')loadLearnLog();
   if(name==='chat'){devNewConv();loadDevRecent();}
   if(name==='search')document.getElementById('devSearchQ')?.focus();
-  if(name==='dataset'){loadDsStats();loadDsSample();}
 }
 
 /* ═══ USER NAVIGATION ═══ */
@@ -2540,17 +2474,95 @@ async function generateImage(){
   const btn     = document.getElementById('devImgBtn');
   const provEl  = document.getElementById('devImgProviderLabel');
 
-  el.innerHTML  = `<div style="color:var(--text2);font-size:.84rem;padding:8px 0">⏳ Generando ${_imgCount} imagen(es) con motor ${model}...</div>`;
+  el.innerHTML  = `<div style="color:var(--text2);font-size:.84rem;padding:8px 0">⏳ Generando imagen con motor ${model}...</div>`;
   btn.disabled  = true;
   if(provEl) provEl.textContent = '';
 
+  // Motores que se llaman directo desde el navegador (sin pasar por el servidor)
+  const browserMotors = ['pollinations_flux','pollinations_turbo','pollinations_sd'];
+  const autoBrowser   = model === 'auto'; // auto también intenta Pollinations directo
+
   try{
-    const r = await req('/api/image/generate','POST',{prompt,style,size,quality,count:_imgCount,model});
-    if(!r.success){el.innerHTML=`<div class="alert alert-err">${esc(r.error||'Error desconocido')}</div>`;return;}
-    if(provEl) provEl.textContent = `✓ ${r.provider||''} · ${r.count||1} imagen(es)`;
-    el.innerHTML = _renderImgGallery(r.images, r);
+    // ── Intento 1: motor CicDream o motores del servidor ──────────
+    if(!browserMotors.includes(model)){
+      try{
+        const r = await req('/api/image/generate','POST',{prompt,style,size,quality,count:_imgCount,model});
+        if(r.success && r.images && r.images.length > 0){
+          // Verificar que no sea SVG si el usuario eligió un motor real
+          const isSvgFallback = r.images[0]?.provider?.includes('svg') || r.images[0]?.provider?.includes('algoritmico');
+          if(!isSvgFallback || model === 'svg' || model === 'cicdream' || model === 'pil' || model === 'fractal'){
+            if(provEl) provEl.textContent = `✓ ${r.provider||''} · ${r.count||1} imagen(es)`;
+            el.innerHTML = _renderImgGallery(r.images, r);
+            btn.disabled = false;
+            return;
+          }
+          // Si cayó a SVG y no era lo pedido → intentar Pollinations directo
+          if(autoBrowser || browserMotors.includes(model)){
+            el.innerHTML = `<div style="color:var(--text2);font-size:.84rem;padding:8px 0">⚡ Conectando con Pollinations FLUX...</div>`;
+          }
+        }
+      }catch(e){
+        if(model === 'cicdream' || model === 'svg' || model === 'pil' || model === 'fractal'){
+          el.innerHTML = `<div class="alert alert-err">Error: ${esc(e.message)}</div>`;
+          btn.disabled = false;
+          return;
+        }
+        // Para otros motores, intentar Pollinations directo
+      }
+    }
+
+    // ── Intento 2: Pollinations directo desde el navegador ────────
+    const dims = {square:'1024/1024', landscape:'1280/720', portrait:'720/1280', '512':'512/512'};
+    const [w,h] = (dims[size]||'1024/1024').split('/');
+    const styleMap = {
+      realistic:'photorealistic, 8k, highly detailed',
+      artistic:'digital art, vibrant colors, artstation trending',
+      anime:'anime style, cel shading, studio quality',
+      cyberpunk:'cyberpunk, neon lights, futuristic',
+      fantasy:'fantasy art, magical, epic',
+      sketch:'pencil sketch, detailed linework',
+      '3d_render':'3D render, octane, volumetric lighting',
+      watercolor:'watercolor painting, soft brushstrokes',
+    };
+    const suffix = styleMap[style] || styleMap.realistic;
+    const enhancedPrompt = `${prompt}, ${suffix}`;
+    const polModel = model === 'pollinations_turbo' ? 'turbo'
+                   : model === 'pollinations_sd'    ? 'stable-diffusion'
+                   : 'flux';
+
+    const polUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(enhancedPrompt)}?model=${polModel}&width=${w}&height=${h}&nologo=true&enhance=true&seed=${Math.floor(Math.random()*99999)}`;
+
+    el.innerHTML = `<div style="color:var(--text2);font-size:.84rem;padding:8px 0">⚡ Generando con Pollinations ${polModel.toUpperCase()}...</div>`;
+
+    // Cargar imagen directamente en el navegador
+    await new Promise((resolve, reject) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        const images = [{url: polUrl, provider: `pollinations_${polModel}`}];
+        const fakeR   = {provider: `pollinations_${polModel}`, count: 1, prompt, enhanced: enhancedPrompt};
+        if(provEl) provEl.textContent = `✓ Pollinations ${polModel.toUpperCase()} · 1 imagen`;
+        el.innerHTML = _renderImgGallery(images, fakeR);
+        resolve();
+      };
+      img.onerror = () => reject(new Error('Pollinations no respondió'));
+      img.src = polUrl;
+      setTimeout(() => reject(new Error('Timeout — Pollinations tardó más de 45s')), 45000);
+    });
+
   }catch(e){
-    el.innerHTML = `<div class="alert alert-err">Error de red: ${esc(e.message)}</div>`;
+    // Último fallback: SVG local
+    try{
+      const r2 = await req('/api/image/generate','POST',{prompt,style,size,quality,count:1,model:'svg'});
+      if(r2.success){
+        if(provEl) provEl.textContent = `⚠️ svg_algoritmico (fallback)`;
+        el.innerHTML = _renderImgGallery(r2.images, r2);
+      } else {
+        el.innerHTML = `<div class="alert alert-err">No se pudo generar: ${esc(e.message)}</div>`;
+      }
+    }catch(e2){
+      el.innerHTML = `<div class="alert alert-err">Error: ${esc(e.message)}</div>`;
+    }
   }finally{
     btn.disabled = false;
   }
@@ -2569,21 +2581,64 @@ async function generateImageUser(){
   const btn     = document.getElementById('uImgBtn');
   const provEl  = document.getElementById('uImgProviderLabel');
 
-  el.innerHTML = `<div style="color:var(--text2);font-size:.84rem;padding:8px 0">⏳ Generando ${_uImgCount} imagen(es)...</div>`;
+  el.innerHTML = `<div style="color:var(--text2);font-size:.84rem;padding:8px 0">⏳ Generando imagen...</div>`;
   btn.disabled = true;
   if(provEl) provEl.textContent = '';
 
   try{
-    const r = await req('/api/image/generate','POST',{
-      prompt, style, size, quality, count:_uImgCount, model:engine
+    // Intentar servidor primero
+    try{
+      const r = await req('/api/image/generate','POST',{prompt,style,size,quality,count:_uImgCount,model:engine});
+      if(r.success && r.images?.length > 0){
+        const isSvgFallback = r.images[0]?.provider?.includes('svg') || r.images[0]?.provider?.includes('algoritmico');
+        if(!isSvgFallback || engine === 'svg' || engine === 'cicdream'){
+          if(provEl) provEl.textContent = `✓ ${r.provider||''}`;
+          el.innerHTML = _renderImgGallery(r.images, r);
+          btn.disabled = false;
+          return;
+        }
+      }
+    }catch(e){}
+
+    // Pollinations directo desde el navegador
+    const dims = {square:'1024/1024', landscape:'1280/720', portrait:'720/1280', '512':'512/512'};
+    const [w,h] = (dims[size]||'1024/1024').split('/');
+    const styleMap = {
+      realistic:'photorealistic, 8k, highly detailed',
+      artistic:'digital art, vibrant colors',
+      anime:'anime style, studio quality',
+      cyberpunk:'cyberpunk, neon lights',
+      fantasy:'fantasy art, magical, epic',
+      sketch:'pencil sketch',
+      '3d':'3D render, octane',
+      space:'space art, cosmic, nebula',
+    };
+    const suffix = styleMap[style] || 'high quality, detailed';
+    const polUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt+', '+suffix)}?model=flux&width=${w}&height=${h}&nologo=true&seed=${Math.floor(Math.random()*99999)}`;
+
+    el.innerHTML = `<div style="color:var(--text2);font-size:.84rem;padding:8px 0">⚡ Generando con FLUX...</div>`;
+    await new Promise((resolve, reject) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        if(provEl) provEl.textContent = '✓ Pollinations FLUX';
+        el.innerHTML = _renderImgGallery([{url:polUrl,provider:'pollinations_flux'}], {prompt,count:1});
+        resolve();
+      };
+      img.onerror = () => reject(new Error('No se pudo conectar'));
+      img.src = polUrl;
+      setTimeout(()=>reject(new Error('Timeout')),45000);
     });
-    if(!r.success){el.innerHTML=`<div class="alert alert-err">${esc(r.error||'Error')}</div>`;return;}
-    if(provEl) provEl.textContent = `✓ ${r.provider||''} · ${r.count||1} imagen(es)`;
-    el.innerHTML = _renderImgGallery(r.images, r);
+
   }catch(e){
-    el.innerHTML = `<div class="alert alert-err">Error: ${esc(e.message)}</div>`;
+    // Fallback SVG
+    try{
+      const r2 = await req('/api/image/generate','POST',{prompt,style,size,quality,count:1,model:'svg'});
+      if(r2.success){ el.innerHTML=_renderImgGallery(r2.images,r2); }
+      else el.innerHTML=`<div class="alert alert-err">Error: ${esc(e.message)}</div>`;
+    }catch{ el.innerHTML=`<div class="alert alert-err">Error: ${esc(e.message)}</div>`; }
   }finally{
-    btn.disabled = false;
+    btn.disabled=false;
   }
 }
 
@@ -2820,91 +2875,6 @@ function showGlobalPasteToast(role){
   t.textContent = '🖼️ Imagen lista — escribe tu pregunta y pulsa Enter';
   t.style.opacity = '1';
   setTimeout(()=>{ t.style.opacity='0'; }, 3000);
-}
-
-/* ═══ DATASET ═══ */
-let dsFile=null;
-function handleDsDrop(e){
-  e.preventDefault();
-  document.getElementById('dsDropZone').style.borderColor='var(--border2)';
-  document.getElementById('dsDropZone').style.background='';
-  if(e.dataTransfer.files[0])setDsFile(e.dataTransfer.files[0]);
-}
-function onDsFileSelect(input){if(input.files[0])setDsFile(input.files[0]);}
-function setDsFile(file){
-  dsFile=file;
-  document.getElementById('dsFileName').textContent='📄 '+file.name+' ('+(file.size/1024).toFixed(1)+' KB)';
-  document.getElementById('dsDropZone').style.borderColor='var(--green)';
-}
-async function importDataset(){
-  if(!dsFile)return showDsAlert('⚠️ Selecciona un archivo primero','err');
-  const btn=document.getElementById('dsImportBtn');
-  btn.disabled=true;btn.textContent='⏳ Importando...';
-  const prog=document.getElementById('dsProgress');
-  const bar=document.getElementById('dsProgressBar');
-  const txt=document.getElementById('dsProgressText');
-  prog.style.display='block';bar.style.width='10%';txt.textContent='Leyendo archivo...';
-  try{
-    const form=new FormData();
-    form.append('file',dsFile);
-    form.append('source',document.getElementById('dsSource').value.trim()||'dataset_import');
-    form.append('category',document.getElementById('dsCategory').value.trim()||'sd_prompts');
-    form.append('limit',document.getElementById('dsLimit').value||'5000');
-    bar.style.width='40%';txt.textContent='Enviando al servidor...';
-    const r=await fetch('/api/dataset/import',{method:'POST',headers:{'Authorization':'Bearer '+TOKEN},body:form});
-    bar.style.width='80%';txt.textContent='Procesando prompts...';
-    const data=await r.json();
-    bar.style.width='100%';
-    if(data.success){txt.textContent='✅ Completado';showDsAlert('✅ '+data.message,'ok');loadDsStats();loadDsSample();}
-    else showDsAlert('❌ '+(data.error||'Error desconocido'),'err');
-  }catch(e){showDsAlert('❌ Error: '+e.message,'err');}
-  finally{
-    btn.disabled=false;btn.textContent='⬆️ Importar Dataset';
-    setTimeout(()=>{prog.style.display='none';bar.style.width='0%';},3000);
-  }
-}
-function showDsAlert(msg,type){
-  const el=document.getElementById('dsAlert');
-  el.style.display='block';
-  el.style.background=type==='ok'?'rgba(34,211,160,.12)':'rgba(248,113,113,.12)';
-  el.style.border='1px solid '+(type==='ok'?'var(--green)':'var(--red)');
-  el.style.color=type==='ok'?'var(--green)':'var(--red)';
-  el.textContent=msg;
-  setTimeout(()=>{el.style.display='none';},6000);
-}
-async function loadDsStats(){
-  try{
-    const d=await api('/api/dataset/stats');
-    document.getElementById('ds-total').textContent=(d.total||0).toLocaleString();
-    document.getElementById('ds-sources').textContent=d.by_source.length;
-    document.getElementById('ds-cats').textContent=d.by_category.length;
-    const sl=document.getElementById('dsSourcesList');
-    if(!d.by_source.length){sl.innerHTML='<p style="color:var(--text2);font-size:.83rem">No hay datasets importados aún.</p>';return;}
-    sl.innerHTML=d.by_source.map(s=>`
-      <div style="display:flex;justify-content:space-between;align-items:center;background:var(--bg3);border-radius:8px;padding:9px 13px;margin-bottom:8px;">
-        <div><strong style="font-size:.88rem">${s.source}</strong><span style="color:var(--text2);font-size:.78rem;margin-left:8px">${s.count.toLocaleString()} prompts</span></div>
-        <button onclick="deleteSource('${s.source}')" class="btn btn-sm" style="background:rgba(248,113,113,.12);border:1px solid var(--red);color:var(--red);padding:4px 10px;">🗑️ Eliminar</button>
-      </div>`).join('');
-  }catch(e){console.warn('ds stats:',e);}
-}
-async function loadDsSample(){
-  try{
-    const d=await api('/api/dataset/sample?n=8');
-    const el=document.getElementById('dsSampleList');
-    if(!d.prompts||!d.prompts.length){el.innerHTML='<p style="color:var(--text2);font-size:.83rem">No hay prompts importados aún.</p>';return;}
-    el.innerHTML=d.prompts.map(p=>`
-      <div style="background:var(--bg3);border-radius:8px;padding:9px 13px;border-left:3px solid var(--accent);font-size:.8rem;margin-bottom:7px;">
-        <span style="color:var(--text)">${p.prompt.substring(0,180)}${p.prompt.length>180?'…':''}</span>
-        <span style="font-size:.7rem;color:var(--text3);margin-left:6px">[${p.source}] Q:${(p.quality*100).toFixed(0)}%</span>
-      </div>`).join('');
-  }catch(e){console.warn('ds sample:',e);}
-}
-async function deleteSource(source){
-  if(!confirm(`¿Eliminar todos los prompts de "${source}"?`))return;
-  try{
-    const d=await api('/api/dataset/delete','POST',{source});
-    if(d.success){loadDsStats();loadDsSample();}else alert(d.error||'Error');
-  }catch(e){alert(e.message);}
 }
 
 /* ═══ INIT ═══ */
