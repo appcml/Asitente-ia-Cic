@@ -2938,7 +2938,7 @@ function showDsAlert(msg,type){
 }
 async function loadDsStats(){
   try{
-    const d=await api('/api/dataset/stats');
+    const d=await req('/api/dataset/stats');
     document.getElementById('ds-total').textContent=(d.total||0).toLocaleString();
     document.getElementById('ds-sources').textContent=d.by_source.length;
     document.getElementById('ds-cats').textContent=d.by_category.length;
@@ -2953,7 +2953,7 @@ async function loadDsStats(){
 }
 async function loadDsSample(){
   try{
-    const d=await api('/api/dataset/sample?n=8');
+    const d=await req('/api/dataset/sample?n=8');
     const el=document.getElementById('dsSampleList');
     if(!d.prompts||!d.prompts.length){el.innerHTML='<p style="color:var(--text2);font-size:.83rem">No hay prompts importados aún.</p>';return;}
     el.innerHTML=d.prompts.map(p=>`
@@ -2966,7 +2966,7 @@ async function loadDsSample(){
 async function deleteSource(source){
   if(!confirm(`¿Eliminar todos los prompts de "${source}"?`))return;
   try{
-    const d=await api('/api/dataset/delete','POST',{source});
+    const d=await req('/api/dataset/delete','POST',{source});
     if(d.success){loadDsStats();loadDsSample();}else alert(d.error||'Error');
   }catch(e){alert(e.message);}
 }
