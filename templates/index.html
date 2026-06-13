@@ -468,84 +468,63 @@
       <h2>🗄️ Importar Dataset</h2>
       <p class="subtitle">Carga prompts externos para entrenar CicDream</p>
 
-      <!-- Stats -->
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:24px;">
-        <div class="stat-card"><div class="stat-value" id="ds-total">—</div><div class="stat-label">Prompts en BD</div></div>
-        <div class="stat-card"><div class="stat-value" id="ds-sources">—</div><div class="stat-label">Fuentes</div></div>
-        <div class="stat-card"><div class="stat-value" id="ds-cats">—</div><div class="stat-label">Categorías</div></div>
+      <div class="cards">
+        <div class="card"><div class="value" id="ds-total">—</div><div class="label">Prompts en BD</div></div>
+        <div class="card green"><div class="value" id="ds-sources">—</div><div class="label">Fuentes</div></div>
+        <div class="card yellow"><div class="value" id="ds-cats">—</div><div class="label">Categorías</div></div>
       </div>
 
-      <!-- Upload card -->
       <div class="card" style="margin-bottom:20px;">
         <h3 style="margin-bottom:12px;color:var(--accent)">📤 Cargar archivo de dataset</h3>
         <p style="color:var(--text2);font-size:.85rem;margin-bottom:16px;">
           Formatos soportados: <strong style="color:var(--text)">.parquet · .csv · .jsonl · .json · .txt</strong><br>
           Columna detectada automáticamente: <code>prompt</code>, <code>Prompt</code>, <code>text</code>, <code>caption</code>
         </p>
-
-        <!-- Drop zone -->
-        <div id="dsDropZone" style="
-          border:2px dashed #2d3561;border-radius:10px;padding:28px;text-align:center;
-          cursor:pointer;transition:all .2s;margin-bottom:16px;
-        "
-        onclick="document.getElementById('dsFileInput').click()"
-        ondragover="event.preventDefault();this.style.borderColor='var(--accent)';this.style.background='rgba(108,99,255,.07)'"
-        ondragleave="this.style.borderColor='#2d3561';this.style.background=''"
-        ondrop="handleDsDrop(event)">
+        <div id="dsDropZone" style="border:2px dashed #2d3561;border-radius:10px;padding:28px;text-align:center;cursor:pointer;transition:all .2s;margin-bottom:16px;"
+          onclick="document.getElementById('dsFileInput').click()"
+          ondragover="event.preventDefault();this.style.borderColor='var(--accent)';this.style.background='rgba(108,99,255,.07)'"
+          ondragleave="this.style.borderColor='#2d3561';this.style.background=''"
+          ondrop="handleDsDrop(event)">
           <div style="font-size:2rem;margin-bottom:8px">📁</div>
           <div style="color:var(--text2);font-size:.9rem">Arrastra tu archivo aquí o haz clic para seleccionar</div>
           <div id="dsFileName" style="margin-top:8px;color:var(--accent);font-size:.85rem;font-weight:600"></div>
         </div>
         <input type="file" id="dsFileInput" accept=".parquet,.csv,.jsonl,.json,.txt" style="display:none" onchange="onDsFileSelect(this)">
-
-        <!-- Options -->
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:16px;">
           <div>
             <label style="font-size:.8rem;color:var(--text2);display:block;margin-bottom:4px">Nombre de fuente</label>
-            <input id="dsSource" type="text" value="sd_prompts_gustavosta" class="input-field" style="width:100%">
+            <input id="dsSource" type="text" value="sd_prompts_gustavosta" style="width:100%;background:var(--bg3);border:1px solid #2d3561;border-radius:8px;padding:8px 12px;color:var(--text);font-size:.85rem;">
           </div>
           <div>
             <label style="font-size:.8rem;color:var(--text2);display:block;margin-bottom:4px">Categoría</label>
-            <input id="dsCategory" type="text" value="sd_prompts" class="input-field" style="width:100%">
+            <input id="dsCategory" type="text" value="sd_prompts" style="width:100%;background:var(--bg3);border:1px solid #2d3561;border-radius:8px;padding:8px 12px;color:var(--text);font-size:.85rem;">
           </div>
           <div>
             <label style="font-size:.8rem;color:var(--text2);display:block;margin-bottom:4px">Máx. prompts</label>
-            <input id="dsLimit" type="number" value="5000" min="100" max="50000" class="input-field" style="width:100%">
+            <input id="dsLimit" type="number" value="5000" min="100" max="50000" style="width:100%;background:var(--bg3);border:1px solid #2d3561;border-radius:8px;padding:8px 12px;color:var(--text);font-size:.85rem;">
           </div>
         </div>
-
-        <!-- Progress bar -->
         <div id="dsProgress" style="display:none;margin-bottom:12px;">
           <div style="height:6px;background:var(--bg3);border-radius:4px;overflow:hidden;">
             <div id="dsProgressBar" style="height:100%;background:var(--accent);width:0%;transition:width .4s;border-radius:4px;"></div>
           </div>
           <div id="dsProgressText" style="font-size:.8rem;color:var(--text2);margin-top:6px;text-align:center"></div>
         </div>
-
         <div id="dsAlert" style="display:none;padding:10px 14px;border-radius:8px;font-size:.85rem;margin-bottom:12px;"></div>
-
-        <button id="dsImportBtn" onclick="importDataset()" class="btn btn-primary">
-          ⬆️ Importar Dataset
-        </button>
+        <button id="dsImportBtn" onclick="importDataset()" class="btn btn-primary">⬆️ Importar Dataset</button>
       </div>
 
-      <!-- Muestra de prompts -->
       <div class="card" style="margin-bottom:20px;">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
           <h3 style="color:var(--accent)">🔍 Muestra de prompts importados</h3>
           <button onclick="loadDsSample()" class="btn btn-outline btn-sm">🔄 Actualizar</button>
         </div>
-        <div id="dsSampleList">
-          <p style="color:var(--text2);font-size:.85rem">Importa un dataset para ver los prompts aquí.</p>
-        </div>
+        <div id="dsSampleList"><p style="color:var(--text2);font-size:.85rem">Importa un dataset para ver los prompts aquí.</p></div>
       </div>
 
-      <!-- Gestionar fuentes -->
       <div class="card">
         <h3 style="color:var(--accent);margin-bottom:16px;">🗑️ Gestionar fuentes</h3>
-        <div id="dsSourcesList">
-          <p style="color:var(--text2);font-size:.85rem">Cargando fuentes...</p>
-        </div>
+        <div id="dsSourcesList"><p style="color:var(--text2);font-size:.85rem">Cargando fuentes...</p></div>
       </div>
     </section>
 
@@ -1047,8 +1026,7 @@ function handleDsDrop(e) {
   e.preventDefault();
   document.getElementById('dsDropZone').style.borderColor = '#2d3561';
   document.getElementById('dsDropZone').style.background = '';
-  const file = e.dataTransfer.files[0];
-  if (file) setDsFile(file);
+  if (e.dataTransfer.files[0]) setDsFile(e.dataTransfer.files[0]);
 }
 function onDsFileSelect(input) {
   if (input.files[0]) setDsFile(input.files[0]);
@@ -1056,116 +1034,85 @@ function onDsFileSelect(input) {
 function setDsFile(file) {
   dsFile = file;
   document.getElementById('dsFileName').textContent = '📄 ' + file.name + ' (' + (file.size/1024).toFixed(1) + ' KB)';
-  document.getElementById('dsDropZone').style.borderColor = 'var(--green,#1dd1a1)';
+  document.getElementById('dsDropZone').style.borderColor = 'var(--green)';
 }
-
 async function importDataset() {
   if (!dsFile) return showDsAlert('⚠️ Selecciona un archivo primero', 'err');
   const btn = document.getElementById('dsImportBtn');
-  btn.disabled = true;
-  btn.textContent = '⏳ Importando...';
-
+  btn.disabled = true; btn.textContent = '⏳ Importando...';
   const prog = document.getElementById('dsProgress');
   const bar  = document.getElementById('dsProgressBar');
   const txt  = document.getElementById('dsProgressText');
-  prog.style.display = 'block';
-  bar.style.width = '10%';
-  txt.textContent = 'Leyendo archivo...';
-
+  prog.style.display = 'block'; bar.style.width = '10%'; txt.textContent = 'Leyendo archivo...';
   try {
     const form = new FormData();
     form.append('file',     dsFile);
     form.append('source',   document.getElementById('dsSource').value.trim()   || 'dataset_import');
     form.append('category', document.getElementById('dsCategory').value.trim() || 'sd_prompts');
     form.append('limit',    document.getElementById('dsLimit').value            || '5000');
-
-    bar.style.width = '40%';
-    txt.textContent = 'Enviando al servidor...';
-
+    bar.style.width = '40%'; txt.textContent = 'Enviando al servidor...';
     const r = await fetch('/api/dataset/import', {
       method: 'POST',
       headers: { 'Authorization': 'Bearer ' + TOKEN },
       body: form
     });
-
-    bar.style.width = '80%';
-    txt.textContent = 'Procesando prompts...';
-
+    bar.style.width = '80%'; txt.textContent = 'Procesando prompts...';
     const data = await r.json();
     bar.style.width = '100%';
-
     if (data.success) {
       txt.textContent = '✅ Completado';
       showDsAlert('✅ ' + data.message, 'ok');
-      loadDsStats();
-      loadDsSample();
+      loadDsStats(); loadDsSample();
     } else {
       showDsAlert('❌ ' + (data.error || 'Error desconocido'), 'err');
     }
   } catch(e) {
     showDsAlert('❌ Error: ' + e.message, 'err');
   } finally {
-    btn.disabled = false;
-    btn.textContent = '⬆️ Importar Dataset';
+    btn.disabled = false; btn.textContent = '⬆️ Importar Dataset';
     setTimeout(() => { prog.style.display = 'none'; bar.style.width = '0%'; }, 3000);
   }
 }
-
 function showDsAlert(msg, type) {
   const el = document.getElementById('dsAlert');
   el.style.display = 'block';
   el.style.background = type === 'ok' ? 'rgba(29,209,161,.15)' : 'rgba(255,107,107,.15)';
-  el.style.border = '1px solid ' + (type === 'ok' ? '#1dd1a1' : '#ff6b6b');
-  el.style.color  = type === 'ok' ? '#1dd1a1' : '#ff6b6b';
+  el.style.border = '1px solid ' + (type === 'ok' ? 'var(--green)' : 'var(--red)');
+  el.style.color  = type === 'ok' ? 'var(--green)' : 'var(--red)';
   el.textContent = msg;
   setTimeout(() => { el.style.display = 'none'; }, 6000);
 }
-
 async function loadDsStats() {
   try {
     const d = await api('/api/dataset/stats');
     document.getElementById('ds-total').textContent   = (d.total || 0).toLocaleString();
     document.getElementById('ds-sources').textContent = d.by_source.length;
     document.getElementById('ds-cats').textContent    = d.by_category.length;
-
     const sl = document.getElementById('dsSourcesList');
     if (!d.by_source.length) {
-      sl.innerHTML = '<p style="color:var(--text2);font-size:.85rem">No hay datasets importados aún.</p>';
-      return;
+      sl.innerHTML = '<p style="color:var(--text2);font-size:.85rem">No hay datasets importados aún.</p>'; return;
     }
     sl.innerHTML = d.by_source.map(s => `
-      <div style="display:flex;justify-content:space-between;align-items:center;
-           background:var(--bg3,#1a1d2e);border-radius:8px;padding:10px 14px;margin-bottom:8px;">
-        <div>
-          <strong style="font-size:.9rem">${s.source}</strong>
-          <span style="color:var(--text2);font-size:.8rem;margin-left:8px">${s.count.toLocaleString()} prompts</span>
-        </div>
-        <button onclick="deleteSource('${s.source}')" class="btn btn-sm" style="background:rgba(255,107,107,.15);border:1px solid #ff6b6b;color:#ff6b6b;">
-          🗑️ Eliminar
-        </button>
-      </div>
-    `).join('');
+      <div style="display:flex;justify-content:space-between;align-items:center;background:var(--bg3);border-radius:8px;padding:10px 14px;margin-bottom:8px;">
+        <div><strong>${s.source}</strong><span style="color:var(--text2);font-size:.8rem;margin-left:8px">${s.count.toLocaleString()} prompts</span></div>
+        <button onclick="deleteSource('${s.source}')" class="btn btn-sm" style="background:rgba(255,107,107,.15);border:1px solid var(--red);color:var(--red);">🗑️ Eliminar</button>
+      </div>`).join('');
   } catch(e) { console.warn('Dataset stats:', e); }
 }
-
 async function loadDsSample() {
   try {
     const d = await api('/api/dataset/sample?n=8');
     const el = document.getElementById('dsSampleList');
     if (!d.prompts || !d.prompts.length) {
-      el.innerHTML = '<p style="color:var(--text2);font-size:.85rem">No hay prompts importados aún.</p>';
-      return;
+      el.innerHTML = '<p style="color:var(--text2);font-size:.85rem">No hay prompts importados aún.</p>'; return;
     }
     el.innerHTML = d.prompts.map(p => `
-      <div style="background:var(--bg3,#1a1d2e);border-radius:8px;padding:10px 14px;
-           border-left:3px solid var(--accent);font-size:.82rem;margin-bottom:8px;">
+      <div style="background:var(--bg3);border-radius:8px;padding:10px 14px;border-left:3px solid var(--accent);font-size:.82rem;margin-bottom:8px;">
         <span style="color:var(--text)">${p.prompt.substring(0,180)}${p.prompt.length>180?'…':''}</span>
         <span style="font-size:.73rem;color:#4a5568;margin-left:6px">[${p.source}] Q:${(p.quality*100).toFixed(0)}%</span>
-      </div>
-    `).join('');
+      </div>`).join('');
   } catch(e) { console.warn('Sample error:', e); }
 }
-
 async function deleteSource(source) {
   if (!confirm(`¿Eliminar todos los prompts de "${source}"?`)) return;
   try {
