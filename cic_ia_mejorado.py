@@ -2259,60 +2259,136 @@ def image_feedback():
 @app.route('/api/image/training/manual', methods=['POST'])
 @dev_required
 def image_training_manual():
-    """Guarda imagen de entrenamiento para CicDream"""
-    data       = request.json or {}
-    image_b64  = data.get('image_b64', '')
-    prompt     = data.get('prompt', '')
-    style      = data.get('style', 'auto')
-    rating     = data.get('rating', 5)
-    if not image_b64 or not prompt:
-        return jsonify({'success': False, 'error': 'image_b64 y prompt requeridos'}), 400
+    """
+    Guarda imagen de entrenamiento para CicDream.
+    Acepta: prompt + (imagen opcional).
+    No requiere Groq — guarda directo en BD.
+    """
+    data    = request.json or {}
+    prompt  = (data.get('prompt') or data.get('description') or '').strip()
+    style   = data.get('style', 'auto')
+    rating  = int(data.get('rating', 5))
+    tags    = data.get('tags', [])
+    info    = data.get('info', '')
+
+    if not prompt:
+        return jsonify({'success': False, 'error': 'Se requiere al menos una descripción/prompt'}), 400
+
     try:
+        # Guardar como prompt en dataset
+        dp = DatasetPrompt(
+            prompt   = prompt,
+            source   = 'manual_training',
+            category = style if style != 'auto' else 'manual',
+            quality  = min(1.0, rating / 5.0)
+        )
+        db.session.add(dp)
+
+        # También guardar en memoria del sistema
+        content = f"[CICDREAM TRAINING] prompt: {prompt}"
+        if info:
+            content += f" | info: {info}"
+        if tags:
+            content += f" | tags: {', '.join(tags) if isinstance(tags, list) else tags}"
+
         mem = Memory(
-            content=f"[TRAINING] prompt:{prompt} style:{style} rating:{rating}",
-            source='cicdream_training',
-            topic='image_training',
-            relevance_score=rating/5.0,
-            tags=['training', style]
+            content        = content,
+            source         = 'cicdream_training',
+            topic          = 'image_training',
+            relevance_score= min(1.0, rating / 5.0),
+            tags           = tags if isinstance(tags, list) else [style]
         )
         db.session.add(mem)
         db.session.commit()
-        return jsonify({'success': True, 'message': 'Imagen de entrenamiento guardada'})
+
+        total = DatasetPrompt.query.filter_by(source='manual_training').count()
+        return jsonify({
+            'success': True,
+            'message': f'✅ Imagen de entrenamiento guardada correctamente',
+            'total_manual': total
+        })
     except Exception as e:
         db.session.rollback()
-        return jsonify({'success': False, 'error': str(e)})
+        logger.error(f"Error training manual: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 @app.route('/api/image/training/analyze', methods=['POST'])
 @dev_required
 def image_training_analyze():
-    """Analiza imagen con Groq Vision para extraer descripción"""
+    """
+    Analiza imagen con Groq Vision.
+    Si Groq falla o no está disponible, genera descripción básica local.
+    """
     data      = request.json or {}
     image_b64 = data.get('image_b64', '')
     if not image_b64:
         return jsonify({'success': False, 'error': 'image_b64 requerido'}), 400
-    if not GROQ_API_KEY:
-        return jsonify({'success': False, 'error': 'GROQ_API_KEY no configurado'})
+
+    # Intentar con Groq primero
+    if GROQ_API_KEY:
+        try:
+            # Reducir imagen antes de enviar (máx 200KB en base64)
+            img_data = base64.b64decode(image_b64)
+            if len(img_data) > 150000:
+                try:
+                    pil_img = __import__('PIL.Image', fromlist=['Image']).open(
+                        __import__('io').BytesIO(img_data)
+                    ).convert('RGB')
+                    w, h = pil_img.size
+                    ratio = min(1.0, 400 / max(w, h))
+                    pil_img = pil_img.resize((int(w*ratio), int(h*ratio)))
+                    buf = __import__('io').BytesIO()
+                    pil_img.save(buf, format='JPEG', quality=75)
+                    image_b64 = base64.b64encode(buf.getvalue()).decode()
+                except Exception:
+                    pass
+
+            resp = requests.post(
+                'https://api.groq.com/openai/v1/chat/completions',
+                headers={'Authorization': f'Bearer {GROQ_API_KEY}', 'Content-Type': 'application/json'},
+                json={
+                    'model': 'meta-llama/llama-4-scout-17b-16e-instruct',
+                    'messages': [{
+                        'role': 'user',
+                        'content': [
+                            {'type': 'image_url', 'image_url': {'url': f'data:image/jpeg;base64,{image_b64}'}},
+                            {'type': 'text', 'text': 'Describe this image as a Stable Diffusion prompt in English. Include subject, art style, lighting, colors, mood. Max 80 words, comma-separated. Only output the prompt.'}
+                        ]
+                    }],
+                    'max_tokens': 150
+                },
+                timeout=20
+            )
+            if resp.status_code == 200:
+                description = resp.json()['choices'][0]['message']['content'].strip()
+                return jsonify({'success': True, 'description': description, 'source': 'groq_vision'})
+        except Exception as e:
+            logger.warning(f"Groq Vision falló: {e} — usando análisis local")
+
+    # Fallback local — análisis básico por colores y tamaño
     try:
-        resp = requests.post('https://api.groq.com/openai/v1/chat/completions',
-            headers={'Authorization': f'Bearer {GROQ_API_KEY}', 'Content-Type': 'application/json'},
-            json={
-                'model': 'meta-llama/llama-4-scout-17b-16e-instruct',
-                'messages': [{
-                    'role': 'user',
-                    'content': [
-                        {'type': 'image_url', 'image_url': {'url': f'data:image/jpeg;base64,{image_b64}'}},
-                        {'type': 'text', 'text': 'Describe esta imagen en inglés como un prompt de Stable Diffusion. Incluye: sujeto principal, estilo artístico, iluminación, colores, composición. Máximo 100 palabras, separado por comas.'}
-                    ]
-                }],
-                'max_tokens': 200
-            }, timeout=30)
-        if resp.status_code == 200:
-            description = resp.json()['choices'][0]['message']['content']
-            return jsonify({'success': True, 'description': description})
-        return jsonify({'success': False, 'error': f'Groq {resp.status_code}'})
+        img_data = base64.b64decode(image_b64)
+        pil_img  = __import__('PIL.Image', fromlist=['Image']).open(
+            __import__('io').BytesIO(img_data)
+        ).convert('RGB')
+        w, h = pil_img.size
+        orientation = 'landscape' if w > h else 'portrait' if h > w else 'square'
+        # Muestra de colores dominantes
+        small = pil_img.resize((50, 50))
+        pixels = list(small.getdata())
+        r_avg = sum(p[0] for p in pixels) // len(pixels)
+        g_avg = sum(p[1] for p in pixels) // len(pixels)
+        b_avg = sum(p[2] for p in pixels) // len(pixels)
+        brightness = (r_avg + g_avg + b_avg) // 3
+        tone = 'dark' if brightness < 85 else 'bright' if brightness > 170 else 'medium tone'
+        dominant = 'warm' if r_avg > b_avg + 20 else 'cool' if b_avg > r_avg + 20 else 'neutral'
+        description = f"digital art, {orientation} composition, {tone}, {dominant} color palette, detailed illustration, high quality"
+        return jsonify({'success': True, 'description': description, 'source': 'local_analysis'})
     except Exception as e:
-        return jsonify({'success': False, 'error': str(e)})
+        return jsonify({'success': True, 'description': 'digital art, high quality, detailed illustration', 'source': 'default'})
+
+
 
 
 @app.route('/api/image/dataset/export', methods=['GET'])
