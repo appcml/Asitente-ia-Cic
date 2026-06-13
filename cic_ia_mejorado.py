@@ -55,6 +55,11 @@ app.config['SQLALCHEMY_ENGINE_OPTIONS'] = _engine_opts
 # API Keys (desde entorno)
 ANTHROPIC_API_KEY = os.environ.get('ANTHROPIC_API_KEY', '')
 OPENAI_API_KEY    = os.environ.get('OPENAI_API_KEY', '')
+GEMINI_API_KEY    = os.environ.get('GEMINI_API_KEY', '')
+FAL_API_KEY       = os.environ.get('FAL_API_KEY', '')
+STABILITY_API_KEY = os.environ.get('STABILITY_API_KEY', '')
+HUGGINGFACE_TOKEN = os.environ.get('HUGGINGFACE_TOKEN', '')
+GROQ_API_KEY      = os.environ.get('GROQ_API_KEY', '')
 
 # Archivos
 UPLOAD_FOLDER = 'uploads'
@@ -1841,6 +1846,492 @@ def dev_setup():
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
+
+# ========== MÓDULO GENERACIÓN DE IMÁGENES ==========
+
+import base64
+import io
+import math
+
+def _size_to_dims(size):
+    """Convierte nombre de tamaño a dimensiones WxH"""
+    return {
+        'square':    (1024, 1024),
+        'landscape': (1280, 720),
+        'portrait':  (720, 1280),
+        '512':       (512, 512),
+    }.get(size, (1024, 1024))
+
+def _enhance_prompt(prompt, style):
+    """Mejora el prompt según el estilo seleccionado"""
+    suffixes = {
+        'realistic':    'photorealistic, 8k, highly detailed, professional photography',
+        'artistic':     'digital art, vibrant colors, artistic masterpiece, trending on artstation',
+        'anime':        'anime style, cel shading, detailed illustration, studio quality',
+        'watercolor':   'watercolor painting, soft colors, artistic brushstrokes',
+        'oil_painting': 'oil painting, classical art style, rich textures, museum quality',
+        'sketch':       'pencil sketch, detailed linework, black and white drawing',
+        'cyberpunk':    'cyberpunk aesthetic, neon lights, futuristic city, blade runner style',
+        'fantasy':      'fantasy art, magical atmosphere, epic scene, detailed world',
+        'minimalist':   'minimalist design, clean composition, simple elegant',
+        '3d_render':    '3D render, octane render, volumetric lighting, ray tracing',
+    }
+    suffix = suffixes.get(style, '')
+    return f"{prompt}, {suffix}" if suffix else prompt
+
+def _generate_pollinations(prompt, model_key, size):
+    """Genera imagen via Pollinations.ai — sin API key"""
+    import urllib.parse
+    w, h = _size_to_dims(size)
+    model_map = {
+        'pollinations_flux':  'flux',
+        'pollinations_turbo': 'turbo',
+        'pollinations_sd':    'stable-diffusion',
+    }
+    model = model_map.get(model_key, 'flux')
+    encoded = urllib.parse.quote(prompt)
+    url = f"https://image.pollinations.ai/prompt/{encoded}?model={model}&width={w}&height={h}&nologo=true&enhance=true"
+    try:
+        resp = requests.get(url, timeout=45)
+        if resp.status_code == 200 and resp.headers.get('content-type','').startswith('image'):
+            img_b64 = base64.b64encode(resp.content).decode()
+            return {'success': True, 'image_b64': img_b64, 'provider': f'pollinations_{model}', 'url': url}
+        return {'success': False, 'error': f'Pollinations {resp.status_code}'}
+    except Exception as e:
+        return {'success': False, 'error': str(e)}
+
+def _generate_hf(prompt, model_key, size):
+    """Genera imagen via HuggingFace Inference API"""
+    if not HUGGINGFACE_TOKEN:
+        return {'success': False, 'error': 'HUGGINGFACE_TOKEN no configurado'}
+    model_map = {
+        'hf_sdxl':  'stabilityai/stable-diffusion-xl-base-1.0',
+        'hf_flux':  'black-forest-labs/FLUX.1-schnell',
+        'hf_sd21':  'stabilityai/stable-diffusion-2-1',
+    }
+    hf_model = model_map.get(model_key, 'stabilityai/stable-diffusion-xl-base-1.0')
+    url = f"https://api-inference.huggingface.co/models/{hf_model}"
+    w, h = _size_to_dims(size)
+    try:
+        resp = requests.post(url,
+            headers={'Authorization': f'Bearer {HUGGINGFACE_TOKEN}'},
+            json={'inputs': prompt, 'parameters': {'width': w, 'height': h}},
+            timeout=60)
+        if resp.status_code == 200:
+            img_b64 = base64.b64encode(resp.content).decode()
+            return {'success': True, 'image_b64': img_b64, 'provider': f'huggingface_{hf_model.split("/")[-1]}'}
+        return {'success': False, 'error': f'HuggingFace {resp.status_code}: {resp.text[:100]}'}
+    except Exception as e:
+        return {'success': False, 'error': str(e)}
+
+def _generate_fal(prompt, model_key, size):
+    """Genera imagen via fal.ai"""
+    if not FAL_API_KEY:
+        return {'success': False, 'error': 'FAL_API_KEY no configurado'}
+    w, h = _size_to_dims(size)
+    model_map = {
+        'fal_flux_schnell': 'fal-ai/flux/schnell',
+        'fal_flux_dev':     'fal-ai/flux/dev',
+    }
+    fal_model = model_map.get(model_key, 'fal-ai/flux/schnell')
+    try:
+        resp = requests.post(f"https://fal.run/{fal_model}",
+            headers={'Authorization': f'Key {FAL_API_KEY}', 'Content-Type': 'application/json'},
+            json={'prompt': prompt, 'image_size': {'width': w, 'height': h}, 'num_images': 1},
+            timeout=60)
+        if resp.status_code == 200:
+            data = resp.json()
+            img_url = data.get('images', [{}])[0].get('url', '')
+            if img_url:
+                img_resp = requests.get(img_url, timeout=30)
+                img_b64 = base64.b64encode(img_resp.content).decode()
+                return {'success': True, 'image_b64': img_b64, 'provider': fal_model, 'url': img_url}
+        return {'success': False, 'error': f'fal.ai {resp.status_code}: {resp.text[:100]}'}
+    except Exception as e:
+        return {'success': False, 'error': str(e)}
+
+def _generate_stability(prompt, model_key, size):
+    """Genera imagen via Stability AI"""
+    if not STABILITY_API_KEY:
+        return {'success': False, 'error': 'STABILITY_API_KEY no configurado'}
+    w, h = _size_to_dims(size)
+    engine = 'stable-image/generate/core' if model_key == 'stability_core' else 'stable-image/generate/sd3'
+    try:
+        resp = requests.post(f"https://api.stability.ai/v2beta/{engine}",
+            headers={'Authorization': f'Bearer {STABILITY_API_KEY}', 'Accept': 'image/*'},
+            files={'none': ''},
+            data={'prompt': prompt, 'output_format': 'png'},
+            timeout=60)
+        if resp.status_code == 200:
+            img_b64 = base64.b64encode(resp.content).decode()
+            return {'success': True, 'image_b64': img_b64, 'provider': f'stability_{model_key}'}
+        return {'success': False, 'error': f'Stability {resp.status_code}: {resp.text[:100]}'}
+    except Exception as e:
+        return {'success': False, 'error': str(e)}
+
+def _generate_gemini(prompt, size):
+    """Genera imagen via Google Gemini"""
+    if not GEMINI_API_KEY:
+        return {'success': False, 'error': 'GEMINI_API_KEY no configurado'}
+    try:
+        resp = requests.post(
+            f"https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-001:predict?key={GEMINI_API_KEY}",
+            json={'instances': [{'prompt': prompt}], 'parameters': {'sampleCount': 1}},
+            timeout=60)
+        if resp.status_code == 200:
+            data = resp.json()
+            img_b64 = data.get('predictions', [{}])[0].get('bytesBase64Encoded', '')
+            if img_b64:
+                return {'success': True, 'image_b64': img_b64, 'provider': 'gemini_imagen'}
+        return {'success': False, 'error': f'Gemini {resp.status_code}: {resp.text[:150]}'}
+    except Exception as e:
+        return {'success': False, 'error': str(e)}
+
+def _generate_svg(prompt, size):
+    """Genera imagen SVG algorítmica — siempre funciona, sin APIs"""
+    try:
+        from PIL import Image, ImageDraw, ImageFont
+    except ImportError:
+        pass
+    w, h = _size_to_dims(size)
+    words = prompt.lower().split()
+    # Paleta dinámica según palabras clave
+    palettes = {
+        'sunset':    ['#ff6b35','#f7c59f','#efefd0','#004e89','#1a936f'],
+        'ocean':     ['#03045e','#0077b6','#00b4d8','#90e0ef','#caf0f8'],
+        'forest':    ['#1b4332','#2d6a4f','#52b788','#95d5b2','#d8f3dc'],
+        'fire':      ['#d00000','#e85d04','#f48c06','#faa307','#ffba08'],
+        'night':     ['#03071e','#370617','#6a040f','#9d0208','#d62828'],
+        'space':     ['#03071e','#240046','#3c096c','#7b2d8b','#c77dff'],
+        'default':   ['#0f1117','#1a1d2e','#5b8dee','#38d9c0','#a78bfa'],
+    }
+    palette = palettes['default']
+    for key in palettes:
+        if key in words:
+            palette = palettes[key]
+            break
+    # SVG generativo
+    seed = sum(ord(c) for c in prompt)
+    shapes = []
+    rng = seed
+    def nxt(mn, mx):
+        nonlocal rng
+        rng = (rng * 1664525 + 1013904223) & 0xFFFFFFFF
+        return mn + (rng % (mx - mn))
+    for i in range(12):
+        color = palette[nxt(0, len(palette))]
+        opacity = (nxt(20, 70)) / 100
+        x, y = nxt(0, w), nxt(0, h)
+        r = nxt(50, 200)
+        shapes.append(f'<circle cx="{x}" cy="{y}" r="{r}" fill="{color}" opacity="{opacity}"/>')
+    for i in range(6):
+        color = palette[nxt(0, len(palette))]
+        x1, y1 = nxt(0, w), nxt(0, h)
+        x2, y2 = nxt(0, w), nxt(0, h)
+        x3, y3 = nxt(0, w), nxt(0, h)
+        opacity = (nxt(15, 50)) / 100
+        shapes.append(f'<polygon points="{x1},{y1} {x2},{y2} {x3},{y3}" fill="{color}" opacity="{opacity}"/>')
+    short = prompt[:60] + ('...' if len(prompt) > 60 else '')
+    svg = f'''<svg xmlns="http://www.w3.org/2000/svg" width="{w}" height="{h}" viewBox="0 0 {w} {h}">
+  <defs><filter id="blur"><feGaussianBlur stdDeviation="8"/></filter></defs>
+  <rect width="{w}" height="{h}" fill="{palette[0]}"/>
+  <g filter="url(#blur)">{"".join(shapes)}</g>
+  <rect width="{w}" height="{h}" fill="rgba(0,0,0,0.2)"/>
+  <text x="{w//2}" y="{h-40}" text-anchor="middle" fill="rgba(255,255,255,0.6)"
+    font-family="sans-serif" font-size="14">{short}</text>
+</svg>'''
+    svg_b64 = base64.b64encode(svg.encode()).decode()
+    return {'success': True, 'image_b64': svg_b64, 'mime': 'image/svg+xml', 'provider': 'svg_algoritmico'}
+
+def _generate_pil(prompt, size):
+    """Genera imagen PIL algorítmica"""
+    try:
+        from PIL import Image, ImageDraw
+        w, h = _size_to_dims(size)
+        seed = sum(ord(c) for c in prompt)
+        rng = seed
+        def nxt(mn, mx):
+            nonlocal rng
+            rng = (rng * 1664525 + 1013904223) & 0xFFFFFFFF
+            return mn + (rng % (mx - mn))
+        img = Image.new('RGB', (w, h), (nxt(0,30), nxt(0,30), nxt(20,60)))
+        draw = ImageDraw.Draw(img)
+        for _ in range(20):
+            x0,y0 = nxt(0,w), nxt(0,h)
+            x1,y1 = x0+nxt(50,300), y0+nxt(50,300)
+            col = (nxt(50,255), nxt(50,255), nxt(50,255))
+            draw.ellipse([x0,y0,x1,y1], fill=col+(nxt(80,180),))
+        buf = io.BytesIO()
+        img.save(buf, format='PNG')
+        img_b64 = base64.b64encode(buf.getvalue()).decode()
+        return {'success': True, 'image_b64': img_b64, 'provider': 'pil_algoritmico'}
+    except Exception as e:
+        return {'success': False, 'error': str(e)}
+
+def _generate_fractal(prompt, size):
+    """Genera fractal Mandelbrot/Julia coloreado"""
+    try:
+        w, h = _size_to_dims(size)
+        w2, h2 = min(w, 512), min(h, 512)
+        seed = sum(ord(c) for c in prompt) % 1000
+        pixels = []
+        cx = -0.7 + (seed % 100) / 500
+        cy = 0.27 + (seed % 50) / 500
+        for py in range(h2):
+            row = []
+            for px in range(w2):
+                zx = (px - w2/2) / (w2/4)
+                zy = (py - h2/2) / (h2/4)
+                z = complex(zx, zy)
+                c = complex(cx, cy)
+                i = 0
+                while abs(z) < 2 and i < 80:
+                    z = z*z + c
+                    i += 1
+                t = i / 80
+                r = int(9*(1-t)*t*t*t*255)
+                g = int(15*(1-t)*(1-t)*t*t*255)
+                b = int(8.5*(1-t)*(1-t)*(1-t)*t*255)
+                row.extend([r, g, b])
+            pixels.append(row)
+        from PIL import Image
+        img = Image.new('RGB', (w2, h2))
+        for py in range(h2):
+            for px in range(w2):
+                idx = px * 3
+                img.putpixel((px, py), (pixels[py][idx], pixels[py][idx+1], pixels[py][idx+2]))
+        if w2 != w or h2 != h:
+            img = img.resize((w, h), Image.LANCZOS)
+        buf = io.BytesIO()
+        img.save(buf, format='PNG')
+        img_b64 = base64.b64encode(buf.getvalue()).decode()
+        return {'success': True, 'image_b64': img_b64, 'provider': 'fractal_julia'}
+    except Exception as e:
+        return _generate_svg(prompt, size)
+
+def _generate_cicdream(prompt, size):
+    """CicDream — motor propio en modo aprendizaje, genera via SVG mejorado por dataset"""
+    # Buscar prompts similares del dataset para enriquecer
+    enriched = prompt
+    try:
+        similar = DatasetPrompt.query.filter(
+            DatasetPrompt.quality > 0.4
+        ).order_by(db.func.random()).limit(3).all()
+        if similar:
+            keywords = ', '.join(p.prompt.split(',')[0].strip() for p in similar if p.prompt)
+            enriched = f"{prompt}, inspired by: {keywords}"
+    except Exception:
+        pass
+    result = _generate_svg(enriched, size)
+    result['provider'] = 'cicdream_v1'
+    result['learning_mode'] = True
+    return result
+
+def _auto_cascade(prompt, size):
+    """Prueba motores en orden hasta que uno funcione"""
+    cascade = [
+        ('pollinations_flux',  lambda: _generate_pollinations(prompt, 'pollinations_flux', size)),
+        ('pollinations_turbo', lambda: _generate_pollinations(prompt, 'pollinations_turbo', size)),
+        ('pollinations_sd',    lambda: _generate_pollinations(prompt, 'pollinations_sd', size)),
+        ('hf_sdxl',            lambda: _generate_hf(prompt, 'hf_sdxl', size)),
+        ('gemini_flash',       lambda: _generate_gemini(prompt, size)),
+        ('fal_flux_schnell',   lambda: _generate_fal(prompt, 'fal_flux_schnell', size)),
+        ('stability_core',     lambda: _generate_stability(prompt, 'stability_core', size)),
+        ('svg',                lambda: _generate_svg(prompt, size)),
+    ]
+    errors = []
+    for name, fn in cascade:
+        try:
+            r = fn()
+            if r.get('success'):
+                logger.info(f"✅ Imagen generada con {name}")
+                return r
+            errors.append(f"{name}: {r.get('error','?')}")
+        except Exception as e:
+            errors.append(f"{name}: {e}")
+    return {'success': False, 'error': 'Todos los motores fallaron: ' + ' | '.join(errors[-3:])}
+
+# ── Endpoints ──────────────────────────────────────────────────────────────────
+
+@app.route('/api/image/generate', methods=['POST'])
+def image_generate():
+    """Genera imagen — accesible para usuarios autenticados y anónimos"""
+    data    = request.json or {}
+    prompt  = (data.get('prompt') or '').strip()
+    model   = data.get('model', 'auto')
+    style   = data.get('style', 'realistic')
+    size    = data.get('size', 'square')
+    quality = data.get('quality', 'standard')
+    count   = min(int(data.get('count', 1)), 4)
+
+    if not prompt:
+        return jsonify({'success': False, 'error': 'Prompt requerido'}), 400
+
+    enhanced = _enhance_prompt(prompt, style)
+    logger.info(f"🖼 Generando imagen — motor:{model} style:{style} size:{size}")
+
+    dispatch = {
+        'pollinations_flux':  lambda: _generate_pollinations(enhanced, 'pollinations_flux', size),
+        'pollinations_turbo': lambda: _generate_pollinations(enhanced, 'pollinations_turbo', size),
+        'pollinations_sd':    lambda: _generate_pollinations(enhanced, 'pollinations_sd', size),
+        'hf_sdxl':            lambda: _generate_hf(enhanced, 'hf_sdxl', size),
+        'hf_flux':            lambda: _generate_hf(enhanced, 'hf_flux', size),
+        'hf_sd21':            lambda: _generate_hf(enhanced, 'hf_sd21', size),
+        'fal_flux_schnell':   lambda: _generate_fal(enhanced, 'fal_flux_schnell', size),
+        'fal_flux_dev':       lambda: _generate_fal(enhanced, 'fal_flux_dev', size),
+        'stability_core':     lambda: _generate_stability(enhanced, 'stability_core', size),
+        'stability_sd3':      lambda: _generate_stability(enhanced, 'stability_sd3', size),
+        'gemini_flash':       lambda: _generate_gemini(enhanced, size),
+        'svg':                lambda: _generate_svg(prompt, size),
+        'pil':                lambda: _generate_pil(prompt, size),
+        'fractal':            lambda: _generate_fractal(prompt, size),
+        'cicdream':           lambda: _generate_cicdream(enhanced, size),
+        'auto':               lambda: _auto_cascade(enhanced, size),
+    }
+
+    fn = dispatch.get(model, dispatch['auto'])
+    images = []
+    last_error = ''
+    for _ in range(count):
+        try:
+            r = fn()
+            if r.get('success'):
+                mime = r.get('mime', 'image/png')
+                images.append({
+                    'url':      f"data:{mime};base64,{r['image_b64']}",
+                    'provider': r.get('provider', model),
+                    'learning_mode': r.get('learning_mode', False),
+                })
+            else:
+                last_error = r.get('error', 'Error desconocido')
+                # Si falla el motor elegido, prueba auto
+                if model not in ('auto', 'svg', 'pil', 'fractal'):
+                    r2 = _auto_cascade(enhanced, size)
+                    if r2.get('success'):
+                        mime = r2.get('mime', 'image/png')
+                        images.append({
+                            'url':      f"data:{mime};base64,{r2['image_b64']}",
+                            'provider': r2.get('provider', 'auto_fallback'),
+                        })
+        except Exception as e:
+            last_error = str(e)
+            logger.error(f"Error generando imagen: {e}")
+
+    if not images:
+        return jsonify({'success': False, 'error': last_error or 'No se pudo generar ninguna imagen'})
+
+    return jsonify({
+        'success':  True,
+        'images':   images,
+        'count':    len(images),
+        'provider': images[0].get('provider', model),
+        'prompt':   prompt,
+        'enhanced': enhanced,
+    })
+
+
+@app.route('/api/image/feedback', methods=['POST'])
+def image_feedback():
+    """Guarda feedback de imagen para CicDream"""
+    data = request.json or {}
+    generation_id = data.get('generation_id', '')
+    rating        = data.get('rating', 0)
+    details       = data.get('details', '')
+    tags          = data.get('tags', [])
+    try:
+        # Guardar en memoria del sistema como aprendizaje
+        if rating >= 4:
+            mem = Memory(
+                content=f"Imagen bien calificada ({rating}/5): {details}",
+                source='image_feedback',
+                topic='image_generation',
+                relevance_score=rating/5.0,
+                tags=tags if isinstance(tags, list) else []
+            )
+            db.session.add(mem)
+            db.session.commit()
+        return jsonify({'success': True, 'message': 'Feedback guardado'})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/image/training/manual', methods=['POST'])
+@dev_required
+def image_training_manual():
+    """Guarda imagen de entrenamiento para CicDream"""
+    data       = request.json or {}
+    image_b64  = data.get('image_b64', '')
+    prompt     = data.get('prompt', '')
+    style      = data.get('style', 'auto')
+    rating     = data.get('rating', 5)
+    if not image_b64 or not prompt:
+        return jsonify({'success': False, 'error': 'image_b64 y prompt requeridos'}), 400
+    try:
+        mem = Memory(
+            content=f"[TRAINING] prompt:{prompt} style:{style} rating:{rating}",
+            source='cicdream_training',
+            topic='image_training',
+            relevance_score=rating/5.0,
+            tags=['training', style]
+        )
+        db.session.add(mem)
+        db.session.commit()
+        return jsonify({'success': True, 'message': 'Imagen de entrenamiento guardada'})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/image/training/analyze', methods=['POST'])
+@dev_required
+def image_training_analyze():
+    """Analiza imagen con Groq Vision para extraer descripción"""
+    data      = request.json or {}
+    image_b64 = data.get('image_b64', '')
+    if not image_b64:
+        return jsonify({'success': False, 'error': 'image_b64 requerido'}), 400
+    if not GROQ_API_KEY:
+        return jsonify({'success': False, 'error': 'GROQ_API_KEY no configurado'})
+    try:
+        resp = requests.post('https://api.groq.com/openai/v1/chat/completions',
+            headers={'Authorization': f'Bearer {GROQ_API_KEY}', 'Content-Type': 'application/json'},
+            json={
+                'model': 'meta-llama/llama-4-scout-17b-16e-instruct',
+                'messages': [{
+                    'role': 'user',
+                    'content': [
+                        {'type': 'image_url', 'image_url': {'url': f'data:image/jpeg;base64,{image_b64}'}},
+                        {'type': 'text', 'text': 'Describe esta imagen en inglés como un prompt de Stable Diffusion. Incluye: sujeto principal, estilo artístico, iluminación, colores, composición. Máximo 100 palabras, separado por comas.'}
+                    ]
+                }],
+                'max_tokens': 200
+            }, timeout=30)
+        if resp.status_code == 200:
+            description = resp.json()['choices'][0]['message']['content']
+            return jsonify({'success': True, 'description': description})
+        return jsonify({'success': False, 'error': f'Groq {resp.status_code}'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/image/dataset/export', methods=['GET'])
+@dev_required
+def image_dataset_export():
+    """Exporta muestras del dataset para verificación"""
+    limit = min(int(request.args.get('limit', 10)), 100)
+    try:
+        with app.app_context():
+            db.create_all()
+        samples = DatasetPrompt.query.order_by(db.func.random()).limit(limit).all()
+        return jsonify({
+            'success': True,
+            'count':   len(samples),
+            'prompts': [s.to_dict() for s in samples]
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
 
 # ========== DATASET IMPORT (CicDream Prompts) ==========
 
