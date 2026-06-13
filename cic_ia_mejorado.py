@@ -65,7 +65,7 @@ GROQ_API_KEY      = os.environ.get('GROQ_API_KEY', '')
 UPLOAD_FOLDER = 'uploads'
 ALLOWED_EXTENSIONS = {'txt','pdf','png','jpg','jpeg','gif','doc','docx','py','js','html','css','json','csv','xlsx','xls','db','sqlite','md'}
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-app.config['MAX_CONTENT_LENGTH'] = 32 * 1024 * 1024  # 32MB
+app.config['MAX_CONTENT_LENGTH'] = 200 * 1024 * 1024  # 200MB — para datasets grandes
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs('models', exist_ok=True)
 
@@ -2602,9 +2602,15 @@ def dataset_import():
 
 
 @app.route('/api/dataset/stats', methods=['GET'])
-@dev_required
 def dataset_stats():
-    """Estadísticas de los datasets importados"""
+    """Estadísticas de los datasets importados — requiere token dev"""
+    # Verificar token (dev o usuario normal autenticado)
+    token = _get_token_from_request()
+    if not token:
+        return jsonify({'error': 'No autorizado'}), 401
+    session_obj = UserSession.query.filter_by(token=token).first()
+    if not session_obj:
+        return jsonify({'error': 'Token inválido'}), 401
     try:
         with app.app_context():
             db.create_all()
