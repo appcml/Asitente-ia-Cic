@@ -23,11 +23,6 @@ import numpy as np
 from functools import wraps
 from sqlalchemy import text, inspect
 
-# Registro automático de módulos independientes
-# Para agregar un módulo nuevo: solo edita modules/__init__.py
-# NO es necesario modificar este archivo
-from modules import register_all as _register_modules
-
 # ========== CONFIGURACIÓN ==========
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(name)s: %(message)s')
 logger = logging.getLogger('cic_ia')
@@ -215,7 +210,7 @@ def run_migration():
 
             # Config por defecto (solo inserta si no existe la clave)
             defaults = [
-                ('ai_provider',                   'auto',                                                                                                   'string'),
+                ('ai_provider',                   'groq',                                                                                                   'string'),
                 ('ai_model',                      'claude-haiku-4-5-20251001',                                                                              'string'),
                 ('system_prompt',                 'Eres Cic_IA, un asistente inteligente en español. Responde de forma clara, útil y amigable.',             'string'),
                 ('max_tokens',                    '1000',                                                                                                    'int'),
@@ -692,7 +687,7 @@ class CicIA:
             logger.info(f"   Memorias: {Memory.query.count()}")
             logger.info(f"   Conversaciones: {Conversation.query.count()}")
             logger.info(f"   Conocimiento manual: {ManualKnowledge.query.count()}")
-            provider = get_config('ai_provider', 'auto')
+            provider = get_config('ai_provider', 'groq')
             has_key  = bool(ANTHROPIC_API_KEY or OPENAI_API_KEY)
             logger.info(f"   Proveedor IA: {provider} ({'✅ API Key OK' if has_key else '⚠️ Sin API Key'})")
             logger.info("=" * 55)
@@ -1054,11 +1049,6 @@ Luego responde directamente sin mostrar este proceso al usuario.""")
 # Instancia global
 cic_ia = CicIA()
 
-# ========== MÓDULOS INDEPENDIENTES ==========
-# Cada módulo registra sus propias rutas via Blueprint
-# Agregar módulos: edita modules/__init__.py únicamente
-_register_modules(app)
-
 # ========== RUTAS PÚBLICAS ==========
 
 @app.route('/')
@@ -1284,167 +1274,97 @@ def read_github(current_user):
 @app.route('/api/chat/analyze-image', methods=['POST'])
 @token_required
 def analyze_image(current_user):
-    """
-    Analiza una imagen con contexto conversacional completo.
-    Soporta:
-    - Groq Vision (meta-llama/llama-4-scout-17b-16e-instruct) — prioridad 1, gratis
-    - Anthropic Claude Vision — fallback
-    - history: lista de mensajes previos para mantener contexto tras la imagen
-    - follow_up: si es True, es un mensaje de seguimiento sobre la misma imagen
-    """
+    """Analiza una imagen — usa Groq Vision (gratis) o Anthropic como fallback"""
     try:
-        data        = request.json or {}
-        image_b64   = data.get('image_b64', '')
-        message     = data.get('message', 'Describe esta imagen en detalle en español').strip()
-        mime_type   = data.get('mime_type', 'image/jpeg')
-        history     = data.get('history', [])   # historial previo del frontend
-        follow_up   = data.get('follow_up', False)  # True si es pregunta de seguimiento
+        data      = request.json or {}
+        image_b64 = data.get('image_b64', '')
+        message   = data.get('message', 'Describe esta imagen en detalle en español')
+        mime_type = data.get('mime_type', 'image/jpeg')
 
-        if not image_b64 and not follow_up:
+        if not image_b64:
             return jsonify({'error': 'imagen requerida'}), 400
 
         groq_key = os.environ.get('GROQ_API_KEY', '')
         system   = get_config('system_prompt', 'Eres Cic_IA, un asistente inteligente en español.')
-        system  += ("\n\nCuando analices imágenes, sé detallado y descriptivo. "
-                    "Mantén el contexto de la imagen durante toda la conversación "
-                    "para responder preguntas de seguimiento.")
 
-        def _build_groq_messages(include_image=True):
-            """Construye el array de mensajes para Groq con historial."""
-            msgs = [{'role': 'system', 'content': system}]
-            for h in history[-8:]:
-                h_role = h.get('role', 'user')
-                h_content = h.get('content', '')
-                if h_role in ('user', 'assistant') and h_content:
-                    msgs.append({'role': h_role, 'content': str(h_content)})
-            if include_image and image_b64:
-                # llama-4-scout: text ANTES de image_url, data URI completo
-                safe_mime = mime_type if mime_type.startswith('image/') else 'image/jpeg'
-                data_url  = f"data:{safe_mime};base64,{image_b64}"
-                msgs.append({'role': 'user', 'content': [
-                    {'type': 'text',      'text': message or 'Describe esta imagen en detalle en español.'},
-                    {'type': 'image_url', 'image_url': {'url': data_url}}
-                ]})
-            else:
-                msgs.append({'role': 'user', 'content': message or 'Hola'})
-            return msgs
-
-        def _build_anthropic_messages(include_image=True):
-            """Construye mensajes para Anthropic con historial."""
-            msgs = []
-            for h in history[-8:]:
-                role = h.get('role', 'user')
-                content = h.get('content', '')
-                if role in ('user', 'assistant') and content:
-                    msgs.append({'role': role, 'content': str(content)})
-            if include_image and image_b64:
-                msgs.append({'role': 'user', 'content': [
-                    {'type': 'image', 'source': {'type': 'base64', 'media_type': mime_type, 'data': image_b64}},
-                    {'type': 'text', 'text': message or 'Describe esta imagen en detalle.'}
-                ]})
-            else:
-                msgs.append({'role': 'user', 'content': message})
-            return msgs
-
-        result_text = None
-        tokens      = 0
-        provider    = 'fallback'
-        model_used  = '—'
-        error_detail = []  # acumula errores reales para diagnóstico
-
-        # ── Groq Vision — modelos activos (los -vision-preview fueron deprecados) ──
-        GROQ_VISION_MODELS = [
-            'meta-llama/llama-4-scout-17b-16e-instruct',
-            'llama-4-scout-17b-16e-instruct',  # alias sin prefijo
-        ]
-
+        # ── Groq Vision (gratis, prioridad 1) ──────────────────────────
         if groq_key:
-            for vision_model in GROQ_VISION_MODELS:
-                if result_text is not None:
-                    break
-                try:
-                    resp = requests.post(
-                        'https://api.groq.com/openai/v1/chat/completions',
-                        headers={'Authorization': f'Bearer {groq_key}', 'Content-Type': 'application/json'},
-                        json={
-                            'model':       vision_model,
-                            'max_tokens':  1500,
-                            'temperature': 0.7,
-                            'messages':    _build_groq_messages(include_image=bool(image_b64))
-                        },
-                        timeout=35
-                    )
-                    if not resp.ok:
-                        err_body = resp.text[:300]
-                        error_detail.append(f"Groq {vision_model}: HTTP {resp.status_code} — {err_body}")
-                        logger.warning(f"Groq Vision {vision_model} HTTP {resp.status_code}: {err_body}")
-                        continue
-                    rdata       = resp.json()
-                    result_text = rdata['choices'][0]['message']['content']
-                    tokens      = rdata.get('usage', {}).get('completion_tokens', 0)
-                    provider    = 'groq_vision'
-                    model_used  = vision_model
-                    logger.info(f"✅ Groq Vision OK con {vision_model}")
-                except Exception as e:
-                    error_detail.append(f"Groq {vision_model}: {str(e)[:200]}")
-                    logger.warning(f"Groq Vision {vision_model} falló: {e}")
+            try:
+                data_url = f"data:{mime_type};base64,{image_b64}"
+                resp = requests.post(
+                    'https://api.groq.com/openai/v1/chat/completions',
+                    headers={
+                        'Authorization': f'Bearer {groq_key}',
+                        'Content-Type':  'application/json'
+                    },
+                    json={
+                        'model':      'llama-3.2-11b-vision-preview',
+                        'max_tokens': 1500,
+                        'messages': [
+                            {'role': 'system', 'content': system},
+                            {'role': 'user', 'content': [
+                                {'type': 'image_url', 'image_url': {'url': data_url}},
+                                {'type': 'text', 'text': message}
+                            ]}
+                        ]
+                    },
+                    timeout=30
+                )
+                resp.raise_for_status()
+                result_text = resp.json()['choices'][0]['message']['content']
+                tokens      = resp.json().get('usage', {}).get('completion_tokens', 0)
+
+                cic_ia._save_conversation(
+                    user_msg=f'[IMAGEN] {message}',
+                    bot_resp=result_text,
+                    user_id=current_user.id,
+                    tokens=tokens,
+                    sources=['groq_vision']
+                )
+                return jsonify({'success': True, 'response': result_text, 'provider': 'groq_vision', 'model': 'llama-3.2-11b-vision-preview', 'tokens': tokens})
+            except Exception as e:
+                logger.warning(f"Groq Vision falló: {e} — intentando Anthropic")
 
         # ── Anthropic Vision (fallback) ─────────────────────────────────
-        if result_text is None and ANTHROPIC_API_KEY:
+        if ANTHROPIC_API_KEY:
             try:
                 resp = requests.post(
                     'https://api.anthropic.com/v1/messages',
                     headers={
-                        'x-api-key':         ANTHROPIC_API_KEY,
+                        'x-api-key': ANTHROPIC_API_KEY,
                         'anthropic-version': '2023-06-01',
-                        'content-type':      'application/json'
+                        'content-type': 'application/json'
                     },
                     json={
-                        'model':      'claude-haiku-4-5-20251001',
+                        'model': 'claude-haiku-4-5-20251001',
                         'max_tokens': 1500,
-                        'system':     system,
-                        'messages':   _build_anthropic_messages(include_image=bool(image_b64))
+                        'system': system,
+                        'messages': [{'role': 'user', 'content': [
+                            {'type': 'image', 'source': {'type': 'base64', 'media_type': mime_type, 'data': image_b64}},
+                            {'type': 'text', 'text': message}
+                        ]}]
                     },
-                    timeout=35
+                    timeout=30
                 )
-                if not resp.ok:
-                    error_detail.append(f"Anthropic: HTTP {resp.status_code} — {resp.text[:200]}")
-                else:
-                    rdata       = resp.json()
-                    result_text = rdata['content'][0]['text']
-                    tokens      = rdata.get('usage', {}).get('output_tokens', 0)
-                    provider    = 'anthropic_vision'
-                    model_used  = 'claude-haiku'
+                resp.raise_for_status()
+                result_text = resp.json()['content'][0]['text']
+                tokens      = resp.json().get('usage', {}).get('output_tokens', 0)
+                cic_ia._save_conversation(
+                    user_msg=f'[IMAGEN] {message}',
+                    bot_resp=result_text,
+                    user_id=current_user.id,
+                    tokens=tokens,
+                    sources=['anthropic_vision']
+                )
+                return jsonify({'success': True, 'response': result_text, 'provider': 'anthropic_vision', 'tokens': tokens})
             except Exception as e:
-                error_detail.append(f"Anthropic: {str(e)[:200]}")
                 logger.error(f"Anthropic Vision falló: {e}")
 
-        # ── Sin soporte de visión — mostrar error real ──────────────────
-        if result_text is None:
-            diag = ' | '.join(error_detail) if error_detail else 'Sin GROQ_API_KEY ni ANTHROPIC_API_KEY configuradas'
-            logger.error(f"Vision fallback total. Errores: {diag}")
-            return jsonify({
-                'success':  False,
-                'response': f'⚠️ No se pudo analizar la imagen.\n\nDetalle técnico: {diag}',
-                'provider': 'fallback'
-            })
-
-        # Guardar en BD con etiqueta limpia (sin HTML)
-        label = message[:80] if message else '(imagen)'
-        cic_ia._save_conversation(
-            user_msg  = f'[🖼️ IMAGEN] {label}',
-            bot_resp  = result_text,
-            user_id   = current_user.id,
-            tokens    = tokens,
-            sources   = [provider]
-        )
-
+        # ── Sin soporte de visión ───────────────────────────────────────
         return jsonify({
-            'success':  True,
-            'response': result_text,
-            'provider': provider,
-            'model':    model_used,
-            'tokens':   tokens
+            'success':  False,
+            'response': '⚠️ No hay proveedor de visión disponible. Configura GROQ_API_KEY en Render.',
+            'provider': 'fallback'
         })
 
     except Exception as e:
@@ -1470,9 +1390,11 @@ def list_modules():
 
 @app.route('/developer')
 def developer_panel():
-    """Redirige al index unificado — el rol se detecta automáticamente en el frontend"""
-    from flask import redirect, url_for
-    return redirect(url_for('index'))
+    """Panel de desarrollador — renderiza template o retorna info básica"""
+    try:
+        return render_template('developer.html')
+    except Exception:
+        return jsonify({'message': 'Panel desarrollador activo. Usa la API /api/dev/*'})
 
 # --- Estadísticas detalladas ---
 
@@ -1919,6 +1841,253 @@ def dev_setup():
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
+
+# ========== DATASET IMPORT (CicDream Prompts) ==========
+
+class DatasetPrompt(db.Model):
+    """Prompts importados desde datasets externos (ej: Stable Diffusion Prompts)"""
+    __tablename__ = 'dataset_prompt'
+    id         = db.Column(db.Integer, primary_key=True)
+    prompt     = db.Column(db.Text, nullable=False)
+    source     = db.Column(db.String(200), default='manual')
+    category   = db.Column(db.String(100), default='general')
+    used_count = db.Column(db.Integer, default=0)
+    quality    = db.Column(db.Float, default=0.5)   # 0.0 – 1.0
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'prompt': self.prompt,
+            'source': self.source,
+            'category': self.category,
+            'used_count': self.used_count,
+            'quality': self.quality,
+            'created_at': self.created_at.isoformat()
+        }
+
+@app.route('/api/dataset/import', methods=['POST'])
+@dev_required
+def dataset_import():
+    """
+    Importa un archivo de dataset (parquet, csv, json, jsonl, txt) y
+    guarda los prompts en la tabla dataset_prompt.
+    Soporta:  .parquet  /  .csv  /  .json  /  .jsonl  /  .txt
+    """
+    # ── Asegurar que la tabla existe ──────────────────────────────────────
+    try:
+        with app.app_context():
+            db.create_all()
+    except Exception:
+        pass
+
+    if 'file' not in request.files:
+        return jsonify({'error': 'No se recibió ningún archivo'}), 400
+
+    f        = request.files['file']
+    source   = request.form.get('source', 'dataset_import')
+    category = request.form.get('category', 'sd_prompts')
+    limit    = int(request.form.get('limit', 5000))   # máx prompts a importar por lote
+
+    if not f.filename:
+        return jsonify({'error': 'Archivo sin nombre'}), 400
+
+    ext = f.filename.rsplit('.', 1)[-1].lower()
+    if ext not in {'parquet', 'csv', 'json', 'jsonl', 'txt'}:
+        return jsonify({'error': f'Formato no soportado: .{ext}'}), 400
+
+    try:
+        raw = f.read()
+
+        prompts_raw = []
+
+        # ── Parquet ──────────────────────────────────────────────────────
+        if ext == 'parquet':
+            try:
+                import pyarrow.parquet as pq
+                import io
+                table = pq.read_table(io.BytesIO(raw))
+                df    = table.to_pydict()
+                # Detectar columna de prompts
+                col = None
+                for candidate in ('Prompt', 'prompt', 'text', 'caption', 'description'):
+                    if candidate in df:
+                        col = candidate
+                        break
+                if col is None:
+                    col = list(df.keys())[0]
+                prompts_raw = [str(v) for v in df[col] if v]
+            except ImportError:
+                return jsonify({'error': 'pyarrow no instalado — sube un archivo .csv o .jsonl en su lugar'}), 500
+
+        # ── CSV ──────────────────────────────────────────────────────────
+        elif ext == 'csv':
+            import csv, io
+            reader = csv.DictReader(io.StringIO(raw.decode('utf-8', errors='ignore')))
+            col = None
+            for row in reader:
+                if col is None:
+                    for candidate in ('Prompt', 'prompt', 'text', 'caption', 'description'):
+                        if candidate in row:
+                            col = candidate
+                            break
+                    if col is None:
+                        col = list(row.keys())[0]
+                v = row.get(col, '').strip()
+                if v:
+                    prompts_raw.append(v)
+
+        # ── JSONL ────────────────────────────────────────────────────────
+        elif ext == 'jsonl':
+            for line in raw.decode('utf-8', errors='ignore').splitlines():
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    obj = json.loads(line)
+                    for candidate in ('Prompt', 'prompt', 'text', 'caption', 'description'):
+                        if candidate in obj:
+                            prompts_raw.append(str(obj[candidate]))
+                            break
+                    else:
+                        if isinstance(obj, str):
+                            prompts_raw.append(obj)
+                except Exception:
+                    pass
+
+        # ── JSON ─────────────────────────────────────────────────────────
+        elif ext == 'json':
+            data = json.loads(raw.decode('utf-8', errors='ignore'))
+            if isinstance(data, list):
+                for item in data:
+                    if isinstance(item, str):
+                        prompts_raw.append(item)
+                    elif isinstance(item, dict):
+                        for candidate in ('Prompt', 'prompt', 'text', 'caption', 'description'):
+                            if candidate in item:
+                                prompts_raw.append(str(item[candidate]))
+                                break
+            elif isinstance(data, dict):
+                for candidate in ('Prompt', 'prompt', 'text', 'caption', 'description'):
+                    if candidate in data:
+                        items = data[candidate]
+                        if isinstance(items, list):
+                            prompts_raw = [str(x) for x in items if x]
+                        break
+
+        # ── TXT ──────────────────────────────────────────────────────────
+        elif ext == 'txt':
+            prompts_raw = [l.strip() for l in raw.decode('utf-8', errors='ignore').splitlines() if l.strip()]
+
+        # ── Filtrar y limitar ────────────────────────────────────────────
+        prompts_raw = [p.strip() for p in prompts_raw if p and len(p.strip()) > 10][:limit]
+
+        if not prompts_raw:
+            return jsonify({'error': 'No se encontraron prompts válidos en el archivo'}), 400
+
+        # ── Obtener prompts ya existentes para evitar duplicados ─────────
+        existing = set(
+            row[0] for row in db.session.execute(
+                text("SELECT prompt FROM dataset_prompt WHERE source = :s"),
+                {'s': source}
+            ).fetchall()
+        )
+
+        inserted = 0
+        skipped  = 0
+        batch    = []
+        for p in prompts_raw:
+            if p in existing:
+                skipped += 1
+                continue
+            # Score de calidad simple: prompts más largos y con comas suelen ser mejores
+            quality = min(1.0, (len(p) / 200) * 0.5 + (p.count(',') / 10) * 0.5)
+            batch.append(DatasetPrompt(
+                prompt=p, source=source, category=category, quality=round(quality, 3)
+            ))
+            existing.add(p)
+            inserted += 1
+            if len(batch) >= 500:
+                db.session.bulk_save_objects(batch)
+                db.session.commit()
+                batch = []
+
+        if batch:
+            db.session.bulk_save_objects(batch)
+            db.session.commit()
+
+        total = DatasetPrompt.query.filter_by(source=source).count()
+
+        return jsonify({
+            'success':  True,
+            'inserted': inserted,
+            'skipped':  skipped,
+            'total_in_db': total,
+            'source':   source,
+            'category': category,
+            'message':  f'✅ {inserted} prompts importados correctamente ({skipped} duplicados omitidos)'
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Error importando dataset: {e}")
+        return jsonify({'error': f'Error procesando archivo: {str(e)}'}), 500
+
+
+@app.route('/api/dataset/stats', methods=['GET'])
+@dev_required
+def dataset_stats():
+    """Estadísticas de los datasets importados"""
+    try:
+        with app.app_context():
+            db.create_all()
+        total   = DatasetPrompt.query.count()
+        sources = db.session.execute(
+            text("SELECT source, COUNT(*) as cnt FROM dataset_prompt GROUP BY source ORDER BY cnt DESC")
+        ).fetchall()
+        cats    = db.session.execute(
+            text("SELECT category, COUNT(*) as cnt FROM dataset_prompt GROUP BY category ORDER BY cnt DESC")
+        ).fetchall()
+        return jsonify({
+            'total': total,
+            'by_source':   [{'source': r[0], 'count': r[1]} for r in sources],
+            'by_category': [{'category': r[0], 'count': r[1]} for r in cats],
+        })
+    except Exception as e:
+        return jsonify({'total': 0, 'by_source': [], 'by_category': [], 'error': str(e)})
+
+
+@app.route('/api/dataset/sample', methods=['GET'])
+@dev_required
+def dataset_sample():
+    """Retorna una muestra aleatoria de prompts del dataset"""
+    try:
+        n       = min(int(request.args.get('n', 10)), 50)
+        source  = request.args.get('source', '')
+        q       = DatasetPrompt.query
+        if source:
+            q = q.filter_by(source=source)
+        samples = q.order_by(db.func.random()).limit(n).all()
+        return jsonify({'prompts': [s.to_dict() for s in samples]})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/dataset/delete', methods=['POST'])
+@dev_required
+def dataset_delete():
+    """Elimina todos los prompts de una fuente específica"""
+    source = request.json.get('source', '') if request.json else ''
+    if not source:
+        return jsonify({'error': 'source requerido'}), 400
+    try:
+        deleted = DatasetPrompt.query.filter_by(source=source).delete()
+        db.session.commit()
+        return jsonify({'success': True, 'deleted': deleted})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
 
 # ========== MANEJO DE ERRORES ==========
 
