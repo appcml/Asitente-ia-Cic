@@ -2481,25 +2481,63 @@ async function processMassUpload() {
   for (let i = 0; i < _massQueue.length; i++) {
     const file = _massQueue[i];
     txt.textContent = `Analizando ${i+1}/${_massQueue.length}: ${file.name}`;
-    bar.style.width = `${Math.round((i/_massQueue.length)*100)}%`;
+    bar.style.width = `${Math.round((i / _massQueue.length) * 100)}%`;
 
     try {
-      const b64 = await new Promise((res,rej) => {
+      // Leer imagen como base64
+      const b64 = await new Promise((res, rej) => {
         const r = new FileReader();
         r.onload = e => res(e.target.result.split(',')[1]);
         r.onerror = rej;
         r.readAsDataURL(file);
       });
 
-      const result = await req('/api/image/training/analyze', 'POST', {
-        image_base64: b64,
-        filename: file.name,
-        style, rating,
+      // Paso 1: Intentar análisis con Groq Vision
+      let description = null;
+      try {
+        const analyzed = await req('/api/image/training/analyze', 'POST', {
+          image_b64: b64,
+          filename: file.name,
+        });
+        if (analyzed.success && analyzed.description) {
+          description = analyzed.description;
+        }
+      } catch(e) { /* Groq no disponible, usar análisis local */ }
+
+      // Paso 2: Si Groq falló, generar descripción básica desde el nombre del archivo
+      if (!description) {
+        const name = file.name.replace(/\.[^.]+$/, '').replace(/[-_]/g, ' ');
+        const styleMap = {
+          'auto': 'digital art, high quality',
+          'realistic': 'photorealistic, highly detailed, 8k',
+          'anime': 'anime style, vibrant colors, detailed',
+          'fantasy': 'fantasy illustration, magical atmosphere',
+          'cyberpunk': 'cyberpunk aesthetic, neon lights, futuristic',
+          'portrait': 'portrait photography, detailed, professional',
+        };
+        const styleSuffix = styleMap[style] || 'digital art, high quality, detailed';
+        description = `${name}, ${styleSuffix}, masterpiece, best quality`;
+      }
+
+      // Paso 3: Guardar el prompt aprendido directamente en dataset
+      const saved = await req('/api/image/training/manual', 'POST', {
+        prompt: description,
+        style: style,
+        rating: rating,
+        tags: [style, 'mass_training', file.name.split('.').pop()],
+        info: `Mass training from file: ${file.name}`,
       });
 
-      if (result.success) success++;
+      if (saved.success) success++;
       else errors++;
-    } catch(e) { errors++; }
+
+    } catch(e) {
+      errors++;
+      console.warn(`Error procesando ${file.name}:`, e);
+    }
+
+    // Pequeña pausa para no saturar
+    if (i % 10 === 0) await new Promise(r => setTimeout(r, 100));
   }
 
   bar.style.width = '100%';
