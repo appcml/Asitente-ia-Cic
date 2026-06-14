@@ -1890,8 +1890,41 @@ def _enhance_prompt(prompt, style):
                       'have','has','had','do','does','did','will','would',
                       'una','un','el','la','los','las','de','en','con','para'}
 
-        palabras = [w.lower().strip('.,!?') for w in prompt.split()
-                    if len(w) > 3 and w.lower() not in stop_words]
+        # Diccionario ES→EN para mejorar búsqueda en dataset inglés
+        traducciones = {
+            'mujer':'woman','hombre':'man','guerrera':'warrior','guerrero':'warrior',
+            'mago':'wizard','maga':'witch','dragón':'dragon','dragon':'dragon',
+            'bosque':'forest','ciudad':'city','castillo':'castle','cielo':'sky',
+            'fuego':'fire','agua':'water','tierra':'earth','viento':'wind',
+            'oscuro':'dark','oscura':'dark','luz':'light','noche':'night',
+            'día':'day','batalla':'battle','guerra':'war','magia':'magic',
+            'espada':'sword','arco':'bow','armadura':'armor','escudo':'shield',
+            'princesa':'princess','príncipe':'prince','reina':'queen','rey':'king',
+            'elfo':'elf','elfa':'elf','enano':'dwarf','orco':'orc','hada':'fairy',
+            'nave':'spaceship','espacio':'space','futuro':'future','robot':'robot',
+            'cyberpunk':'cyberpunk','anime':'anime','retrato':'portrait',
+            'paisaje':'landscape','montaña':'mountain','océano':'ocean','mar':'sea',
+            'hermosa':'beautiful','hermoso':'beautiful','épico':'epic','épica':'epic',
+            'antigua':'ancient','antiguo':'ancient','mística':'mystical','místico':'mystical',
+            'poderosa':'powerful','poderoso':'powerful','oscuridad':'darkness',
+            'fantasma':'ghost','demonio':'demon','ángel':'angel','diosa':'goddess',
+            'dios':'god','fénix':'phoenix','lobo':'wolf','tigre':'tiger','águila':'eagle',
+            'rojo':'red','azul':'blue','verde':'green','dorado':'golden','negro':'black',
+            'blanco':'white','morado':'purple','rosa':'pink','naranja':'orange',
+        }
+
+        palabras_raw = [w.lower().strip('.,!?') for w in prompt.split()
+                       if len(w) > 3 and w.lower() not in stop_words]
+
+        # Traducir palabras al inglés para búsqueda en dataset
+        palabras = []
+        for p in palabras_raw:
+            traducida = traducciones.get(p, p)
+            palabras.append(traducida)
+            if traducida != p:
+                palabras.append(p)  # también buscar en español
+
+        palabras = list(dict.fromkeys(palabras))  # eliminar duplicados
 
         if not palabras:
             return f"{prompt}, {base_suffix}"
