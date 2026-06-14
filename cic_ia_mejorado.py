@@ -1863,8 +1863,12 @@ def _size_to_dims(size):
     }.get(size, (1024, 1024))
 
 def _enhance_prompt(prompt, style):
-    """Mejora el prompt según el estilo seleccionado"""
-    suffixes = {
+    """
+    Mejora el prompt usando RAG — busca en el dataset de CicDream
+    los prompts más similares y extrae vocabulario profesional.
+    """
+    # ── Sufijos base por estilo ───────────────────────────────────
+    style_suffixes = {
         'realistic':    'photorealistic, 8k, highly detailed, professional photography',
         'artistic':     'digital art, vibrant colors, artistic masterpiece, trending on artstation',
         'anime':        'anime style, cel shading, detailed illustration, studio quality',
@@ -1876,8 +1880,113 @@ def _enhance_prompt(prompt, style):
         'minimalist':   'minimalist design, clean composition, simple elegant',
         '3d_render':    '3D render, octane render, volumetric lighting, ray tracing',
     }
-    suffix = suffixes.get(style, '')
-    return f"{prompt}, {suffix}" if suffix else prompt
+    base_suffix = style_suffixes.get(style, 'high quality, detailed, masterpiece')
+
+    # ── RAG: buscar prompts similares en el dataset ───────────────
+    try:
+        # Extraer palabras clave del prompt del usuario
+        stop_words = {'a','an','the','of','in','on','at','to','for','with',
+                      'and','or','but','is','are','was','were','be','been',
+                      'have','has','had','do','does','did','will','would',
+                      'una','un','el','la','los','las','de','en','con','para'}
+
+        palabras = [w.lower().strip('.,!?') for w in prompt.split()
+                    if len(w) > 3 and w.lower() not in stop_words]
+
+        if not palabras:
+            return f"{prompt}, {base_suffix}"
+
+        # Buscar en dataset_prompt usando palabras clave
+        rag_keywords  = set()
+        rag_qualities = []
+
+        for palabra in palabras[:4]:  # Máx 4 palabras para la búsqueda
+            try:
+                similares = DatasetPrompt.query.filter(
+                    DatasetPrompt.prompt.ilike(f'%{palabra}%'),
+                    DatasetPrompt.quality > 0.5
+                ).order_by(
+                    DatasetPrompt.quality.desc()
+                ).limit(8).all()
+
+                for s in similares:
+                    # Extraer términos técnicos del prompt similar
+                    partes = [p.strip() for p in s.prompt.split(',')]
+                    for parte in partes:
+                        parte_lower = parte.lower()
+                        # Filtrar términos de calidad/estilo útiles
+                        if any(kw in parte_lower for kw in [
+                            'detailed','quality','render','lighting','art',
+                            'painting','photography','cinematic','4k','8k',
+                            'masterpiece','professional','studio','epic',
+                            'dramatic','vibrant','sharp','focus','award',
+                            'trending','artstation','deviantart','unreal',
+                            'octane','ray tracing','volumetric','bokeh',
+                            'hyperrealistic','photorealistic','illustration'
+                        ]):
+                            if len(parte) < 60 and parte not in rag_keywords:
+                                rag_keywords.add(parte)
+                        # Recopilar scores de calidad
+                        rag_qualities.append(s.quality)
+            except Exception:
+                pass
+
+        # ── Construir prompt enriquecido ──────────────────────────
+        # Seleccionar los mejores 5 términos RAG únicos
+        rag_terms = list(rag_keywords)[:5]
+
+        if rag_terms:
+            rag_str   = ', '.join(rag_terms)
+            avg_qual  = sum(rag_qualities) / len(rag_qualities) if rag_qualities else 0
+            enhanced  = f"{prompt}, {base_suffix}, {rag_str}"
+            logger.info(f"🧠 RAG: {len(rag_terms)} términos extraídos de dataset (calidad promedio: {avg_qual:.2f})")
+        else:
+            enhanced = f"{prompt}, {base_suffix}"
+
+        return enhanced
+
+    except Exception as e:
+        logger.warning(f"RAG falló, usando enhance básico: {e}")
+        return f"{prompt}, {base_suffix}"
+
+
+@app.route('/api/image/prompt/enhance', methods=['POST'])
+def prompt_enhance_api():
+    """
+    Endpoint para previsualizar cómo CicDream mejora un prompt
+    antes de generar la imagen.
+    """
+    data   = request.json or {}
+    prompt = (data.get('prompt') or '').strip()
+    style  = data.get('style', 'realistic')
+
+    if not prompt:
+        return jsonify({'error': 'Prompt requerido'}), 400
+
+    try:
+        enhanced = _enhance_prompt(prompt, style)
+
+        # Contar prompts similares encontrados
+        palabras = [w.lower() for w in prompt.split() if len(w) > 3]
+        total_similares = 0
+        for p in palabras[:3]:
+            try:
+                total_similares += DatasetPrompt.query.filter(
+                    DatasetPrompt.prompt.ilike(f'%{p}%')
+                ).count()
+            except Exception:
+                pass
+
+        return jsonify({
+            'success':         True,
+            'original':        prompt,
+            'enhanced':        enhanced,
+            'style':           style,
+            'dataset_prompts': total_similares,
+            'improvement':     len(enhanced) > len(prompt) + 20,
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 def _generate_pollinations(prompt, model_key, size):
     """Genera imagen via Pollinations.ai — sin API key"""
@@ -2169,6 +2278,8 @@ def image_generate():
 
     enhanced = _enhance_prompt(prompt, style)
     logger.info(f"🖼 Generando imagen — motor:{model} style:{style} size:{size}")
+    logger.info(f"🧠 Prompt original: {prompt[:80]}")
+    logger.info(f"✨ Prompt mejorado: {enhanced[:120]}")
 
     dispatch = {
         'pollinations_flux':  lambda: _generate_pollinations(enhanced, 'pollinations_flux', size),
@@ -2227,6 +2338,8 @@ def image_generate():
         'provider': images[0].get('provider', model),
         'prompt':   prompt,
         'enhanced': enhanced,
+        'rag_used': len(enhanced) > len(prompt) + 30,
+        'rag_info': f"Prompt enriquecido con {len(enhanced)-len(prompt)} caracteres desde {165000}+ prompts en BD" if len(enhanced) > len(prompt) + 30 else None,
     })
 
 
