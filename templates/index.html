@@ -601,8 +601,17 @@ tr:hover td{background:rgba(91,141,238,.03);}
 
           <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
             <button class="btn btn-primary" id="devImgBtn" onclick="generateImage()">🖼️ Generar imagen</button>
-            <button class="btn btn-outline btn-sm" onclick="document.getElementById('devImgPrompt').value='';document.getElementById('devImgGenRes').innerHTML=''">Limpiar</button>
+            <button class="btn btn-outline btn-sm" onclick="previewRAG()">🧠 Ver prompt mejorado</button>
+            <button class="btn btn-outline btn-sm" onclick="document.getElementById('devImgPrompt').value='';document.getElementById('devImgGenRes').innerHTML='';document.getElementById('ragPreview').style.display='none'">Limpiar</button>
             <span id="devImgProviderLabel" style="font-size:.72rem;color:var(--text2)"></span>
+          </div>
+
+          <!-- RAG Preview -->
+          <div id="ragPreview" style="display:none;margin-top:12px;background:var(--bg3);border:1px solid var(--accent);border-radius:8px;padding:12px;">
+            <div style="font-size:.75rem;color:var(--accent);font-weight:600;margin-bottom:6px">🧠 CicDream RAG — Prompt enriquecido desde tu dataset:</div>
+            <div id="ragOriginal" style="font-size:.75rem;color:var(--text2);margin-bottom:4px"></div>
+            <div id="ragEnhanced" style="font-size:.82rem;color:var(--text);line-height:1.5"></div>
+            <div id="ragStats" style="font-size:.72rem;color:var(--text2);margin-top:6px"></div>
           </div>
 
           <div id="devImgGenRes" style="margin-top:16px"></div>
@@ -2924,6 +2933,35 @@ function showGlobalPasteToast(role){
   setTimeout(()=>{ t.style.opacity='0'; }, 3000);
 }
 
+/* ═══ RAG PREVIEW ═══ */
+async function previewRAG(){
+  const prompt = (document.getElementById('devImgPrompt')?.value||'').trim();
+  if(!prompt){alert('Escribe un prompt primero');return;}
+  const style = document.getElementById('devImgStyle')?.value||'realistic';
+  const box   = document.getElementById('ragPreview');
+  const origEl = document.getElementById('ragOriginal');
+  const enhEl  = document.getElementById('ragEnhanced');
+  const statEl = document.getElementById('ragStats');
+
+  box.style.display='block';
+  enhEl.textContent='⏳ Consultando dataset...';
+
+  try{
+    const r = await req('/api/image/prompt/enhance','POST',{prompt,style});
+    if(r.success){
+      origEl.textContent = `📝 Original: "${r.original}"`;
+      enhEl.textContent  = `✨ Mejorado: "${r.enhanced}"`;
+      statEl.textContent = r.improvement
+        ? `🧠 RAG activo — encontrados ${r.dataset_prompts.toLocaleString()} prompts similares en BD`
+        : `ℹ️ ${r.dataset_prompts.toLocaleString()} prompts consultados`;
+    } else {
+      enhEl.textContent = '❌ ' + (r.error||'Error');
+    }
+  }catch(e){
+    enhEl.textContent = '❌ Error: ' + e.message;
+  }
+}
+
 /* ═══ DATASET ═══ */
 let dsFile=null;
 function handleDsDrop(e){
@@ -2957,8 +2995,13 @@ async function importDataset(){
     bar.style.width='80%';txt.textContent='Procesando prompts...';
     const data=await r.json();
     bar.style.width='100%';
-    if(data.success){txt.textContent='✅ Completado';showDsAlert('✅ '+data.message,'ok');loadDsStats();loadDsSample();}
-    else showDsAlert('❌ '+(data.error||'Error desconocido'),'err');
+    if(data.success){
+      txt.textContent='✅ Completado';
+      showDsAlert('✅ '+data.message,'ok');
+      loadDsStats();loadDsSample();
+    } else {
+      showDsAlert('❌ '+(data.error||'Error desconocido'),'err');
+    }
   }catch(e){showDsAlert('❌ Error: '+e.message,'err');}
   finally{
     btn.disabled=false;btn.textContent='⬆️ Importar Dataset';
