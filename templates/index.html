@@ -2,1274 +2,1438 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Cic_IA — Panel Desarrollador</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Cic_IA</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
 <style>
-  :root {
-    --bg: #0f1117; --bg2: #1a1d2e; --bg3: #242840;
-    --accent: #6c63ff; --accent2: #48dbfb; --green: #1dd1a1;
-    --red: #ff6b6b; --yellow: #ffd93d; --text: #e2e8f0; --text2: #94a3b8;
-    --radius: 10px; --shadow: 0 4px 24px rgba(0,0,0,0.4);
-  }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
-
-  /* Layout */
-  .layout { display: flex; min-height: 100vh; }
-  .sidebar { width: 240px; background: var(--bg2); padding: 24px 0; display: flex; flex-direction: column; border-right: 1px solid #2d3561; flex-shrink: 0; }
-  .main { flex: 1; padding: 32px; overflow-y: auto; }
-
-  /* Sidebar */
-  .logo { padding: 0 24px 24px; border-bottom: 1px solid #2d3561; }
-  .logo h1 { font-size: 1.3rem; color: var(--accent); }
-  .logo span { font-size: 0.75rem; color: var(--text2); }
-  .nav { padding: 16px 0; flex: 1; }
-  .nav-item { display: flex; align-items: center; gap: 10px; padding: 12px 24px; cursor: pointer; color: var(--text2); font-size: 0.9rem; transition: all .2s; border-left: 3px solid transparent; }
-  .nav-item:hover, .nav-item.active { color: var(--text); background: rgba(108,99,255,.1); border-left-color: var(--accent); }
-  .nav-item .icon { font-size: 1.1rem; width: 20px; text-align: center; }
-
-  /* Sections */
-  .section { display: none; }
-  .section.active { display: block; }
-  h2 { font-size: 1.5rem; margin-bottom: 8px; }
-  .subtitle { color: var(--text2); margin-bottom: 24px; font-size: 0.9rem; }
-
-  /* Cards */
-  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 24px; }
-  .card { background: var(--bg2); border-radius: var(--radius); padding: 20px; border: 1px solid #2d3561; }
-  .card .value { font-size: 2rem; font-weight: 700; color: var(--accent); }
-  .card .label { font-size: 0.8rem; color: var(--text2); margin-top: 4px; }
-  .card.green .value { color: var(--green); }
-  .card.yellow .value { color: var(--yellow); }
-  .card.red .value { color: var(--red); }
-
-  /* Alerts */
-  .alert { padding: 12px 16px; border-radius: var(--radius); margin-bottom: 16px; font-size: 0.9rem; }
-  .alert-warn { background: rgba(255,211,61,.1); border: 1px solid var(--yellow); color: var(--yellow); }
-  .alert-ok   { background: rgba(29,209,161,.1); border: 1px solid var(--green);  color: var(--green); }
-  .alert-err  { background: rgba(255,107,107,.1); border: 1px solid var(--red);   color: var(--red); }
-  .alert-info { background: rgba(108,99,255,.1);  border: 1px solid var(--accent); color: var(--accent2); }
-
-  /* Forms */
-  .form-group { margin-bottom: 16px; }
-  label { display: block; font-size: 0.85rem; color: var(--text2); margin-bottom: 6px; }
-  input, textarea, select {
-    width: 100%; padding: 10px 14px; background: var(--bg3);
-    border: 1px solid #2d3561; border-radius: 8px; color: var(--text);
-    font-size: 0.9rem; font-family: inherit; transition: border .2s;
-  }
-  input:focus, textarea:focus, select:focus { outline: none; border-color: var(--accent); }
-  textarea { resize: vertical; min-height: 100px; }
-
-  /* Buttons */
-  .btn { padding: 10px 20px; border-radius: 8px; border: none; cursor: pointer; font-size: 0.9rem; font-weight: 600; transition: all .2s; }
-  .btn-primary { background: var(--accent); color: #fff; }
-  .btn-primary:hover { background: #5a52e0; }
-  .btn-green { background: var(--green); color: #0f1117; }
-  .btn-green:hover { background: #15b88b; }
-  .btn-red { background: var(--red); color: #fff; }
-  .btn-red:hover { background: #e55a5a; }
-  .btn-outline { background: transparent; border: 1px solid var(--accent); color: var(--accent); }
-  .btn-outline:hover { background: rgba(108,99,255,.1); }
-  .btn-sm { padding: 6px 12px; font-size: 0.8rem; }
-  .btn:disabled { opacity: .5; cursor: not-allowed; }
-
-  /* Table */
-  .table-wrap { overflow-x: auto; }
-  table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
-  th { padding: 12px 16px; text-align: left; color: var(--text2); border-bottom: 1px solid #2d3561; font-weight: 600; }
-  td { padding: 12px 16px; border-bottom: 1px solid #1e2340; }
-  tr:hover td { background: rgba(108,99,255,.05); }
-
-  /* Badges */
-  .badge { display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: 0.75rem; font-weight: 600; }
-  .badge-green  { background: rgba(29,209,161,.15); color: var(--green); }
-  .badge-yellow { background: rgba(255,211,61,.15);  color: var(--yellow); }
-  .badge-red    { background: rgba(255,107,107,.15); color: var(--red); }
-  .badge-blue   { background: rgba(72,219,251,.15);  color: var(--accent2); }
-
-  /* Chat test */
-  .chat-box { background: var(--bg2); border-radius: var(--radius); padding: 20px; min-height: 200px; max-height: 400px; overflow-y: auto; margin-bottom: 12px; border: 1px solid #2d3561; }
-  .msg { margin-bottom: 12px; }
-  .msg.user .bubble { background: var(--accent); color: #fff; border-radius: 12px 12px 4px 12px; padding: 10px 14px; display: inline-block; max-width: 80%; }
-  .msg.bot  .bubble { background: var(--bg3); color: var(--text); border-radius: 12px 12px 12px 4px; padding: 10px 14px; display: inline-block; max-width: 80%; }
-  .msg.user { text-align: right; }
-  .msg-meta { font-size: 0.75rem; color: var(--text2); margin-top: 4px; }
-
-  /* Code */
-  pre { background: #0d0f1a; border: 1px solid #2d3561; border-radius: 8px; padding: 16px; overflow-x: auto; font-size: 0.85rem; color: var(--accent2); }
-
-  /* Row actions */
-  .row-actions { display: flex; gap: 8px; }
-
-  /* Status dot */
-  .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 6px; }
-  .dot-green  { background: var(--green); box-shadow: 0 0 6px var(--green); }
-  .dot-yellow { background: var(--yellow); }
-  .dot-red    { background: var(--red); }
-
-  /* Responsive */
-  @media (max-width: 768px) {
-    .sidebar { width: 60px; }
-    .logo h1, .logo span, .nav-item span { display: none; }
-    .nav-item { justify-content: center; padding: 14px; }
-    .main { padding: 16px; }
-  }
-
-  /* Login screen */
-  .login-screen { display: flex; align-items: center; justify-content: center; min-height: 100vh; }
-  .login-box { background: var(--bg2); padding: 40px; border-radius: 16px; width: 100%; max-width: 400px; border: 1px solid #2d3561; }
-  .login-box h1 { text-align: center; margin-bottom: 8px; }
-  .login-box p  { text-align: center; color: var(--text2); margin-bottom: 28px; font-size: 0.9rem; }
-
-  .tabs { display: flex; gap: 0; margin-bottom: 20px; border-bottom: 1px solid #2d3561; }
-  .tab { padding: 10px 20px; cursor: pointer; color: var(--text2); font-size: 0.9rem; border-bottom: 2px solid transparent; }
-  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+:root{
+  --bg:#0f1117;--bg2:#1a1d2e;--bg3:#242840;
+  --accent:#6c63ff;--accent2:#48dbfb;
+  --green:#1dd1a1;--red:#ff6b6b;--yellow:#ffd93d;
+  --text:#e2e8f0;--text2:#94a3b8;--radius:10px;
+  --sidebar-w:210px;--code-panel-w:420px;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);height:100vh;overflow:hidden;}
+.app{display:flex;height:100vh;overflow:hidden;}
+.sidebar{width:var(--sidebar-w);background:var(--bg2);display:flex;flex-direction:column;border-right:1px solid #2d3561;flex-shrink:0;transition:transform .3s;z-index:50;}
+.logo{padding:16px 20px;border-bottom:1px solid #2d3561;display:flex;align-items:center;gap:10px;}
+.logo h1{font-size:1.1rem;color:var(--accent);}
+.logo .sub{font-size:.7rem;color:var(--text2);}
+.nav{flex:1;overflow-y:auto;padding:6px 0;}
+.nav-label{padding:10px 20px 3px;font-size:.63rem;font-weight:700;letter-spacing:.08em;color:var(--text2);text-transform:uppercase;opacity:.5;}
+.nav-item{display:flex;align-items:center;gap:9px;padding:10px 20px;cursor:pointer;color:var(--text2);font-size:.84rem;transition:all .2s;border-left:3px solid transparent;white-space:nowrap;}
+.nav-item:hover,.nav-item.active{color:var(--text);background:rgba(108,99,255,.1);border-left-color:var(--accent);}
+.nav-item .icon{font-size:.95rem;width:18px;text-align:center;flex-shrink:0;}
+.nav-badge{margin-left:auto;font-size:.6rem;padding:1px 5px;border-radius:8px;font-weight:700;}
+.nb-live{background:rgba(29,209,161,.2);color:var(--green);}
+.nb-dev{background:rgba(108,99,255,.2);color:var(--accent);}
+.sidebar-foot{padding:12px 16px;border-top:1px solid #2d3561;}
+.main-wrap{flex:1;display:flex;overflow:hidden;}
+.main{flex:1;overflow-y:auto;padding:24px;}
+.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:40;}
+.overlay.show{display:block;}
+.hamburger{display:none;position:fixed;top:12px;left:12px;z-index:60;background:var(--bg2);border:1px solid #2d3561;border-radius:8px;padding:8px 10px;cursor:pointer;font-size:1.1rem;color:var(--text);}
+.code-panel{width:0;background:var(--bg2);border-left:1px solid #2d3561;overflow:hidden;transition:width .3s;display:flex;flex-direction:column;flex-shrink:0;}
+.code-panel.open{width:var(--code-panel-w);}
+.code-panel-head{padding:12px 16px;border-bottom:1px solid #2d3561;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
+.code-panel-head h3{font-size:.9rem;color:var(--text2);}
+.code-panel-actions{display:flex;gap:6px;}
+.code-panel-body{flex:1;overflow:auto;}
+.code-panel-body pre{margin:0;border-radius:0;border:none;height:100%;}
+.code-panel-preview{width:100%;flex:1;border:none;background:#fff;}
+.section{display:none;}.section.active{display:block;}
+h2{font-size:1.3rem;margin-bottom:6px;}
+.subtitle{color:var(--text2);margin-bottom:20px;font-size:.85rem;}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:20px;}
+.card{background:var(--bg2);border-radius:var(--radius);padding:16px;border:1px solid #2d3561;}
+.card .value{font-size:1.6rem;font-weight:700;color:var(--accent);}
+.card .label{font-size:.75rem;color:var(--text2);margin-top:4px;}
+.card.green .value{color:var(--green);}.card.yellow .value{color:var(--yellow);}.card.red .value{color:var(--red);}
+.alert{padding:10px 14px;border-radius:var(--radius);margin-bottom:12px;font-size:.85rem;}
+.alert-warn{background:rgba(255,211,61,.1);border:1px solid var(--yellow);color:var(--yellow);}
+.alert-ok{background:rgba(29,209,161,.1);border:1px solid var(--green);color:var(--green);}
+.alert-err{background:rgba(255,107,107,.1);border:1px solid var(--red);color:var(--red);}
+.alert-info{background:rgba(108,99,255,.1);border:1px solid var(--accent);color:var(--accent2);}
+.form-group{margin-bottom:12px;}
+label{display:block;font-size:.8rem;color:var(--text2);margin-bottom:4px;}
+input,textarea,select{width:100%;padding:9px 12px;background:var(--bg3);border:1px solid #2d3561;border-radius:8px;color:var(--text);font-size:.85rem;font-family:inherit;transition:border .2s;}
+input:focus,textarea:focus,select:focus{outline:none;border-color:var(--accent);}
+textarea{resize:vertical;min-height:80px;}
+.btn{padding:8px 16px;border-radius:8px;border:none;cursor:pointer;font-size:.85rem;font-weight:600;transition:all .2s;}
+.btn-primary{background:var(--accent);color:#fff;}.btn-primary:hover{background:#5a52e0;}
+.btn-green{background:var(--green);color:#0f1117;}
+.btn-red{background:var(--red);color:#fff;}
+.btn-outline{background:transparent;border:1px solid var(--accent);color:var(--accent);}
+.btn-outline:hover{background:rgba(108,99,255,.1);}
+.btn-sm{padding:5px 10px;font-size:.78rem;}
+.table-wrap{overflow-x:auto;}
+table{width:100%;border-collapse:collapse;font-size:.84rem;}
+th{padding:9px 12px;text-align:left;color:var(--text2);border-bottom:1px solid #2d3561;font-weight:600;}
+td{padding:9px 12px;border-bottom:1px solid #1e2340;}
+tr:hover td{background:rgba(108,99,255,.04);}
+.badge{display:inline-block;padding:2px 7px;border-radius:20px;font-size:.72rem;font-weight:600;}
+.badge-green{background:rgba(29,209,161,.15);color:var(--green);}
+.badge-yellow{background:rgba(255,211,61,.15);color:var(--yellow);}
+.badge-red{background:rgba(255,107,107,.15);color:var(--red);}
+.badge-blue{background:rgba(72,219,251,.15);color:var(--accent2);}
+.badge-purple{background:rgba(108,99,255,.15);color:var(--accent);}
+.chat-layout{display:flex;flex-direction:column;height:calc(100vh - 48px);}
+.chat-top{padding:12px;border-bottom:1px solid #2d3561;display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:var(--bg2);border-radius:var(--radius) var(--radius) 0 0;}
+.chat-top select,.chat-top input{flex:1;min-width:120px;}
+.chat-messages{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:12px;background:var(--bg2);}
+.chat-empty{text-align:center;color:var(--text2);font-size:.85rem;padding:40px 0;flex:1;display:flex;align-items:center;justify-content:center;}
+.msg-wrap{display:flex;flex-direction:column;gap:4px;}
+.msg-wrap.user{align-items:flex-end;}.msg-wrap.bot{align-items:flex-start;}
+.bubble{padding:10px 14px;border-radius:12px;max-width:85%;font-size:.88rem;line-height:1.55;}
+.msg-wrap.user .bubble{background:var(--accent);color:#fff;border-radius:12px 12px 4px 12px;}
+.msg-wrap.bot .bubble{background:var(--bg3);color:var(--text);border-radius:12px 12px 12px 4px;}
+.msg-meta{font-size:.72rem;color:var(--text2);}
+.chat-input-wrap{padding:12px;border-top:1px solid #2d3561;display:flex;gap:8px;background:var(--bg2);border-radius:0 0 var(--radius) var(--radius);}
+.history-panel{position:fixed;top:0;right:0;width:320px;height:100vh;background:var(--bg2);border-left:1px solid #2d3561;z-index:70;transform:translateX(100%);transition:transform .3s;display:flex;flex-direction:column;}
+.history-panel.open{transform:translateX(0);}
+.history-head{padding:16px;border-bottom:1px solid #2d3561;display:flex;align-items:center;justify-content:space-between;}
+.history-search{padding:12px;border-bottom:1px solid #2d3561;}
+.history-list{flex:1;overflow-y:auto;}
+.history-item{padding:12px 16px;border-bottom:1px solid #1e2340;cursor:pointer;transition:background .15s;}
+.history-item:hover{background:rgba(108,99,255,.08);}
+.history-item .hi-msg{font-size:.83rem;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.history-item .hi-meta{font-size:.72rem;color:var(--text2);margin-top:3px;}
+.code-block{margin:8px 0;border-radius:8px;overflow:hidden;border:1px solid #2d3561;}
+.code-block-head{display:flex;justify-content:space-between;align-items:center;padding:6px 12px;background:#0d0f1a;}
+.code-block-head .lang{font-size:.75rem;color:var(--accent2);}
+.code-block-head .actions{display:flex;gap:4px;}
+.code-block pre{margin:0;border-radius:0;border:none;max-height:320px;overflow:auto;}
+.code-block code{font-size:.82rem !important;}
+.panel{background:var(--bg2);border-radius:var(--radius);padding:20px;border:1px solid #2d3561;margin-bottom:16px;}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+.filters{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;align-items:center;}
+.filters input,.filters select{width:auto;flex:1;min-width:120px;}
+.pagination{display:flex;gap:6px;justify-content:center;margin-top:12px;flex-wrap:wrap;}
+.dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:5px;}
+.dot-green{background:var(--green);box-shadow:0 0 6px var(--green);}.dot-red{background:var(--red);}
+/* LOGIN */
+.login-screen{display:none;align-items:center;justify-content:center;min-height:100vh;background:var(--bg);}
+.login-screen.show{display:flex;}
+.login-box{background:var(--bg2);padding:36px;border-radius:16px;width:100%;max-width:380px;border:1px solid #2d3561;}
+.login-box h1{text-align:center;margin-bottom:6px;}
+.login-box .tagline{text-align:center;color:var(--text2);margin-bottom:24px;font-size:.85rem;}
+.tab-btn{flex:1;padding:10px;background:var(--bg3);border:1px solid #2d3561;color:var(--text2);cursor:pointer;font-size:.87rem;font-weight:600;transition:all .2s;}
+.tab-btn.active{background:var(--accent);color:#fff;border-color:var(--accent);}
+.tab-btn:first-child{border-radius:8px 0 0 8px;border-right:none;}
+.tab-btn:last-child{border-radius:0 8px 8px 0;}
+/* USER CHAT */
+.user-app{display:none;flex-direction:column;height:100vh;background:var(--bg);}
+.user-app.show{display:flex;}
+.user-header{padding:14px 20px;background:var(--bg2);border-bottom:1px solid #2d3561;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
+.user-messages{flex:1;overflow-y:auto;padding:20px;display:flex;flex-direction:column;gap:14px;}
+.user-input-area{padding:14px 20px;background:var(--bg2);border-top:1px solid #2d3561;flex-shrink:0;}
+.ubuser{background:var(--accent);color:#fff;border-radius:18px 18px 4px 18px;padding:12px 16px;max-width:78%;align-self:flex-end;font-size:.9rem;line-height:1.5;word-break:break-word;}
+.ubbot{background:var(--bg2);color:var(--text);border-radius:18px 18px 18px 4px;padding:12px 16px;max-width:78%;align-self:flex-start;font-size:.9rem;line-height:1.5;border:1px solid #2d3561;word-break:break-word;}
+/* RESPONSIVE */
+@media(max-width:768px){
+  :root{--sidebar-w:100%;--code-panel-w:100%;}
+  body{overflow:auto;}
+  .app{flex-direction:column;height:auto;overflow:auto;}
+  .hamburger{display:flex;}
+  .sidebar{position:fixed;top:0;left:0;height:100vh;width:260px;transform:translateX(-100%);z-index:50;}
+  .sidebar.mobile-open{transform:translateX(0);}
+  .main-wrap{flex-direction:column;}
+  .main{padding:14px;padding-top:52px;}
+  .code-panel.open{position:fixed;inset:0;width:100%;z-index:80;}
+  .chat-layout{height:calc(100vh - 52px);}
+  .grid2{grid-template-columns:1fr;}
+  .history-panel{width:100%;}
+  table{font-size:.78rem;}th,td{padding:7px 8px;}
+}
 </style>
 </head>
 <body>
-
-<!-- =========================================== -->
-<!-- LOGIN                                        -->
-<!-- =========================================== -->
-<div id="loginScreen" class="login-screen">
+<!-- ═══ LOGIN SCREEN ═══ -->
+<div id="loginScreen" class="login-screen show">
   <div class="login-box">
     <h1>🤖 Cic_IA</h1>
-    <p>Panel de Desarrollador v8.0</p>
+    <p class="tagline">Tu asistente inteligente</p>
     <div id="loginAlert"></div>
-    <div class="form-group">
-      <label>Usuario</label>
-      <input type="text" id="loginUser" placeholder="tu_usuario" />
+    <div style="display:flex;margin-bottom:20px">
+      <button class="tab-btn active" id="tabLogin" onclick="switchTab('login')">Iniciar sesión</button>
+      <button class="tab-btn" id="tabReg" onclick="switchTab('reg')">Registrarse</button>
     </div>
-    <div class="form-group">
-      <label>Contraseña</label>
-      <input type="password" id="loginPass" placeholder="••••••••" onkeydown="if(event.key==='Enter') doLogin()" />
+    <div id="fLogin">
+      <div class="form-group"><label>Usuario</label><input type="text" id="lUser" placeholder="tu_usuario" autocomplete="username"/></div>
+      <div class="form-group"><label>Contraseña</label><input type="password" id="lPass" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()"/></div>
+      <button class="btn btn-primary" style="width:100%;margin-top:4px;padding:11px" onclick="doLogin()">Iniciar Sesión</button>
     </div>
-    <button class="btn btn-primary" style="width:100%" onclick="doLogin()">Iniciar Sesión</button>
-    <div style="text-align:center;margin-top:16px;font-size:0.8rem;color:var(--text2)">
-      ¿Primer uso? <a href="#" onclick="showSetup()" style="color:var(--accent)">Configurar acceso inicial</a>
+    <div id="fReg" style="display:none">
+      <div class="form-group"><label>Usuario (mín 3 chars)</label><input type="text" id="rUser" placeholder="tu_usuario" autocomplete="username"/></div>
+      <div class="form-group"><label>Email (opcional)</label><input type="email" id="rEmail" placeholder="tu@email.com"/></div>
+      <div class="form-group"><label>Contraseña (mín 6 chars)</label><input type="password" id="rPass" placeholder="••••••••" onkeydown="if(event.key==='Enter')doRegister()"/></div>
+      <button class="btn btn-primary" style="width:100%;margin-top:4px;padding:11px" onclick="doRegister()">Crear cuenta</button>
+    </div>
+    <div style="text-align:center;margin-top:14px;font-size:.78rem;color:var(--text2)">
+      ¿Primer uso? <a href="#" onclick="showSetup()" style="color:var(--accent)">Setup inicial (dev)</a>
     </div>
   </div>
 </div>
 
-<!-- Setup modal -->
-<div id="setupModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:100;display:none;align-items:center;justify-content:center">
-  <div class="login-box" style="max-width:440px">
-    <h1 style="font-size:1.2rem;margin-bottom:16px">⚙️ Configuración Inicial</h1>
+<!-- SETUP MODAL -->
+<div id="setupModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:200;align-items:center;justify-content:center;padding:16px">
+  <div class="login-box" style="max-width:400px">
+    <h1 style="font-size:1rem;margin-bottom:8px">⚙️ Setup Inicial — Cuenta Desarrollador</h1>
+    <p style="font-size:.78rem;color:var(--text2);margin-bottom:16px">Solo funciona una vez, cuando no existe ningún desarrollador.</p>
     <div id="setupAlert"></div>
-    <div class="form-group"><label>Usuario dev</label><input type="text" id="setupUser" /></div>
-    <div class="form-group"><label>Contraseña (mín 8 chars)</label><input type="password" id="setupPass" /></div>
-    <div class="form-group"><label>Setup Key (variable SETUP_KEY en entorno, puede estar vacía)</label><input type="text" id="setupKey" /></div>
-    <div style="display:flex;gap:10px">
+    <div class="form-group"><label>Usuario dev</label><input type="text" id="sUser"/></div>
+    <div class="form-group"><label>Contraseña (mín 8 chars)</label><input type="password" id="sPass"/></div>
+    <div class="form-group"><label>Setup Key (variable SETUP_KEY en Render)</label><input type="text" id="sKey"/></div>
+    <div style="display:flex;gap:8px">
       <button class="btn btn-primary" style="flex:1" onclick="doSetup()">Crear cuenta dev</button>
       <button class="btn btn-outline" onclick="hideSetup()">Cancelar</button>
     </div>
   </div>
 </div>
 
-<!-- =========================================== -->
-<!-- PANEL PRINCIPAL                             -->
-<!-- =========================================== -->
-<div id="panel" class="layout" style="display:none">
+<!-- ═══ VISTA USUARIO NORMAL ═══ -->
+<div id="userApp" class="user-app">
+  <div class="user-header">
+    <div style="display:flex;align-items:center;gap:12px">
+      <span style="font-size:1.5rem">🤖</span>
+      <div>
+        <div style="font-weight:700;font-size:1rem;color:var(--accent)">Cic_IA</div>
+        <div style="font-size:.72rem;color:var(--green)">● En línea</div>
+      </div>
+    </div>
+    <div style="display:flex;gap:10px;align-items:center">
+      <span style="font-size:.82rem;color:var(--text2)" id="uGreet"></span>
+      <select id="uMode" style="width:auto;padding:5px 8px;font-size:.78rem">
+        <option value="balanced">Balanceado</option>
+        <option value="fast">Rápido</option>
+        <option value="complete">Completo</option>
+      </select>
+      <button class="btn btn-outline btn-sm" onclick="doLogout()">Salir</button>
+    </div>
+  </div>
 
-  <!-- Sidebar -->
-  <aside class="sidebar">
+  <div class="user-messages" id="uMessages">
+    <div style="text-align:center;padding:60px 20px;color:var(--text2)">
+      <div style="font-size:2.8rem;margin-bottom:12px">🤖</div>
+      <div style="font-size:1.1rem;font-weight:600;color:var(--text);margin-bottom:8px">¡Hola! Soy Cic_IA</div>
+      <div style="font-size:.88rem">¿En qué puedo ayudarte hoy?</div>
+    </div>
+  </div>
+
+  <div class="user-input-area">
+    <div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap">
+      <label class="btn btn-sm" style="background:#2d3561;color:var(--text);cursor:pointer">
+        🖼️ Imagen<input type="file" id="uImgFile" accept="image/*" style="display:none" onchange="uHandleImg(this)"/>
+      </label>
+      <button class="btn btn-sm" style="background:#2d3561;color:var(--text)" onclick="uPasteImg()">📋 Pegar img</button>
+      <div id="uImgPrev" style="display:none;position:relative">
+        <img id="uImgThumb" style="max-height:36px;border-radius:4px;border:1px solid #2d3561"/>
+        <button onclick="uClearImg()" style="position:absolute;top:-5px;right:-5px;background:var(--red);color:#fff;border:none;border-radius:50%;width:18px;height:18px;cursor:pointer;font-size:.65rem;line-height:18px;text-align:center">✕</button>
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;align-items:flex-end">
+      <textarea id="uMsg" placeholder="Escribe tu mensaje... (Enter = enviar, Shift+Enter = salto)" rows="1"
+        style="flex:1;min-height:44px;max-height:180px;resize:none;overflow-y:auto;line-height:1.5;"
+        onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();uSend();}"
+        oninput="uAutoGrow(this)" onpaste="uHandlePaste(event)"></textarea>
+      <button class="btn btn-primary" onclick="uSend()" style="padding:11px 18px;height:44px;white-space:nowrap">↩ Enviar</button>
+    </div>
+    <div style="margin-top:5px;font-size:.72rem;color:var(--text2)" id="uCharCount">0 / 100,000</div>
+  </div>
+</div>
+
+<!-- ═══ VISTA DESARROLLADOR ═══ -->
+<button class="hamburger" id="hamburger" onclick="toggleSidebar()">☰</button>
+<div class="overlay" id="overlay" onclick="closeSidebar()"></div>
+
+<div class="history-panel" id="historyPanel">
+  <div class="history-head">
+    <h3 style="font-size:.95rem">📜 Historial</h3>
+    <button class="btn btn-sm btn-outline" onclick="closeHistory()">✕</button>
+  </div>
+  <div class="history-search"><input type="text" id="histSearch" placeholder="Buscar..." oninput="filterHistory(this.value)"/></div>
+  <div class="history-list" id="histList"><div style="padding:20px;text-align:center;color:var(--text2);font-size:.83rem">Cargando...</div></div>
+</div>
+
+<div class="code-panel" id="codePanel">
+  <div class="code-panel-head">
+    <div><h3 id="cpTitle">Código</h3><span id="cpLang" style="font-size:.72rem;color:var(--accent2)"></span></div>
+    <div class="code-panel-actions">
+      <button class="btn btn-sm" id="cpCopy" onclick="cpCopyFn()" style="background:#2d3561;color:var(--text)">📋 Copiar</button>
+      <button class="btn btn-sm" onclick="cpDownload()" style="background:#6c63ff;color:#fff">⬇️ Bajar</button>
+      <button class="btn btn-sm" id="cpPrev" onclick="cpTogglePreview()" style="background:#1dd1a1;color:#0f1117;display:none">👁️ Preview</button>
+      <button class="btn btn-sm btn-outline" onclick="closeCodePanel()">✕</button>
+    </div>
+  </div>
+  <div class="code-panel-body" id="cpBody"><pre><code id="cpCode"></code></pre></div>
+  <iframe id="cpFrame" style="display:none;width:100%;flex:1;border:none;background:#fff"></iframe>
+</div>
+
+<div class="app" id="devApp" style="display:none">
+  <aside class="sidebar" id="sidebar">
     <div class="logo">
-      <h1>🤖 Cic_IA</h1>
-      <span>Panel Dev v8.0</span>
+      <span style="font-size:1.4rem">🤖</span>
+      <div><h1>Cic_IA</h1><span class="sub">Panel Dev v8.0</span></div>
     </div>
     <nav class="nav">
-      <div class="nav-item active" onclick="showSection('dashboard')">
-        <span class="icon">📊</span><span>Dashboard</span>
+      <div class="nav-label">Plataforma</div>
+      <div class="nav-item active" onclick="showSection('dashboard',this)"><span class="icon">📊</span><span>Dashboard</span></div>
+      <div class="nav-item" onclick="showSection('chat',this)"><span class="icon">💬</span><span>Chat</span></div>
+      <div class="nav-label" style="margin-top:4px">Módulos</div>
+      <div class="nav-item" onclick="showSection('imggen',this)">
+        <span class="icon">🎨</span><span>Crear imagen</span><span class="nav-badge nb-live">LIVE</span>
       </div>
-      <div class="nav-item" onclick="showSection('knowledge')">
-        <span class="icon">🧠</span><span>Conocimiento</span>
+      <div class="nav-item" onclick="showSection('vidgen',this)">
+        <span class="icon">🎬</span><span>Crear video</span><span class="nav-badge nb-dev">DEV</span>
       </div>
-      <div class="nav-item" onclick="showSection('learn')">
-        <span class="icon">📚</span><span>Aprendizaje</span>
+      <div class="nav-item" onclick="showSection('docsgen',this)">
+        <span class="icon">📄</span><span>Análisis docs</span><span class="nav-badge nb-dev">DEV</span>
       </div>
-      <div class="nav-item" onclick="showSection('memories')">
-        <span class="icon">💾</span><span>Memorias</span>
+      <div class="nav-item" onclick="showSection('tts',this)">
+        <span class="icon">🎙️</span><span>Voz / TTS</span><span class="nav-badge nb-dev">DEV</span>
       </div>
-      <div class="nav-item" onclick="showSection('config')">
-        <span class="icon">⚙️</span><span>Configuración</span>
+      <div class="nav-item" onclick="showSection('codeexec',this)">
+        <span class="icon">⚙️</span><span>Ejecutor código</span><span class="nav-badge nb-dev">DEV</span>
       </div>
-      <div class="nav-item" onclick="showSection('chat')">
-        <span class="icon">💬</span><span>Test Chat</span>
+      <div class="nav-label" style="margin-top:4px">Dev Tools</div>
+      <div class="nav-item" onclick="showSection('knowledge',this)"><span class="icon">🧠</span><span>Conocimiento</span></div>
+      <div class="nav-item" onclick="showSection('learn',this)"><span class="icon">📚</span><span>Aprendizaje</span></div>
+      <div class="nav-item" onclick="showSection('memories',this)">
+        <span class="icon">💾</span><span>Memorias</span><span class="nav-badge" id="memBadge" style="background:rgba(72,219,251,.15);color:var(--accent2)"></span>
       </div>
-      <div class="nav-item" onclick="showSection('users')">
-        <span class="icon">👥</span><span>Usuarios</span>
-      </div>
-      <div class="nav-item" onclick="showSection('video')">
-        <span class="icon">🎬</span><span>CicVideo</span>
-      </div>
+      <div class="nav-item" onclick="showSection('config',this)"><span class="icon">⚙️</span><span>Configuración</span></div>
+      <div class="nav-item" onclick="showSection('users',this)"><span class="icon">👥</span><span>Usuarios</span></div>
     </nav>
-    <div style="padding:16px 24px;border-top:1px solid #2d3561">
-      <div style="font-size:0.8rem;color:var(--text2)" id="sidebarUser">—</div>
-      <button class="btn btn-outline btn-sm" style="margin-top:8px;width:100%" onclick="doLogout()">Salir</button>
+    <div class="sidebar-foot">
+      <div style="font-size:.72rem;color:var(--text2);margin-bottom:8px" id="sidebarUser">—</div>
+      <button class="btn btn-outline btn-sm" style="width:100%" onclick="doLogout()">Cerrar sesión</button>
     </div>
   </aside>
 
-  <!-- Main content -->
-  <main class="main">
-
-    <!-- DASHBOARD -->
-    <section id="sec-dashboard" class="section active">
-      <h2>Dashboard</h2>
-      <p class="subtitle">Resumen del sistema en tiempo real</p>
-      <div id="dashAlert"></div>
-      <div class="cards" id="dashCards">
-        <div class="card"><div class="value" id="d-memories">—</div><div class="label">Memorias totales</div></div>
-        <div class="card green"><div class="value" id="d-convs">—</div><div class="label">Conversaciones</div></div>
-        <div class="card yellow"><div class="value" id="d-kb">—</div><div class="label">Conocimiento manual</div></div>
-        <div class="card"><div class="value" id="d-today">—</div><div class="label">Mensajes hoy</div></div>
-        <div class="card" id="d-aicard"><div class="value" id="d-ai">—</div><div class="label">Proveedor IA</div></div>
-      </div>
-
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
-        <div>
-          <h3 style="margin-bottom:12px;font-size:1rem">Últimas conversaciones</h3>
-          <div id="recentConvs" style="background:var(--bg2);border-radius:var(--radius);border:1px solid #2d3561;overflow:hidden">
-            <div style="padding:16px;color:var(--text2);font-size:0.85rem">Cargando...</div>
-          </div>
+  <div class="main-wrap">
+    <main class="main" id="mainContent">
+      <!-- DASHBOARD -->
+      <section id="sec-dashboard" class="section active">
+        <h2>Dashboard</h2><p class="subtitle">Resumen del sistema en tiempo real</p>
+        <div id="dashAlert"></div>
+        <div class="cards">
+          <div class="card"><div class="value" id="d-mem">—</div><div class="label">Memorias totales</div></div>
+          <div class="card green"><div class="value" id="d-conv">—</div><div class="label">Conversaciones</div></div>
+          <div class="card yellow"><div class="value" id="d-kb">—</div><div class="label">Conocimiento manual</div></div>
+          <div class="card"><div class="value" id="d-today">—</div><div class="label">Mensajes hoy</div></div>
+          <div class="card"><div class="value" id="d-ai">—</div><div class="label">Proveedor IA</div></div>
         </div>
-        <div>
-          <h3 style="margin-bottom:12px;font-size:1rem">Actividad (7 días)</h3>
-          <div id="weekActivity" style="background:var(--bg2);border-radius:var(--radius);border:1px solid #2d3561;overflow:hidden">
-            <div style="padding:16px;color:var(--text2);font-size:0.85rem">Cargando...</div>
-          </div>
+        <div class="grid2">
+          <div class="panel"><h3 style="margin-bottom:10px;font-size:.9rem">Últimas conversaciones</h3><div id="recentConvs"><div style="color:var(--text2);font-size:.83rem">Cargando...</div></div></div>
+          <div class="panel"><h3 style="margin-bottom:10px;font-size:.9rem">Actividad (7 días)</h3><div id="weekActivity"><div style="color:var(--text2);font-size:.83rem">Cargando...</div></div></div>
         </div>
-      </div>
-    </section>
+      </section>
 
-    <!-- CONOCIMIENTO MANUAL -->
-    <section id="sec-knowledge" class="section">
-      <h2>🧠 Conocimiento Manual</h2>
-      <p class="subtitle">Enseña directamente a la IA — este conocimiento se usa en cada respuesta</p>
-
-      <div style="background:var(--bg2);border-radius:var(--radius);padding:24px;border:1px solid #2d3561;margin-bottom:24px">
-        <h3 style="margin-bottom:16px;font-size:1rem">➕ Agregar nuevo conocimiento</h3>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
-          <div class="form-group">
-            <label>Título / Tema *</label>
-            <input type="text" id="kb-title" placeholder="Ej: Horarios de atención, Cómo funciona X..." />
+      <!-- CONOCIMIENTO -->
+      <section id="sec-knowledge" class="section">
+        <h2>🧠 Conocimiento Manual</h2><p class="subtitle">Enseña directamente a la IA</p>
+        <div class="panel">
+          <h3 style="margin-bottom:12px;font-size:.9rem">➕ Agregar conocimiento</h3>
+          <div class="grid2">
+            <div class="form-group"><label>Título *</label><input type="text" id="kb-title" placeholder="Ej: Horarios de atención..."/></div>
+            <div class="form-group"><label>Categoría</label><input type="text" id="kb-category" placeholder="empresa, producto..."/></div>
           </div>
-          <div class="form-group">
-            <label>Categoría</label>
-            <input type="text" id="kb-category" placeholder="Ej: empresa, producto, soporte..." />
-          </div>
-        </div>
-        <div class="form-group">
-          <label>Contenido *</label>
-          <textarea id="kb-content" rows="5" placeholder="Escribe aquí la información que quieres que la IA sepa y use en sus respuestas..."></textarea>
-        </div>
-        <div style="display:grid;grid-template-columns:1fr auto;gap:16px;align-items:end">
-          <div class="form-group" style="margin:0">
-            <label>Tags (separados por coma)</label>
-            <input type="text" id="kb-tags" placeholder="tag1, tag2, tag3" />
-          </div>
-          <div style="display:flex;gap:8px">
-            <select id="kb-priority" style="width:auto">
-              <option value="1">Prioridad Normal</option>
-              <option value="2">Prioridad Alta</option>
-              <option value="3">Crítica</option>
-            </select>
+          <div class="form-group"><label>Contenido *</label><textarea id="kb-content" rows="4" placeholder="Información que quieres que la IA sepa..."></textarea></div>
+          <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
+            <div class="form-group" style="flex:1;margin:0"><label>Tags (coma)</label><input type="text" id="kb-tags" placeholder="tag1, tag2"/></div>
+            <select id="kb-priority" style="width:auto"><option value="1">Normal</option><option value="2">Alta</option><option value="3">Crítica</option></select>
             <button class="btn btn-primary" onclick="addKnowledge()">Guardar</button>
           </div>
+          <div id="kbAddAlert" style="margin-top:10px"></div>
         </div>
-        <div id="kbAddAlert" style="margin-top:12px"></div>
-      </div>
-
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
-        <h3 style="font-size:1rem">Base de conocimiento</h3>
-        <button class="btn btn-outline btn-sm" onclick="loadKnowledge()">🔄 Actualizar</button>
-      </div>
-      <div class="table-wrap">
-        <table>
-          <thead><tr><th>Título</th><th>Categoría</th><th>Prioridad</th><th>Preview</th><th>Fecha</th><th>Acciones</th></tr></thead>
-          <tbody id="kbTable"><tr><td colspan="6" style="color:var(--text2);text-align:center;padding:24px">Cargando...</td></tr></tbody>
-        </table>
-      </div>
-      <div id="kbPagination" style="margin-top:16px;display:flex;gap:8px;justify-content:center"></div>
-    </section>
-
-    <!-- APRENDIZAJE FORZADO -->
-    <section id="sec-learn" class="section">
-      <h2>📚 Aprendizaje Forzado</h2>
-      <p class="subtitle">Fuerza a la IA a aprender sobre temas específicos desde la web o texto directo</p>
-
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
-
-        <div style="background:var(--bg2);border-radius:var(--radius);padding:24px;border:1px solid #2d3561">
-          <h3 style="margin-bottom:16px;font-size:1rem">🔍 Aprender desde la Web</h3>
-          <div class="form-group">
-            <label>Tema a buscar</label>
-            <input type="text" id="learn-topic" placeholder="Ej: Python avanzado, Historia de Chile..." />
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px">
+          <h3 style="font-size:.9rem">Base de conocimiento</h3>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <input type="text" id="kb-filter-text" placeholder="Buscar..." style="width:150px" oninput="loadKnowledge(1)"/>
+            <select id="kb-filter-cat" style="width:150px" onchange="loadKnowledge(1)"><option value="">Todas las categorías</option></select>
+            <button class="btn btn-outline btn-sm" onclick="loadKnowledge(1)">🔄</button>
           </div>
-          <div class="form-group">
-            <label>Contenido adicional (opcional)</label>
-            <textarea id="learn-content" rows="4" placeholder="Si tienes texto específico que quieres que la IA aprenda, pégalo aquí..."></textarea>
+        </div>
+        <div class="table-wrap">
+          <table><thead><tr><th>Título</th><th>Cat.</th><th>Prior.</th><th>Preview</th><th>Fecha</th><th></th></tr></thead>
+          <tbody id="kbTable"><tr><td colspan="6" style="text-align:center;color:var(--text2);padding:16px">Cargando...</td></tr></tbody></table>
+        </div>
+        <div id="kbPag" class="pagination"></div>
+      </section>
+
+      <!-- APRENDIZAJE -->
+      <section id="sec-learn" class="section">
+        <h2>📚 Aprendizaje Forzado</h2><p class="subtitle">Fuerza a la IA a aprender sobre temas específicos</p>
+        <div class="grid2">
+          <div class="panel">
+            <h3 style="margin-bottom:12px;font-size:.9rem">🔍 Desde la Web</h3>
+            <div class="form-group"><label>Tema *</label><input type="text" id="learn-topic" placeholder="Ej: Python avanzado..."/></div>
+            <div class="form-group"><label>Contenido adicional (opcional)</label><textarea id="learn-content" rows="3" placeholder="Texto específico..."></textarea></div>
+            <button class="btn btn-primary" style="width:100%" onclick="forceLearning()">🚀 Iniciar</button>
+            <div id="learnAlert" style="margin-top:10px"></div>
           </div>
-          <button class="btn btn-primary" style="width:100%" onclick="forceLearning()">🚀 Iniciar aprendizaje</button>
-          <div id="learnAlert" style="margin-top:12px"></div>
-        </div>
-
-        <div style="background:var(--bg2);border-radius:var(--radius);padding:24px;border:1px solid #2d3561">
-          <h3 style="margin-bottom:16px;font-size:1rem">📋 Aprendizaje Masivo</h3>
-          <div class="form-group">
-            <label>Lista de temas (uno por línea)</label>
-            <textarea id="bulk-topics" rows="8" placeholder="Inteligencia artificial&#10;Python programación&#10;Historia de Chile&#10;..."></textarea>
+          <div class="panel">
+            <h3 style="margin-bottom:12px;font-size:.9rem">📋 Masivo</h3>
+            <div class="form-group"><label>Lista de temas (uno por línea)</label><textarea id="bulk-topics" rows="7" placeholder="Inteligencia artificial&#10;Python&#10;Historia de Chile"></textarea></div>
+            <button class="btn btn-green" style="width:100%" onclick="bulkLearning()">⚡ Aprender todos</button>
+            <div id="bulkAlert" style="margin-top:10px"></div>
           </div>
-          <button class="btn btn-green" style="width:100%" onclick="bulkLearning()">⚡ Aprender todos</button>
-          <div id="bulkAlert" style="margin-top:12px"></div>
         </div>
-      </div>
-
-      <div style="margin-top:24px;background:var(--bg2);border-radius:var(--radius);padding:24px;border:1px solid #2d3561">
-        <h3 style="margin-bottom:12px;font-size:1rem">📅 Log de aprendizaje reciente</h3>
-        <div id="learningLog" style="color:var(--text2);font-size:0.85rem">Cargando...</div>
-      </div>
-    </section>
-
-    <!-- MEMORIAS -->
-    <section id="sec-memories" class="section">
-      <h2>💾 Memorias</h2>
-      <p class="subtitle">Todo lo que la IA ha aprendido y almacenado</p>
-      <div style="display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap">
-        <input type="text" id="mem-search" placeholder="Buscar por tema..." style="max-width:300px" />
-        <select id="mem-source">
-          <option value="">Todas las fuentes</option>
-          <option value="auto_learning">Auto-aprendizaje</option>
-          <option value="web_search">Búsqueda web</option>
-          <option value="manual_dev">Manual (dev)</option>
-        </select>
-        <button class="btn btn-outline btn-sm" onclick="loadMemories()">🔍 Filtrar</button>
-        <button class="btn btn-red btn-sm" onclick="clearMemories()" style="margin-left:auto">🗑️ Limpiar selección</button>
-      </div>
-      <div class="table-wrap">
-        <table>
-          <thead><tr><th>Tema</th><th>Fuente</th><th>Score</th><th>Accesos</th><th>Fecha</th><th>Preview</th><th></th></tr></thead>
-          <tbody id="memTable"><tr><td colspan="7" style="color:var(--text2);text-align:center;padding:24px">Cargando...</td></tr></tbody>
-        </table>
-      </div>
-      <div id="memPagination" style="margin-top:16px;display:flex;gap:8px;justify-content:center"></div>
-    </section>
-
-    <!-- CONFIGURACIÓN -->
-    <section id="sec-config" class="section">
-      <h2>⚙️ Configuración</h2>
-      <p class="subtitle">Ajusta el comportamiento de la IA en tiempo real</p>
-
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
-
-        <div style="background:var(--bg2);border-radius:var(--radius);padding:24px;border:1px solid #2d3561">
-          <h3 style="margin-bottom:16px;font-size:1rem">🤖 Proveedor de IA</h3>
-          <div class="form-group">
-            <label>Proveedor</label>
-            <select id="cfg-provider">
-              <option value="anthropic">Anthropic (Claude)</option>
-              <option value="openai">OpenAI (GPT)</option>
-            </select>
+        <div class="panel">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+            <h3 style="font-size:.9rem">📅 Log reciente</h3>
+            <button class="btn btn-outline btn-sm" onclick="loadLearningLog()">🔄</button>
           </div>
-          <div class="form-group">
-            <label>Modelo</label>
-            <input type="text" id="cfg-model" placeholder="claude-haiku-4-5-20251001" />
-          </div>
-          <div class="form-group">
-            <label>Máximo de tokens por respuesta</label>
-            <input type="number" id="cfg-tokens" min="100" max="4000" value="1000" />
-          </div>
-          <button class="btn btn-primary" onclick="saveAIConfig()">Guardar</button>
+          <div id="learningLog"><div style="color:var(--text2);font-size:.83rem">Cargando...</div></div>
         </div>
+      </section>
 
-        <div style="background:var(--bg2);border-radius:var(--radius);padding:24px;border:1px solid #2d3561">
-          <h3 style="margin-bottom:16px;font-size:1rem">🔄 Auto-aprendizaje</h3>
-          <div class="form-group">
-            <label>Auto-aprendizaje activado</label>
-            <select id="cfg-autolearn">
-              <option value="true">✅ Activado</option>
-              <option value="false">❌ Desactivado</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label>Intervalo (horas)</label>
-            <input type="number" id="cfg-interval" min="1" max="24" value="2" />
-          </div>
-          <div class="form-group">
-            <label>Búsqueda web en respuestas</label>
-            <select id="cfg-websearch">
-              <option value="true">✅ Activada</option>
-              <option value="false">❌ Desactivada</option>
-            </select>
-          </div>
-          <button class="btn btn-primary" onclick="saveLearningConfig()">Guardar</button>
+      <!-- MEMORIAS -->
+      <section id="sec-memories" class="section">
+        <h2>💾 Memorias</h2><p class="subtitle">Todo lo que la IA ha aprendido</p>
+        <div class="filters">
+          <input type="text" id="mem-search" placeholder="Buscar por tema..."/>
+          <select id="mem-source"><option value="">Todas las fuentes</option><option value="auto_learning">Auto-aprendizaje</option><option value="web_search">Búsqueda web</option><option value="manual_dev">Manual</option></select>
+          <select id="mem-sort"><option value="recent">Más recientes</option><option value="score">Mayor relevancia</option><option value="accesses">Más accedidas</option></select>
+          <input type="date" id="mem-date-from" style="max-width:145px"/>
+          <input type="date" id="mem-date-to" style="max-width:145px"/>
+          <button class="btn btn-outline btn-sm" onclick="loadMemories(1)">🔍 Filtrar</button>
+          <button class="btn btn-red btn-sm" onclick="clearMemoriesPrompt()">🗑️ Limpiar</button>
         </div>
-      </div>
-
-      <div style="background:var(--bg2);border-radius:var(--radius);padding:24px;border:1px solid #2d3561;margin-top:20px">
-        <h3 style="margin-bottom:16px;font-size:1rem">💬 System Prompt (Personalidad de la IA)</h3>
-        <div class="form-group">
-          <textarea id="cfg-prompt" rows="5" placeholder="Eres Cic_IA..."></textarea>
+        <div id="memCount" style="font-size:.8rem;color:var(--text2);margin-bottom:8px"></div>
+        <div class="table-wrap">
+          <table><thead><tr><th>Tema</th><th>Fuente</th><th>Score</th><th>Accesos</th><th>Fecha</th><th>Preview</th><th></th></tr></thead>
+          <tbody id="memTable"><tr><td colspan="7" style="text-align:center;color:var(--text2);padding:16px">Cargando...</td></tr></tbody></table>
         </div>
-        <div style="display:flex;gap:12px">
-          <button class="btn btn-primary" onclick="savePrompt()">Guardar Prompt</button>
-          <button class="btn btn-outline" onclick="resetPrompt()">Restablecer</button>
-        </div>
-        <div id="cfgAlert" style="margin-top:12px"></div>
-      </div>
-    </section>
+        <div id="memPag" class="pagination"></div>
+      </section>
 
-    <!-- TEST CHAT -->
-    <section id="sec-chat" class="section">
-      <h2>💬 Test de Chat</h2>
-      <p class="subtitle">Prueba la IA directamente desde el panel</p>
-
-      <div style="background:var(--bg2);border-radius:var(--radius);padding:24px;border:1px solid #2d3561">
-        <div style="display:flex;gap:12px;margin-bottom:16px;align-items:center">
-          <label style="color:var(--text2);font-size:0.85rem;white-space:nowrap">System prompt:</label>
-          <input type="text" id="test-prompt" placeholder="Opcional — usa el configurado por defecto" style="flex:1" />
-          <select id="test-mode">
-            <option value="balanced">Balanceado</option>
-            <option value="fast">Rápido</option>
-            <option value="complete">Completo</option>
-          </select>
-        </div>
-        <div class="chat-box" id="testChat">
-          <div style="text-align:center;color:var(--text2);font-size:0.85rem;padding:40px 0">Escribe un mensaje para probar la IA</div>
-        </div>
-        <div style="display:flex;gap:10px">
-          <input type="text" id="testMsg" placeholder="Escribe un mensaje..." onkeydown="if(event.key==='Enter')sendTestMsg()" style="flex:1" />
-          <button class="btn btn-primary" onclick="sendTestMsg()">Enviar</button>
-          <button class="btn btn-outline" onclick="clearChat()">Limpiar</button>
-        </div>
-        <div id="testInfo" style="margin-top:10px;font-size:0.8rem;color:var(--text2)"></div>
-      </div>
-
-      <div style="margin-top:20px;background:var(--bg2);border-radius:var(--radius);padding:20px;border:1px solid #2d3561">
-        <h3 style="margin-bottom:12px;font-size:1rem">📡 API Reference</h3>
-        <pre id="apiRef">Cargando configuración...</pre>
-      </div>
-    </section>
-
-    <!-- USUARIOS -->
-    <section id="sec-users" class="section">
-      <h2>👥 Usuarios</h2>
-      <p class="subtitle">Gestión de usuarios del sistema</p>
-      <div class="table-wrap">
-        <table>
-          <thead><tr><th>ID</th><th>Usuario</th><th>Email</th><th>Rol</th><th>Estado</th><th>Mensajes</th><th>Registro</th><th>Acciones</th></tr></thead>
-          <tbody id="usersTable"><tr><td colspan="8" style="color:var(--text2);text-align:center;padding:24px">Cargando...</td></tr></tbody>
-        </table>
-      </div>
-    </section>
-
-    <!-- ════════════════════════════════════════════════════ -->
-    <!-- CICVIDEO                                            -->
-    <!-- ════════════════════════════════════════════════════ -->
-    <section id="sec-video" class="section">
-      <h2>🎬 CicVideo — Generador de Video</h2>
-      <p class="subtitle">Motor propio de generación de video · Cascada automática de modelos gratuitos</p>
-
-      <div id="videoAlert"></div>
-
-      <!-- Estado de motores -->
-      <div style="background:var(--bg2);border-radius:var(--radius);padding:20px;margin-bottom:24px;border:1px solid #2d3561">
-        <h3 style="font-size:1rem;margin-bottom:12px">⚡ Estado de Motores</h3>
-        <div id="videoMotorStatus">
-          <div style="color:var(--text2);font-size:0.85rem">Cargando motores...</div>
-        </div>
-      </div>
-
-      <!-- Generador principal -->
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:24px">
-
-        <!-- Columna izquierda: configuración -->
-        <div style="background:var(--bg2);border-radius:var(--radius);padding:20px;border:1px solid #2d3561">
-          <h3 style="font-size:1rem;margin-bottom:16px">🛠️ Configuración</h3>
-
-          <div class="form-group">
-            <label>Prompt (descripción del video)</label>
-            <textarea id="videoPrompt" rows="3"
-              placeholder="Ej: Un atardecer sobre el océano con olas suaves y luz dorada..."
-              style="resize:vertical"></textarea>
-          </div>
-
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-            <div class="form-group">
-              <label>Resolución</label>
-              <select id="videoResolution">
-                <option value="480p">480p — Rápido</option>
-                <option value="720p">720p — HD</option>
-                <option value="1080p">1080p — Full HD</option>
+      <!-- CONFIGURACIÓN -->
+      <section id="sec-config" class="section">
+        <h2>⚙️ Configuración</h2><p class="subtitle">Ajusta el comportamiento de la IA en tiempo real</p>
+        <div class="grid2">
+          <div class="panel">
+            <h3 style="margin-bottom:12px;font-size:.9rem">🤖 Proveedor de IA</h3>
+            <div class="form-group"><label>Proveedor activo</label>
+              <select id="cfg-provider">
+                <option value="groq">Groq — Llama 3 (gratis, recomendado)</option>
+                <option value="auto">Auto (Groq → Ollama → Anthropic)</option>
+                <option value="ollama">Ollama (modelo local)</option>
+                <option value="anthropic">Anthropic (Claude)</option>
+                <option value="openai">OpenAI (GPT)</option>
               </select>
             </div>
-            <div class="form-group">
-              <label>Duración</label>
-              <select id="videoDuration">
-                <option value="3s">3 segundos — Ultra rápido</option>
-                <option value="5s" selected>5 segundos — Estándar</option>
-                <option value="8s">8 segundos — Largo</option>
-                <option value="15s">15 segundos — Máximo</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label>Motor</label>
-              <select id="videoMotor">
-                <option value="auto">AUTO (cascada)</option>
-                <option value="cicvideo_math">CicVideo Math (propio)</option>
-                <option value="hf_zeroscope">HF ZeroScope</option>
-                <option value="replicate">Replicate ZeroScope</option>
-                <option value="pollinations">Pollinations</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label>Efecto</label>
-              <select id="videoEffect">
-                <option value="auto">AUTO (detectar)</option>
-                <option value="wave">Wave — Ondas</option>
-                <option value="particles">Particles — Partículas</option>
-                <option value="zoom">Zoom — Pulso</option>
-                <option value="flow">Flow — Flujo</option>
-                <option value="gradient">Gradient — Gradiente</option>
-              </select>
-            </div>
+            <div class="form-group"><label>Modelo</label><input type="text" id="cfg-model" placeholder="llama-3.1-8b-instant"/></div>
+            <div class="form-group"><label>Máximo de tokens</label><input type="number" id="cfg-tokens" min="100" max="4000"/></div>
+            <button class="btn btn-primary" onclick="saveAIConfig()">Guardar</button>
+            <div id="cfgAIAlert" style="margin-top:8px"></div>
           </div>
-
-          <!-- Imagen de referencia -->
-          <div class="form-group" style="margin-top:4px">
-            <label>Imagen de referencia (opcional)</label>
-            <input type="file" accept="image/*" onchange="videoHandleRef(this)"
-              style="padding:8px;cursor:pointer">
-            <div id="videoRefPreview"></div>
-          </div>
-
-          <button id="videoBtnGenerate" class="btn btn-primary"
-            onclick="generateVideo()" style="width:100%;margin-top:8px;font-size:1rem;padding:12px">
-            🎬 Generar Video
-          </button>
-        </div>
-
-        <!-- Columna derecha: resultado -->
-        <div style="background:var(--bg2);border-radius:var(--radius);padding:20px;border:1px solid #2d3561">
-          <h3 style="font-size:1rem;margin-bottom:16px">🎥 Resultado</h3>
-          <div id="videoResult">
-            <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;
-              height:280px;color:var(--text2);gap:16px;border:2px dashed #2d3561;border-radius:8px">
-              <span style="font-size:3rem">🎬</span>
-              <span style="font-size:0.9rem">El video aparecerá aquí</span>
-              <span style="font-size:0.78rem;text-align:center;max-width:240px">
-                Formatos de salida: GIF animado · WebP animado · MP4
-              </span>
-            </div>
+          <div class="panel">
+            <h3 style="margin-bottom:12px;font-size:.9rem">🔄 Auto-aprendizaje</h3>
+            <div class="form-group"><label>Estado</label><select id="cfg-autolearn"><option value="true">✅ Activado</option><option value="false">❌ Desactivado</option></select></div>
+            <div class="form-group"><label>Intervalo (horas)</label><input type="number" id="cfg-interval" min="1" max="24"/></div>
+            <div class="form-group"><label>Búsqueda web</label><select id="cfg-websearch"><option value="true">✅ Activada</option><option value="false">❌ Desactivada</option></select></div>
+            <button class="btn btn-primary" onclick="saveLearningConfig()">Guardar</button>
+            <div id="cfgLearnAlert" style="margin-top:8px"></div>
           </div>
         </div>
-      </div>
-
-      <!-- Panel de entrenamiento del motor propio -->
-      <div style="background:var(--bg2);border-radius:var(--radius);padding:20px;border:1px solid #2d3561">
-        <h3 style="font-size:1rem;margin-bottom:4px">🔬 Entrenar Motor Propio (CicVideoMath)</h3>
-        <p style="font-size:0.82rem;color:var(--text2);margin-bottom:16px">
-          Prueba el motor matemático propio con distintos efectos y resoluciones.
-          No usa APIs externas — siempre disponible. Úsalo para verificar que el motor funciona
-          y para explorar cómo los algoritmos reaccionan a diferentes configuraciones.
-        </p>
-        <div id="videoTrainAlert"></div>
-        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:12px">
-          <div class="form-group">
-            <label>Prompt de prueba</label>
-            <input type="text" id="videoTrainPrompt" placeholder="paisaje marino con olas">
-          </div>
-          <div class="form-group">
-            <label>Efecto</label>
-            <select id="videoTrainEffect">
-              <option value="gradient">gradient</option>
-              <option value="wave">wave</option>
-              <option value="particles">particles</option>
-              <option value="zoom">zoom</option>
-              <option value="flow">flow</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label>Resolución</label>
-            <select id="videoTrainRes">
-              <option value="480p">480p</option>
-              <option value="720p">720p</option>
-              <option value="1080p">1080p</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label>Duración</label>
-            <select id="videoTrainDur">
-              <option value="3s" selected>3s</option>
-              <option value="5s">5s</option>
-              <option value="8s">8s</option>
-            </select>
-          </div>
-        </div>
-        <button id="videoBtnTrain" class="btn btn-outline" onclick="trainVideoMotor()">
-          🔧 Ejecutar Entrenamiento
-        </button>
-        <div style="margin-top:16px;padding:14px;background:var(--bg3);border-radius:8px;font-size:0.8rem;color:var(--text2)">
-          <strong style="color:var(--accent2)">📐 Algoritmos del motor propio:</strong><br>
-          <strong>wave</strong> — Ondas sinusoidales superpuestas (sin X + cos Y + sin XY), paleta semántica del prompt<br>
-          <strong>particles</strong> — Campo de partículas con radio y alpha basados en distancia euclidiana<br>
-          <strong>zoom</strong> — Pulso radial con sin(t·2π), expansión de gradiente desde el centro<br>
-          <strong>flow</strong> — Flujo tipo lava: sin(X·1.5+t) × cos(Y+t) × sin(XY+t), colores continuos<br>
-          <strong>gradient</strong> — Gradiente rotacional: proyección sobre eje rotado por ángulo = t·2π
-        </div>
-      </div>
-    </section>
-
-  </main>
-</div>
-
-<script>
-const API = '';
-let TOKEN = localStorage.getItem('dev_token') || '';
-let currentUser = null;
-let currentPage = { memories: 1, knowledge: 1 };
-
-// ============ AUTH ============
-
-async function doLogin() {
-  const user = document.getElementById('loginUser').value.trim();
-  const pass = document.getElementById('loginPass').value;
-  showAlert('loginAlert', '', '');
-  if (!user || !pass) return showAlert('loginAlert', 'Completa todos los campos', 'err');
-
-  try {
-    const r = await api('/api/auth/login', 'POST', { username: user, password: pass }, false);
-    if (r.success) {
-      TOKEN = r.token;
-      currentUser = r.user;
-      localStorage.setItem('dev_token', TOKEN);
-      if (!r.user.is_developer) {
-        showAlert('loginAlert', 'Esta cuenta no tiene privilegios de desarrollador', 'err');
-        TOKEN = ''; localStorage.removeItem('dev_token');
-        return;
-      }
-      showPanel();
-    } else {
-      showAlert('loginAlert', r.error || 'Error de login', 'err');
-    }
-  } catch(e) {
-    showAlert('loginAlert', 'Error de conexión: ' + e.message, 'err');
-  }
-}
-
-async function doLogout() {
-  try { await api('/api/auth/logout', 'POST'); } catch {}
-  TOKEN = ''; localStorage.removeItem('dev_token');
-  location.reload();
-}
-
-function showSetup() {
-  document.getElementById('setupModal').style.display = 'flex';
-}
-function hideSetup() {
-  document.getElementById('setupModal').style.display = 'none';
-}
-
-async function doSetup() {
-  const user = document.getElementById('setupUser').value.trim();
-  const pass = document.getElementById('setupPass').value;
-  const key  = document.getElementById('setupKey').value.trim();
-  showAlert('setupAlert', '', '');
-
-  try {
-    const r = await api('/api/dev/setup', 'POST', { username: user, password: pass, setup_key: key }, false);
-    if (r.success) {
-      showAlert('setupAlert', '✅ ' + r.message, 'ok');
-      setTimeout(() => hideSetup(), 2000);
-    } else {
-      showAlert('setupAlert', r.error || 'Error', 'err');
-    }
-  } catch(e) {
-    showAlert('setupAlert', e.message, 'err');
-  }
-}
-
-// ============ LAYOUT ============
-
-function showPanel() {
-  document.getElementById('loginScreen').style.display = 'none';
-  document.getElementById('panel').style.display = 'flex';
-  document.getElementById('sidebarUser').textContent = currentUser?.username || '—';
-  loadDashboard();
-}
-
-function showSection(name) {
-  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
-  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-  document.getElementById('sec-' + name).classList.add('active');
-  event.currentTarget.classList.add('active');
-
-  // Lazy load
-  if (name === 'knowledge') loadKnowledge();
-  if (name === 'memories')  loadMemories();
-  if (name === 'config')    loadConfig();
-  if (name === 'users')     loadUsers();
-  if (name === 'learn')     loadLearningLog();
-  if (name === 'chat')      loadAPIRef();
-  if (name === 'video')     loadVideoMotors();
-}
-
-// ============ API HELPER ============
-
-async function api(path, method = 'GET', body = null, auth = true) {
-  const headers = { 'Content-Type': 'application/json' };
-  if (auth && TOKEN) headers['Authorization'] = 'Bearer ' + TOKEN;
-  const opts = { method, headers };
-  if (body) opts.body = JSON.stringify(body);
-  const r = await fetch(API + path, opts);
-  const data = await r.json();
-  if (!r.ok && data.error) throw new Error(data.error);
-  return data;
-}
-
-function showAlert(id, msg, type) {
-  const el = document.getElementById(id);
-  if (!el) return;
-  if (!msg) { el.innerHTML = ''; return; }
-  const cls = { ok: 'alert-ok', err: 'alert-err', warn: 'alert-warn', info: 'alert-info' }[type] || 'alert-info';
-  el.innerHTML = `<div class="alert ${cls}">${msg}</div>`;
-}
-
-// ============ DASHBOARD ============
-
-async function loadDashboard() {
-  try {
-    const d = await api('/api/dev/stats');
-    document.getElementById('d-memories').textContent = d.system.total_memories.toLocaleString();
-    document.getElementById('d-convs').textContent    = d.system.total_conversations.toLocaleString();
-    document.getElementById('d-kb').textContent       = d.system.manual_knowledge.toLocaleString();
-    document.getElementById('d-today').textContent    = d.today.conversations;
-
-    const hasKey = d.ai_config.has_anthropic || d.ai_config.has_openai;
-    document.getElementById('d-ai').innerHTML = `<span class="dot ${hasKey ? 'dot-green' : 'dot-red'}"></span>${d.ai_config.provider}`;
-    if (!hasKey) showAlert('dashAlert', '⚠️ No hay API Key configurada. La IA usará modo fallback. Configura ANTHROPIC_API_KEY o OPENAI_API_KEY como variable de entorno.', 'warn');
-
-    // Recent conversations
-    const rc = document.getElementById('recentConvs');
-    if (d.recent_conversations?.length) {
-      rc.innerHTML = d.recent_conversations.map(c => `
-        <div style="padding:12px 16px;border-bottom:1px solid #1e2340">
-          <div style="font-size:0.85rem;color:var(--text2)">👤 ${esc(c.user.substring(0,80))}</div>
-          <div style="font-size:0.85rem;margin-top:4px">🤖 ${esc(c.bot.substring(0,80))}</div>
-          <div style="font-size:0.75rem;color:var(--text2);margin-top:4px">${new Date(c.time).toLocaleString()} · ${c.tokens} tokens</div>
-        </div>
-      `).join('');
-    } else {
-      rc.innerHTML = '<div style="padding:20px;color:var(--text2);text-align:center;font-size:0.85rem">Sin conversaciones aún</div>';
-    }
-
-    // Week activity
-    const wa = document.getElementById('weekActivity');
-    if (d.week_activity?.length) {
-      wa.innerHTML = `<table style="width:100%"><thead><tr><th>Fecha</th><th>Mensajes</th><th>Aprendido</th></tr></thead><tbody>` +
-        d.week_activity.map(w => `<tr><td>${w.date}</td><td>${w.conversations}</td><td>${w.auto_learned}</td></tr>`).join('') +
-        '</tbody></table>';
-    }
-  } catch(e) {
-    showAlert('dashAlert', 'Error cargando stats: ' + e.message, 'err');
-  }
-}
-
-// ============ KNOWLEDGE ============
-
-let kbPage = 1;
-async function loadKnowledge(page = 1) {
-  kbPage = page;
-  try {
-    const d = await api(`/api/dev/knowledge?page=${page}`);
-    const priorityLabel = { 1: 'Normal', 2: '<span class="badge badge-yellow">Alta</span>', 3: '<span class="badge badge-red">Crítica</span>' };
-    document.getElementById('kbTable').innerHTML = d.knowledge.length ? d.knowledge.map(k => `
-      <tr>
-        <td><strong>${esc(k.title)}</strong></td>
-        <td><span class="badge badge-blue">${esc(k.category || '—')}</span></td>
-        <td>${priorityLabel[k.priority] || k.priority}</td>
-        <td style="color:var(--text2);font-size:0.82rem">${esc(k.content)}</td>
-        <td style="font-size:0.8rem;color:var(--text2)">${new Date(k.created).toLocaleDateString()}</td>
-        <td><div class="row-actions">
-          <button class="btn btn-red btn-sm" onclick="deleteKnowledge(${k.id})">🗑️</button>
-        </div></td>
-      </tr>
-    `).join('') : '<tr><td colspan="6" style="text-align:center;color:var(--text2);padding:24px">Sin conocimiento aún. ¡Agrega el primero!</td></tr>';
-
-    renderPagination('kbPagination', d.pages, kbPage, loadKnowledge);
-  } catch(e) {
-    document.getElementById('kbTable').innerHTML = `<tr><td colspan="6" style="color:var(--red)">${e.message}</td></tr>`;
-  }
-}
-
-async function addKnowledge() {
-  const title    = document.getElementById('kb-title').value.trim();
-  const content  = document.getElementById('kb-content').value.trim();
-  const category = document.getElementById('kb-category').value.trim();
-  const tags     = document.getElementById('kb-tags').value.split(',').map(t => t.trim()).filter(Boolean);
-  const priority = parseInt(document.getElementById('kb-priority').value);
-
-  if (!title || !content) return showAlert('kbAddAlert', 'Título y contenido son requeridos', 'err');
-
-  try {
-    showAlert('kbAddAlert', 'Guardando...', 'info');
-    const r = await api('/api/dev/knowledge', 'POST', { title, content, category, tags, priority });
-    showAlert('kbAddAlert', '✅ ' + r.message, 'ok');
-    ['kb-title','kb-content','kb-category','kb-tags'].forEach(id => document.getElementById(id).value = '');
-    loadKnowledge();
-  } catch(e) {
-    showAlert('kbAddAlert', '❌ ' + e.message, 'err');
-  }
-}
-
-async function deleteKnowledge(id) {
-  if (!confirm('¿Desactivar este conocimiento?')) return;
-  try {
-    await api(`/api/dev/knowledge/${id}`, 'DELETE');
-    loadKnowledge(kbPage);
-  } catch(e) { alert(e.message); }
-}
-
-// ============ LEARNING ============
-
-async function forceLearning() {
-  const topic   = document.getElementById('learn-topic').value.trim();
-  const content = document.getElementById('learn-content').value.trim();
-  if (!topic) return showAlert('learnAlert', 'El tema es requerido', 'err');
-
-  try {
-    showAlert('learnAlert', '⏳ Aprendiendo...', 'info');
-    const r = await api('/api/dev/learn', 'POST', { topic, content: content || undefined });
-    showAlert('learnAlert', `✅ Completado — ${r.web_learned} memorias web aprendidas${r.manual_saved ? ' + conocimiento manual guardado' : ''}`, 'ok');
-    loadLearningLog();
-  } catch(e) {
-    showAlert('learnAlert', '❌ ' + e.message, 'err');
-  }
-}
-
-async function bulkLearning() {
-  const text   = document.getElementById('bulk-topics').value.trim();
-  const topics = text.split('\n').map(t => t.trim()).filter(Boolean);
-  if (!topics.length) return showAlert('bulkAlert', 'Agrega al menos un tema', 'err');
-
-  try {
-    showAlert('bulkAlert', `⏳ Procesando ${topics.length} temas...`, 'info');
-    const items = topics.map(t => ({ topic: t }));
-    const r = await api('/api/dev/learn/bulk', 'POST', { items });
-    showAlert('bulkAlert', `✅ Procesados ${r.processed} temas — ${r.total_learned} memorias aprendidas`, 'ok');
-    loadLearningLog();
-  } catch(e) {
-    showAlert('bulkAlert', '❌ ' + e.message, 'err');
-  }
-}
-
-async function loadLearningLog() {
-  try {
-    const d = await api('/api/dev/stats');
-    const el = document.getElementById('learningLog');
-    if (d.week_activity?.length) {
-      el.innerHTML = d.week_activity.map(w =>
-        `<div style="display:flex;gap:16px;padding:8px 0;border-bottom:1px solid #1e2340">
-          <span style="width:100px">${w.date}</span>
-          <span><strong>${w.conversations}</strong> mensajes</span>
-          <span><strong style="color:var(--green)">${w.auto_learned}</strong> aprendidos</span>
-        </div>`
-      ).join('');
-    } else {
-      el.innerHTML = 'Sin actividad reciente';
-    }
-  } catch {}
-}
-
-// ============ MEMORIES ============
-
-let memPage = 1;
-async function loadMemories(page = 1) {
-  memPage = page;
-  const topic  = document.getElementById('mem-search').value.trim();
-  const source = document.getElementById('mem-source').value;
-  let url = `/api/dev/memories?page=${page}`;
-  if (topic)  url += `&topic=${encodeURIComponent(topic)}`;
-  if (source) url += `&source=${source}`;
-
-  try {
-    const d = await api(url);
-    document.getElementById('memTable').innerHTML = d.memories.length ? d.memories.map(m => `
-      <tr>
-        <td style="max-width:150px">${esc((m.topic || '—').substring(0,50))}</td>
-        <td><span class="badge ${m.source === 'manual_dev' ? 'badge-blue' : 'badge-green'}">${m.source}</span></td>
-        <td>${(m.score || 0).toFixed(2)}</td>
-        <td>${m.accesses}</td>
-        <td style="font-size:0.8rem;color:var(--text2)">${new Date(m.created).toLocaleDateString()}</td>
-        <td style="color:var(--text2);font-size:0.82rem;max-width:200px">${esc(m.content)}</td>
-        <td><button class="btn btn-red btn-sm" onclick="deleteMemory(${m.id})">🗑️</button></td>
-      </tr>
-    `).join('') : '<tr><td colspan="7" style="text-align:center;color:var(--text2);padding:24px">Sin memorias</td></tr>';
-    renderPagination('memPagination', d.pages, memPage, loadMemories);
-  } catch(e) {
-    document.getElementById('memTable').innerHTML = `<tr><td colspan="7" style="color:var(--red)">${e.message}</td></tr>`;
-  }
-}
-
-async function deleteMemory(id) {
-  if (!confirm('¿Eliminar esta memoria?')) return;
-  try {
-    await api(`/api/dev/memories/${id}`, 'DELETE');
-    loadMemories(memPage);
-  } catch(e) { alert(e.message); }
-}
-
-async function clearMemories() {
-  const source  = document.getElementById('mem-source').value;
-  const confirm_text = source ? `¿Limpiar memorias de fuente "${source}"?` : '¿Limpiar TODAS las memorias? Esta acción no se puede deshacer.';
-  if (!confirm(confirm_text)) return;
-  try {
-    const r = await api('/api/dev/memories/clear', 'POST', { source: source || undefined, confirm: 'CONFIRMAR' });
-    alert(`✅ Eliminadas ${r.deleted} memorias`);
-    loadMemories(1);
-  } catch(e) { alert(e.message); }
-}
-
-// ============ CONFIG ============
-
-async function loadConfig() {
-  try {
-    const d = await api('/api/dev/config');
-    const c = d.config;
-    const v = key => c[key]?.value || '';
-    document.getElementById('cfg-provider').value   = v('ai_provider');
-    document.getElementById('cfg-model').value      = v('ai_model');
-    document.getElementById('cfg-tokens').value     = v('max_tokens') || '1000';
-    document.getElementById('cfg-autolearn').value  = v('auto_learning_enabled') || 'true';
-    document.getElementById('cfg-interval').value   = v('auto_learning_interval_hours') || '2';
-    document.getElementById('cfg-websearch').value  = v('web_search_enabled') || 'true';
-    document.getElementById('cfg-prompt').value     = v('system_prompt');
-  } catch(e) {
-    showAlert('cfgAlert', 'Error: ' + e.message, 'err');
-  }
-}
-
-async function saveAIConfig() {
-  try {
-    await api('/api/dev/config', 'PUT', { updates: {
-      ai_provider: document.getElementById('cfg-provider').value,
-      ai_model:    document.getElementById('cfg-model').value,
-      max_tokens:  document.getElementById('cfg-tokens').value,
-    }});
-    showAlert('cfgAlert', '✅ Configuración de IA guardada', 'ok');
-  } catch(e) { showAlert('cfgAlert', '❌ ' + e.message, 'err'); }
-}
-
-async function saveLearningConfig() {
-  try {
-    await api('/api/dev/config', 'PUT', { updates: {
-      auto_learning_enabled:        document.getElementById('cfg-autolearn').value,
-      auto_learning_interval_hours: document.getElementById('cfg-interval').value,
-      web_search_enabled:           document.getElementById('cfg-websearch').value,
-    }});
-    showAlert('cfgAlert', '✅ Configuración de aprendizaje guardada', 'ok');
-  } catch(e) { showAlert('cfgAlert', '❌ ' + e.message, 'err'); }
-}
-
-async function savePrompt() {
-  const prompt = document.getElementById('cfg-prompt').value.trim();
-  if (!prompt) return showAlert('cfgAlert', 'El prompt no puede estar vacío', 'err');
-  try {
-    await api('/api/dev/config/prompt', 'PUT', { prompt });
-    showAlert('cfgAlert', '✅ System prompt actualizado', 'ok');
-  } catch(e) { showAlert('cfgAlert', '❌ ' + e.message, 'err'); }
-}
-
-function resetPrompt() {
-  document.getElementById('cfg-prompt').value = 'Eres Cic_IA, un asistente inteligente en español. Responde de forma clara, útil y amigable.';
-}
-
-// ============ TEST CHAT ============
-
-const chatHistory = [];
-
-async function sendTestMsg() {
-  const msg = document.getElementById('testMsg').value.trim();
-  if (!msg) return;
-  document.getElementById('testMsg').value = '';
-
-  const box = document.getElementById('testChat');
-  box.innerHTML += `<div class="msg user"><div class="bubble">${esc(msg)}</div></div>`;
-  box.innerHTML += `<div class="msg bot" id="lastBot"><div class="bubble" style="color:var(--text2)">⏳ Pensando...</div></div>`;
-  box.scrollTop = box.scrollHeight;
-
-  const customPrompt = document.getElementById('test-prompt').value.trim();
-  const mode = document.getElementById('test-mode').value;
-
-  try {
-    let payload = { message: msg };
-    if (customPrompt) payload.system_prompt = customPrompt;
-
-    // Usar endpoint de test si hay prompt personalizado, sino chat normal
-    let r;
-    if (customPrompt) {
-      r = await api('/api/dev/test-ai', 'POST', { message: msg, system_prompt: customPrompt });
-    } else {
-      r = await api('/api/chat', 'POST', { message: msg, mode, history: chatHistory });
-    }
-
-    chatHistory.push({ role: 'user', content: msg });
-    chatHistory.push({ role: 'assistant', content: r.response });
-    if (chatHistory.length > 20) chatHistory.splice(0, 2);
-
-    document.getElementById('lastBot').innerHTML =
-      `<div class="bubble">${esc(r.response).replace(/\n/g,'<br>')}</div>`;
-    document.getElementById('testInfo').textContent =
-      `Provider: ${r.provider || '—'} | Model: ${r.model || '—'} | Tokens: ${r.tokens_used ?? r.tokens ?? 0}`;
-  } catch(e) {
-    document.getElementById('lastBot').innerHTML =
-      `<div class="bubble" style="color:var(--red)">Error: ${esc(e.message)}</div>`;
-  }
-  box.scrollTop = box.scrollHeight;
-}
-
-function clearChat() {
-  chatHistory.length = 0;
-  document.getElementById('testChat').innerHTML = '<div style="text-align:center;color:var(--text2);font-size:0.85rem;padding:40px 0">Chat limpiado</div>';
-  document.getElementById('testInfo').textContent = '';
-}
-
-function loadAPIRef() {
-  document.getElementById('apiRef').textContent = `# Endpoints principales — requieren Authorization: Bearer <TOKEN>
-
-POST /api/chat              — Chat con la IA
-GET  /api/chat/history      — Historial del usuario
-GET  /api/user/stats        — Stats del usuario
-
-# Endpoints desarrollador — requieren cuenta dev
-
-GET  /api/dev/stats                    — Stats completas del sistema
-GET  /api/dev/knowledge                — Listar conocimiento manual
-POST /api/dev/knowledge                — Agregar conocimiento
-PUT  /api/dev/knowledge/:id            — Editar conocimiento
-DEL  /api/dev/knowledge/:id            — Desactivar conocimiento
-POST /api/dev/learn                    — Forzar aprendizaje (topic, content?)
-POST /api/dev/learn/bulk               — Aprendizaje masivo [{topic, content?}]
-GET  /api/dev/config                   — Ver configuración
-PUT  /api/dev/config                   — Actualizar config {updates: {key: val}}
-PUT  /api/dev/config/prompt            — Actualizar system prompt
-GET  /api/dev/memories                 — Listar memorias
-DEL  /api/dev/memories/:id             — Eliminar memoria
-POST /api/dev/memories/clear           — Limpiar memorias {source?, confirm: "CONFIRMAR"}
-POST /api/dev/test-ai                  — Test IA sin guardar {message, system_prompt?}
-GET  /api/dev/users                    — Listar usuarios
-POST /api/dev/users/:id/toggle-dev     — Dar/quitar rol dev`;
-}
-
-// ============ USERS ============
-
-async function loadUsers() {
-  try {
-    const d = await api('/api/dev/users');
-    document.getElementById('usersTable').innerHTML = d.users.map(u => `
-      <tr>
-        <td>${u.id}</td>
-        <td><strong>${esc(u.username)}</strong></td>
-        <td style="color:var(--text2);font-size:0.85rem">${esc(u.email)}</td>
-        <td>${u.is_developer ? '<span class="badge badge-red">Dev</span>' : '<span class="badge badge-green">Usuario</span>'}</td>
-        <td>${u.is_active ? '<span class="badge badge-green">Activo</span>' : '<span class="badge badge-red">Inactivo</span>'}</td>
-        <td>${u.conversations}</td>
-        <td style="font-size:0.8rem;color:var(--text2)">${new Date(u.created_at).toLocaleDateString()}</td>
-        <td>
-          <button class="btn btn-outline btn-sm" onclick="toggleDev(${u.id})" title="Cambiar rol dev">
-            ${u.is_developer ? '👤 Quitar dev' : '👨‍💻 Hacer dev'}
-          </button>
-        </td>
-      </tr>
-    `).join('');
-  } catch(e) {
-    document.getElementById('usersTable').innerHTML = `<tr><td colspan="8" style="color:var(--red)">Error: ${e.message}</td></tr>`;
-  }
-}
-
-async function toggleDev(id) {
-  try {
-    const r = await api(`/api/dev/users/${id}/toggle-dev`, 'POST');
-    loadUsers();
-  } catch(e) { alert(e.message); }
-}
-
-// ============ CICVIDEO ============
-
-async function loadVideoMotors() {
-  try {
-    const d = await api('/api/video/motors');
-    const motors = d.motors || {};
-    document.getElementById('videoMotorStatus').innerHTML = Object.entries(motors).map(([k, v]) => `
-      <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #1e2340">
-        <span class="dot ${v.available ? 'dot-green' : 'dot-red'}"></span>
-        <span style="font-weight:600;min-width:180px">${k}</span>
-        <span class="badge badge-blue">${v.type}</span>
-        <span style="color:var(--text2);font-size:0.82rem">${v.cost}</span>
-      </div>
-    `).join('');
-  } catch(e) {
-    document.getElementById('videoMotorStatus').innerHTML =
-      `<div style="color:var(--text2);font-size:0.85rem">No se pudo cargar info de motores: ${esc(e.message)}</div>`;
-  }
-}
-
-let videoRefBase64 = null;
-
-function videoHandleRef(input) {
-  const file = input.files[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = e => {
-    videoRefBase64 = e.target.result.split(',')[1];
-    document.getElementById('videoRefPreview').innerHTML =
-      `<img src="${e.target.result}" style="max-height:120px;border-radius:8px;margin-top:8px;border:1px solid #2d3561">
-       <div style="font-size:0.78rem;color:var(--green);margin-top:4px">✅ Imagen de referencia cargada</div>`;
-  };
-  reader.readAsDataURL(file);
-}
-
-async function generateVideo() {
-  const prompt     = document.getElementById('videoPrompt').value.trim();
-  const resolution = document.getElementById('videoResolution').value;
-  const duration   = document.getElementById('videoDuration').value;
-  const motor      = document.getElementById('videoMotor').value;
-  const effect     = document.getElementById('videoEffect').value;
-
-  if (!prompt) { showAlert('videoAlert', 'Escribe un prompt primero', 'warn'); return; }
-
-  const btn = document.getElementById('videoBtnGenerate');
-  btn.disabled = true;
-  btn.textContent = '⏳ Generando...';
-  document.getElementById('videoResult').innerHTML = '';
-  showAlert('videoAlert', '🎬 Generando video... esto puede tomar unos segundos.', 'info');
-
-  const t0 = Date.now();
-
-  try {
-    const body = { prompt, resolution, duration, motor, effect };
-    if (videoRefBase64) body.ref_image = videoRefBase64;
-
-    const d = await api('/api/video/generate', 'POST', body);
-
-    if (!d.success) {
-      showAlert('videoAlert', `❌ Error: ${d.error}`, 'err');
-      return;
-    }
-
-    const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
-    const mime = d.format === 'mp4' ? 'video/mp4' : (d.format === 'webp' ? 'image/webp' : 'image/gif');
-    const src  = `data:${mime};base64,${d.data}`;
-    const isVideo = d.format === 'mp4';
-
-    document.getElementById('videoResult').innerHTML = `
-      <div style="background:var(--bg3);border-radius:10px;padding:20px;border:1px solid #2d3561">
-        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
-          <span class="badge badge-green">✅ ${esc(d.motor)}</span>
-          <span class="badge badge-blue">${esc(d.resolution)}</span>
-          <span class="badge badge-blue">${esc(d.duration)}</span>
-          <span class="badge badge-blue">${d.frames} frames · ${d.fps}fps</span>
-          <span class="badge badge-blue">${esc(d.effect_used)}</span>
-          <span class="badge">${elapsed}s generación</span>
-        </div>
-        ${isVideo
-          ? `<video src="${src}" autoplay loop muted playsinline
-               style="max-width:100%;border-radius:8px;display:block;margin:0 auto"></video>`
-          : `<img src="${src}" style="max-width:100%;border-radius:8px;display:block;margin:0 auto"
-               alt="Video generado">`
-        }
-        <div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
-          <a href="${src}" download="cicvideo_${Date.now()}.${d.format}"
-             class="btn btn-primary btn-sm">⬇️ Descargar .${d.format}</a>
-          <span style="font-size:0.8rem;color:var(--text2)">Prompt: ${esc(d.prompt_original)}</span>
-        </div>
-        <div style="margin-top:16px">
-          <div style="font-size:0.85rem;color:var(--text2);margin-bottom:8px">¿Qué tal quedó el video? (feedback para entrenar CicVideo)</div>
+        <div class="panel">
+          <h3 style="margin-bottom:12px;font-size:.9rem">💬 Personalidad de la IA (System Prompt)</h3>
+          <div class="form-group"><textarea id="cfg-prompt" rows="5"></textarea></div>
           <div style="display:flex;gap:8px">
-            ${[1,2,3,4,5].map(n => `
-              <button class="btn btn-sm btn-outline" onclick="sendVideoFeedback(${n},'${esc(d.motor)}')">
-                ${'⭐'.repeat(n)}
-              </button>`).join('')}
+            <button class="btn btn-primary" onclick="savePrompt()">Guardar</button>
+            <button class="btn btn-outline" onclick="resetPrompt()">Restablecer</button>
+          </div>
+          <div id="cfgPromptAlert" style="margin-top:8px"></div>
+        </div>
+      </section>
+
+      <!-- TEST CHAT -->
+      <section id="sec-chat" class="section" style="padding:0;margin:-24px">
+        <div class="chat-layout">
+          <div class="chat-top">
+            <input type="text" id="test-prompt" placeholder="System prompt opcional..." style="flex:2;min-width:0"/>
+            <select id="test-mode" style="width:120px">
+              <option value="balanced">Balanceado</option>
+              <option value="fast">Rápido</option>
+              <option value="complete">Completo</option>
+            </select>
+            <button class="btn btn-outline btn-sm" onclick="newConv()">✏️ Nueva</button>
+            <button class="btn btn-sm" style="background:#2d3561;color:var(--text)" onclick="clearChat()">🗑️</button>
+          </div>
+          <div class="chat-messages" id="chatMessages">
+            <div class="chat-empty">Escribe un mensaje o carga del historial</div>
+          </div>
+          <div class="chat-input-wrap" style="flex-direction:column;gap:6px">
+            <div style="display:flex;gap:6px;flex-wrap:wrap">
+              <input type="text" id="githubUrl" placeholder="🔗 URL GitHub..." style="flex:1;min-width:0;font-size:.78rem"/>
+              <button class="btn btn-sm" style="background:#2d3561;color:var(--text)" onclick="readGitHub()">📂 Leer</button>
+              <label class="btn btn-sm" style="background:#2d3561;color:var(--text);cursor:pointer">
+                🖼️<input type="file" id="imgInput" accept="image/*" style="display:none" onchange="handleImgUpload(this)"/>
+              </label>
+              <button class="btn btn-sm" style="background:#2d3561;color:var(--text)" onclick="pasteImgClipboard()">📋</button>
+            </div>
+            <div id="imgPrevWrap" style="display:none;position:relative">
+              <img id="imgPrev" style="max-height:80px;border-radius:6px;border:1px solid #2d3561"/>
+              <button onclick="clearImg()" style="position:absolute;top:2px;right:2px;background:var(--red);color:#fff;border:none;border-radius:50%;width:20px;height:20px;cursor:pointer;font-size:.7rem">✕</button>
+            </div>
+            <textarea id="testMsg" placeholder="Escribe un mensaje... (Enter=enviar, Shift+Enter=nueva línea)" autocomplete="off" rows="1"
+              style="flex:1;min-height:42px;max-height:200px;resize:none;overflow-y:auto;line-height:1.5;font-family:inherit;"
+              onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendTestMsg();}"
+              oninput="autoGrow(this)" onpaste="handlePaste(event)"></textarea>
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <span id="charCount" style="font-size:.72rem;color:var(--text2)">0 / 100,000</span>
+              <div style="display:flex;gap:6px">
+                <button class="btn btn-outline btn-sm" onclick="clearInput()">✕ Limpiar</button>
+                <button class="btn btn-primary" onclick="sendTestMsg()">Enviar ↩</button>
+              </div>
+            </div>
+          </div>
+          <div id="testInfo" style="padding:4px 12px 6px;font-size:.73rem;color:var(--text2);background:var(--bg2)"></div>
+          <div style="border-top:1px solid #2d3561;background:var(--bg2)">
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 14px">
+              <span style="font-size:.78rem;color:var(--text2);font-weight:600">📜 Conversaciones recientes</span>
+              <button class="btn btn-sm btn-outline" onclick="openHistModal()" style="font-size:.72rem;padding:3px 8px">Ver todas</button>
+            </div>
+            <div id="recentChatList" style="display:flex;gap:8px;padding:0 10px 10px;overflow-x:auto">
+              <div style="color:var(--text2);font-size:.78rem;padding:8px">Cargando...</div>
+            </div>
           </div>
         </div>
+      </section>
+
+      <!-- Modal historial -->
+      <div id="histModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:200;align-items:flex-start;justify-content:center;padding:40px 16px;overflow-y:auto">
+        <div style="background:var(--bg2);border-radius:16px;width:100%;max-width:700px;border:1px solid #2d3561">
+          <div style="padding:16px 20px;border-bottom:1px solid #2d3561;display:flex;justify-content:space-between;align-items:center">
+            <h3 style="font-size:1rem">📜 Historial</h3>
+            <button class="btn btn-outline btn-sm" onclick="closeHistModal()">✕</button>
+          </div>
+          <div style="padding:12px 16px;border-bottom:1px solid #2d3561">
+            <input type="text" id="histModalQ" placeholder="Buscar..." oninput="filterHistModal(this.value)"/>
+          </div>
+          <div id="histModalList" style="max-height:60vh;overflow-y:auto"></div>
+        </div>
+      </div>
+
+      <!-- USUARIOS -->
+      <section id="sec-users" class="section">
+        <h2>👥 Usuarios</h2><p class="subtitle">Gestión de usuarios del sistema</p>
+        <div class="table-wrap">
+          <table><thead><tr><th>ID</th><th>Usuario</th><th>Rol</th><th>Estado</th><th>Msgs</th><th>Registro</th><th></th></tr></thead>
+          <tbody id="usersTable"><tr><td colspan="7" style="text-align:center;color:var(--text2);padding:16px">Cargando...</td></tr></tbody></table>
+        </div>
+      </section>
+
+      <!-- CREAR IMAGEN -->
+      <section id="sec-imggen" class="section">
+        <h2>🎨 Crear Imagen</h2>
+        <p class="subtitle">Motor propio Cic_IA · SVG · PIL · Fractal · Cascada automática</p>
+        <div id="imgAlert"></div>
+        <div class="grid2">
+          <div class="panel">
+            <div style="font-size:.75rem;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px">DESCRIBE LA IMAGEN</div>
+            <textarea id="imgPrompt" rows="4" placeholder="Ej: Ciudad cyberpunk bajo la lluvia, neon lights..." style="margin-bottom:10px"></textarea>
+            <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:12px">
+              <button class="btn btn-sm btn-outline" onclick="setImgP('Ciudad cyberpunk bajo la lluvia')">Ciudad cyberpunk</button>
+              <button class="btn btn-sm btn-outline" onclick="setImgP('Nebulosa galáctica en el espacio')">Nebulosa galáctica</button>
+              <button class="btn btn-sm btn-outline" onclick="setImgP('Bosque encantado al atardecer')">Bosque encantado</button>
+              <button class="btn btn-sm btn-outline" onclick="setImgP('Arte fractal abstracto colorido')">Arte fractal</button>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+              <div class="form-group" style="margin:0"><label>ESTILO</label>
+                <select id="imgStyle">
+                  <option value="fotorrealista">🌄 Fotorrealista</option>
+                  <option value="anime">🎌 Anime</option>
+                  <option value="digital_art">🎨 Arte Digital</option>
+                  <option value="oil_painting">🖼️ Óleo</option>
+                  <option value="watercolor">💧 Acuarela</option>
+                  <option value="pixel_art">👾 Pixel Art</option>
+                  <option value="sketch">✏️ Boceto</option>
+                  <option value="fractal">🌀 Fractal</option>
+                </select>
+              </div>
+              <div class="form-group" style="margin:0"><label>MOTOR</label>
+                <select id="imgMotor">
+                  <option value="auto">⚡ Auto</option>
+                  <option value="pollinations">🌸 Pollinations</option>
+                  <option value="svg">📐 SVG (propio)</option>
+                  <option value="pil">🐍 PIL (propio)</option>
+                  <option value="fractal">🌀 Fractal (propio)</option>
+                  <option value="cicdream">✨ CicDream</option>
+                </select>
+              </div>
+              <div class="form-group" style="margin:0"><label>FORMATO</label>
+                <select id="imgFormat">
+                  <option value="square">⬛ Cuadrado</option>
+                  <option value="landscape">🖼️ Horizontal</option>
+                  <option value="portrait">📱 Vertical</option>
+                  <option value="wide">📺 Ancho</option>
+                </select>
+              </div>
+              <div class="form-group" style="margin:0"><label>CALIDAD</label>
+                <select id="imgQuality"><option value="standard">Standard</option><option value="hd">HD</option></select>
+              </div>
+            </div>
+            <div style="display:flex;gap:8px">
+              <button class="btn btn-primary" onclick="generateImage()" id="imgBtn" style="flex:1;padding:11px">🎨 Generar imagen</button>
+              <button class="btn btn-outline btn-sm" onclick="clearImgResult()">Limpiar</button>
+            </div>
+            <div id="imgMotorStatus" style="margin-top:6px;font-size:.73rem;color:var(--text2)"></div>
+          </div>
+          <div class="panel" id="imgResultPanel">
+            <div style="text-align:center;padding:40px 0;color:var(--text2)">
+              <div style="font-size:3rem;margin-bottom:12px">🎨</div>
+              <div style="font-size:.88rem">Las imágenes aparecerán aquí</div>
+              <div style="font-size:.73rem;margin-top:8px">SVG · PIL · Fractal · Pollinations · CicDream</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- CREAR VIDEO (CicVideo) -->
+      <section id="sec-vidgen" class="section">
+        <h2>🎬 Crear Video — CicVideo</h2>
+        <p class="subtitle">Motor propio CicVideo · Cascada automática · Sin APIs de pago requeridas</p>
+        <div id="vidAlert"></div>
+        <div class="panel" style="margin-bottom:16px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+            <h3 style="font-size:.9rem">⚡ Estado de Motores</h3>
+            <button class="btn btn-outline btn-sm" onclick="loadVideoMotors()">🔄</button>
+          </div>
+          <div id="videoMotorStatus"><div style="color:var(--text2);font-size:.83rem">Cargando...</div></div>
+        </div>
+        <div class="grid2" style="margin-bottom:16px">
+          <div class="panel">
+            <h3 style="font-size:.9rem;margin-bottom:12px">🛠️ Configuración</h3>
+            <div class="form-group"><label>Prompt</label>
+              <textarea id="videoPrompt" rows="3" placeholder="Ej: Un atardecer sobre el océano con olas suaves..." style="resize:vertical"></textarea>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+              <div class="form-group"><label>Resolución</label>
+                <select id="videoResolution">
+                  <option value="480p">480p — Rápido</option>
+                  <option value="720p">720p — HD</option>
+                  <option value="1080p">1080p — Full HD</option>
+                </select>
+              </div>
+              <div class="form-group"><label>Duración</label>
+                <select id="videoDuration">
+                  <option value="3s">3s — Ultra rápido</option>
+                  <option value="5s" selected>5s — Estándar</option>
+                  <option value="8s">8s — Largo</option>
+                  <option value="15s">15s — Máximo</option>
+                </select>
+              </div>
+              <div class="form-group"><label>Motor</label>
+                <select id="videoMotor">
+                  <option value="auto">AUTO (cascada)</option>
+                  <option value="cicvideo_math">CicVideo Math</option>
+                  <option value="hf_zeroscope">HF ZeroScope</option>
+                  <option value="replicate">Replicate</option>
+                  <option value="pollinations">Pollinations</option>
+                </select>
+              </div>
+              <div class="form-group"><label>Efecto</label>
+                <select id="videoEffect">
+                  <option value="auto">AUTO</option>
+                  <option value="wave">Wave</option>
+                  <option value="particles">Particles</option>
+                  <option value="zoom">Zoom</option>
+                  <option value="flow">Flow</option>
+                  <option value="gradient">Gradient</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-group">
+              <label>Imagen de referencia (opcional)</label>
+              <input type="file" accept="image/*" onchange="videoHandleRef(this)" style="padding:7px;cursor:pointer">
+              <div id="videoRefPreview"></div>
+            </div>
+            <button id="videoBtnGenerate" class="btn btn-primary" onclick="generateVideo()" style="width:100%;padding:11px">🎬 Generar Video</button>
+          </div>
+          <div class="panel" id="videoResult">
+            <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:260px;color:var(--text2);gap:10px;border:2px dashed #2d3561;border-radius:8px">
+              <span style="font-size:3rem">🎬</span>
+              <span style="font-size:.88rem">El video aparecerá aquí</span>
+              <span style="font-size:.72rem;max-width:200px;text-align:center">GIF · WebP · MP4</span>
+            </div>
+          </div>
+        </div>
+        <div class="panel">
+          <h3 style="font-size:.9rem;margin-bottom:4px">🔬 Entrenar Motor Propio (CicVideoMath)</h3>
+          <p style="font-size:.78rem;color:var(--text2);margin-bottom:12px">Prueba el motor matemático sin APIs externas — siempre disponible.</p>
+          <div id="videoTrainAlert"></div>
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:10px">
+            <div class="form-group"><label>Prompt</label><input type="text" id="videoTrainPrompt" placeholder="prueba..."></div>
+            <div class="form-group"><label>Efecto</label>
+              <select id="videoTrainEffect"><option>gradient</option><option>wave</option><option>particles</option><option>zoom</option><option>flow</option></select>
+            </div>
+            <div class="form-group"><label>Resolución</label>
+              <select id="videoTrainRes"><option>480p</option><option>720p</option><option>1080p</option></select>
+            </div>
+            <div class="form-group"><label>Duración</label>
+              <select id="videoTrainDur"><option selected>3s</option><option>5s</option><option>8s</option></select>
+            </div>
+          </div>
+          <button id="videoBtnTrain" class="btn btn-outline btn-sm" onclick="trainVideoMotor()">🔧 Ejecutar Entrenamiento</button>
+          <div style="margin-top:10px;padding:10px;background:var(--bg3);border-radius:6px;font-size:.73rem;color:var(--text2)">
+            <strong style="color:var(--accent2)">📐 Algoritmos: </strong>
+            wave sin(X+t)+cos(Y+t) · particles campo euclidiano · zoom sin(t·2π) radial · flow sin·cos·sin multieje · gradient rotación t·2π
+          </div>
+        </div>
+      </section>
+
+      <!-- MÓDULOS PENDIENTES -->
+      <section id="sec-docsgen" class="section">
+        <h2>📄 Análisis de Documentos</h2><p class="subtitle">Lee, analiza y extrae información de PDFs, Word, Excel</p>
+        <div class="panel" style="text-align:center;padding:48px">
+          <div style="font-size:3rem;margin-bottom:16px">📄</div>
+          <h3 style="margin-bottom:8px">Módulo en integración</h3>
+          <p style="color:var(--text2);font-size:.85rem;max-width:400px;margin:0 auto">Sube PDFs, Word y Excel para obtener resúmenes, extracción de datos y análisis con IA.</p>
+          <span class="badge badge-purple" style="margin-top:16px;display:inline-block">🔧 DEV — Próximamente activo</span>
+        </div>
+      </section>
+      <section id="sec-tts" class="section">
+        <h2>🎙️ Voz / TTS</h2><p class="subtitle">Texto a voz con múltiples motores</p>
+        <div class="panel" style="text-align:center;padding:48px">
+          <div style="font-size:3rem;margin-bottom:16px">🎙️</div>
+          <h3 style="margin-bottom:8px">Módulo en integración</h3>
+          <p style="color:var(--text2);font-size:.85rem;max-width:400px;margin:0 auto">Convierte texto a voz con voces naturales, ajusta velocidad y exporta audio.</p>
+          <span class="badge badge-purple" style="margin-top:16px;display:inline-block">🔧 DEV — Próximamente activo</span>
+        </div>
+      </section>
+      <section id="sec-codeexec" class="section">
+        <h2>⚙️ Ejecutor de Código</h2><p class="subtitle">Sandbox seguro para Python, JS y más</p>
+        <div class="panel" style="text-align:center;padding:48px">
+          <div style="font-size:3rem;margin-bottom:16px">⚙️</div>
+          <h3 style="margin-bottom:8px">Módulo en integración</h3>
+          <p style="color:var(--text2);font-size:.85rem;max-width:400px;margin:0 auto">Ejecuta código en un sandbox seguro con outputs en tiempo real.</p>
+          <span class="badge badge-purple" style="margin-top:16px;display:inline-block">🔧 DEV — Próximamente activo</span>
+        </div>
+      </section>
+
+    </main>
+  </div>
+</div>
+<script>
+const API='';
+let TOKEN=localStorage.getItem('cic_token')||'';
+let currentUser=null;
+// Dev chat state
+const chatHistory=[];
+let allHistory=[];
+let cpCode='';let cpLang='';
+let devImgB64=null;let devImgMime='image/jpeg';
+// User chat state
+let uChatHistory=[];
+let uImgB64=null;
+// Video state
+let videoRefB64=null;
+
+/* ══════════════════ AUTH ══════════════════ */
+function switchTab(t){
+  document.getElementById('fLogin').style.display=t==='login'?'':'none';
+  document.getElementById('fReg').style.display=t==='reg'?'':'none';
+  document.getElementById('tabLogin').classList.toggle('active',t==='login');
+  document.getElementById('tabReg').classList.toggle('active',t==='reg');
+  showAlert('loginAlert','','');
+}
+
+function showApp(user){
+  document.getElementById('loginScreen').classList.remove('show');
+  if(user.is_developer){
+    document.getElementById('devApp').style.display='flex';
+    document.getElementById('hamburger').style.display='';
+    document.getElementById('sidebarUser').textContent=user.username+' · Dev ✓';
+    loadDashboard();
+  } else {
+    document.getElementById('userApp').classList.add('show');
+    document.getElementById('uGreet').textContent='Hola, '+user.username;
+  }
+}
+
+async function doLogin(){
+  const user=document.getElementById('lUser').value.trim();
+  const pass=document.getElementById('lPass').value;
+  showAlert('loginAlert','','');
+  if(!user||!pass)return showAlert('loginAlert','Completa todos los campos','err');
+  try{
+    const r=await req('/api/auth/login','POST',{username:user,password:pass},false);
+    if(r.success){
+      TOKEN=r.token;currentUser=r.user;localStorage.setItem('cic_token',TOKEN);
+      showApp(r.user);
+    }else showAlert('loginAlert',r.error||'Credenciales inválidas','err');
+  }catch(e){showAlert('loginAlert','Error: '+e.message,'err');}
+}
+
+async function doRegister(){
+  const user=document.getElementById('rUser').value.trim();
+  const email=document.getElementById('rEmail').value.trim();
+  const pass=document.getElementById('rPass').value;
+  showAlert('loginAlert','','');
+  if(!user||!pass)return showAlert('loginAlert','Usuario y contraseña requeridos','err');
+  try{
+    const r=await req('/api/auth/register','POST',{username:user,email,password:pass},false);
+    if(r.success){
+      TOKEN=r.token;currentUser=r.user;localStorage.setItem('cic_token',TOKEN);
+      showApp(r.user);
+    }else showAlert('loginAlert',r.error||'Error al registrar','err');
+  }catch(e){showAlert('loginAlert','Error: '+e.message,'err');}
+}
+
+async function doLogout(){
+  try{await req('/api/auth/logout','POST');}catch{}
+  TOKEN='';localStorage.removeItem('cic_token');location.reload();
+}
+function showSetup(){document.getElementById('setupModal').style.display='flex';}
+function hideSetup(){document.getElementById('setupModal').style.display='none';}
+async function doSetup(){
+  const user=document.getElementById('sUser').value.trim();
+  const pass=document.getElementById('sPass').value;
+  const key=document.getElementById('sKey').value.trim();
+  try{
+    const r=await req('/api/dev/setup','POST',{username:user,password:pass,setup_key:key},false);
+    if(r.success){showAlert('setupAlert','✅ '+r.message+' — inicia sesión ahora','ok');}
+    else showAlert('setupAlert',r.error||'Error','err');
+  }catch(e){showAlert('setupAlert',e.message,'err');}
+}
+
+/* AUTO-LOGIN */
+(async()=>{
+  if(!TOKEN)return;
+  try{
+    const r=await req('/api/auth/verify','GET');
+    if(r.success){TOKEN&&(currentUser=r.user);showApp(r.user);}
+  }catch{TOKEN='';localStorage.removeItem('cic_token');}
+})();
+
+/* ══════════════════ USER CHAT ══════════════════ */
+function uAutoGrow(el){
+  el.style.height='auto';el.style.height=Math.min(el.scrollHeight,180)+'px';
+  document.getElementById('uCharCount').textContent=el.value.length+' / 100,000';
+}
+async function uSend(){
+  const ta=document.getElementById('uMsg');
+  const msg=ta.value.trim();
+  if(!msg&&!uImgB64)return;
+  const mode=document.getElementById('uMode').value;
+  ta.value='';ta.style.height='44px';
+  document.getElementById('uCharCount').textContent='0 / 100,000';
+  const wrap=document.getElementById('uMessages');
+  // Remove welcome
+  const welcome=wrap.querySelector('[data-welcome]');if(welcome)welcome.remove();
+  // User bubble
+  const udiv=document.createElement('div');udiv.style.cssText='display:flex;flex-direction:column;align-items:flex-end;gap:6px';
+  if(uImgB64){const im=document.createElement('img');im.src='data:image/jpeg;base64,'+uImgB64;im.style.cssText='max-width:180px;border-radius:8px;border:1px solid #2d3561';udiv.appendChild(im);}
+  if(msg){const b=document.createElement('div');b.className='ubuser';b.textContent=msg;udiv.appendChild(b);}
+  wrap.appendChild(udiv);wrap.scrollTop=wrap.scrollHeight;
+  // Typing
+  const typing=document.createElement('div');typing.className='ubbot';
+  typing.innerHTML='<span style="color:var(--text2)">⏳ Pensando...</span>';
+  typing.style.alignSelf='flex-start';wrap.appendChild(typing);wrap.scrollTop=wrap.scrollHeight;
+  try{
+    let result;
+    if(uImgB64){
+      result=await req('/api/chat/analyze-image','POST',{image_b64:uImgB64,message:msg||'Describe esta imagen en español',mime_type:'image/jpeg'});
+    }else{
+      result=await req('/api/chat','POST',{message:msg,mode,history:uChatHistory});
+    }
+    typing.remove();
+    uChatHistory.push({role:'user',content:msg});
+    const resp=result.response||result.error||'Sin respuesta';
+    uChatHistory.push({role:'assistant',content:resp});
+    const bdiv=document.createElement('div');bdiv.className='ubbot';bdiv.style.alignSelf='flex-start';
+    bdiv.innerHTML=renderMsg(resp);
+    wrap.appendChild(bdiv);
+    bdiv.querySelectorAll('pre code').forEach(b=>{if(typeof hljs!=='undefined')hljs.highlightElement(b);});
+  }catch(e){
+    typing.remove();
+    const ediv=document.createElement('div');ediv.className='ubbot';ediv.style.cssText='align-self:flex-start;border-color:var(--red)';
+    ediv.textContent='⚠️ '+e.message;wrap.appendChild(ediv);
+  }
+  uClearImg();wrap.scrollTop=wrap.scrollHeight;
+}
+function uHandleImg(input){
+  const f=input.files[0];if(!f)return;
+  const r=new FileReader();r.onload=e=>{uImgB64=e.target.result.split(',')[1];uShowImgPrev(e.target.result);};r.readAsDataURL(f);
+}
+async function uPasteImg(){
+  try{
+    const items=await navigator.clipboard.read();
+    for(const item of items)for(const t of item.types)if(t.startsWith('image/')){
+      const blob=await item.getType(t);const r=new FileReader();
+      r.onload=e=>{uImgB64=e.target.result.split(',')[1];uShowImgPrev(e.target.result);};r.readAsDataURL(blob);return;
+    }
+  }catch{alert('No hay imagen en el portapapeles');}
+}
+function uHandlePaste(e){
+  const items=(e.clipboardData||e.originalEvent.clipboardData).items;
+  for(const item of items)if(item.type.startsWith('image/')){
+    e.preventDefault();const blob=item.getAsFile();const r=new FileReader();
+    r.onload=ev=>{uImgB64=ev.target.result.split(',')[1];uShowImgPrev(ev.target.result);};r.readAsDataURL(blob);return;
+  }
+}
+function uShowImgPrev(src){
+  document.getElementById('uImgThumb').src=src;
+  document.getElementById('uImgPrev').style.display='inline-block';
+}
+function uClearImg(){
+  uImgB64=null;
+  document.getElementById('uImgPrev').style.display='none';
+  document.getElementById('uImgFile').value='';
+}
+
+/* ══════════════════ DEV PANEL NAV ══════════════════ */
+function showSection(name,el){
+  document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  const sec=document.getElementById('sec-'+name);if(sec)sec.classList.add('active');
+  if(el)el.classList.add('active');
+  closeSidebar();
+  if(name==='dashboard')loadDashboard();
+  if(name==='knowledge')loadKnowledge(1);
+  if(name==='memories')loadMemories(1);
+  if(name==='config')loadConfig();
+  if(name==='users')loadUsers();
+  if(name==='learn')loadLearningLog();
+  if(name==='chat'){newConv();loadRecentChats();}
+  if(name==='vidgen')loadVideoMotors();
+}
+function toggleSidebar(){document.getElementById('sidebar').classList.toggle('mobile-open');document.getElementById('overlay').classList.toggle('show');}
+function closeSidebar(){document.getElementById('sidebar').classList.remove('mobile-open');document.getElementById('overlay').classList.remove('show');}
+
+/* ══════════════════ API HELPER ══════════════════ */
+async function req(path,method='GET',body=null,auth=true){
+  const headers={'Content-Type':'application/json'};
+  if(auth&&TOKEN)headers['Authorization']='Bearer '+TOKEN;
+  const opts={method,headers};if(body)opts.body=JSON.stringify(body);
+  const r=await fetch(API+path,opts);
+  if(r.status===204)return{};
+  const d=await r.json();
+  if(!r.ok&&d.error)throw new Error(d.error);
+  return d;
+}
+function showAlert(id,msg,type){
+  const el=document.getElementById(id);if(!el)return;
+  if(!msg){el.innerHTML='';return;}
+  const cls={ok:'alert-ok',err:'alert-err',warn:'alert-warn',info:'alert-info'}[type]||'alert-info';
+  el.innerHTML=`<div class="alert ${cls}">${msg}</div>`;
+}
+function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function renderPag(id,total,cur,fn){
+  const el=document.getElementById(id);if(!el||total<=1){if(el)el.innerHTML='';return;}
+  let h='';for(let i=1;i<=Math.min(total,10);i++)h+=`<button class="btn btn-sm ${i===cur?'btn-primary':'btn-outline'}" onclick="${fn.name}(${i})">${i}</button>`;
+  el.innerHTML=h;
+}
+
+/* ══════════════════ CODE PANEL ══════════════════ */
+function openCodePanel(code,lang,title){
+  cpCode=code;cpLang=lang;
+  document.getElementById('cpTitle').textContent=title||'Código';
+  document.getElementById('cpLang').textContent=lang;
+  const cEl=document.getElementById('cpCode');cEl.className='language-'+lang;cEl.textContent=code;
+  if(typeof hljs!=='undefined')hljs.highlightElement(cEl);
+  document.getElementById('cpPrev').style.display=lang==='html'?'':'none';
+  document.getElementById('codePanel').classList.add('open');
+}
+function closeCodePanel(){document.getElementById('codePanel').classList.remove('open');}
+function cpCopyFn(){navigator.clipboard.writeText(cpCode).then(()=>{const b=document.getElementById('cpCopy');b.textContent='✅ Copiado';setTimeout(()=>b.textContent='📋 Copiar',1500);});}
+function cpDownload(){
+  const ext={'python':'py','javascript':'js','html':'html','css':'css','json':'json','typescript':'ts'}[cpLang]||'txt';
+  const a=document.createElement('a');a.href='data:text/plain;charset=utf-8,'+encodeURIComponent(cpCode);a.download='codigo.'+ext;a.click();
+}
+function cpTogglePreview(){
+  const f=document.getElementById('cpFrame');const b=document.getElementById('cpBody');
+  const show=f.style.display==='none';f.style.display=show?'flex':'none';b.style.display=show?'none':'flex';
+  if(show)f.srcdoc=cpCode;
+}
+
+/* ══════════════════ DEV CHAT ══════════════════ */
+function newConv(){
+  chatHistory.length=0;
+  document.getElementById('chatMessages').innerHTML='<div class="chat-empty">Escribe un mensaje o carga del historial</div>';
+  document.getElementById('testInfo').textContent='';
+}
+function autoGrow(el){
+  el.style.height='auto';el.style.height=Math.min(el.scrollHeight,200)+'px';
+  const c=document.getElementById('charCount');
+  if(c){const n=el.value.length;c.textContent=`${n.toLocaleString()} / 100,000`;c.style.color=n>14000?'var(--red)':n>10000?'var(--yellow)':'var(--text2)';}
+}
+function clearInput(){const el=document.getElementById('testMsg');el.value='';el.style.height='42px';const c=document.getElementById('charCount');if(c)c.textContent='0 / 100,000';el.focus();}
+function clearChat(){newConv();}
+
+function renderMsg(text){
+  const re=/```(\w*)\n?([\s\S]*?)```/g;let result='';let last=0;let m;let cnt=0;
+  while((m=re.exec(text))!==null){
+    const before=text.slice(last,m.index);
+    if(before)result+=`<p style="white-space:pre-wrap;word-break:break-word">${esc(before)}</p>`;
+    const lang=m[1]||'plaintext';const code=m[2];const id='c'+Date.now()+'_'+(cnt++);
+    result+=`<div class="code-block"><div class="code-block-head"><span class="lang">${esc(lang)}</span><div class="actions"><button class="btn btn-sm" style="background:#2d3561;color:var(--text);font-size:.7rem;padding:3px 7px" onclick="navigator.clipboard.writeText(document.getElementById('${id}').textContent)">📋</button><button class="btn btn-sm btn-primary" style="font-size:.7rem;padding:3px 7px" onclick="openCodePanel(document.getElementById('${id}').textContent,'${esc(lang)}','Código')">⤢</button></div></div><pre><code id="${id}" class="language-${esc(lang)}">${esc(code)}</code></pre></div>`;
+    last=m.index+m[0].length;
+  }
+  const rem=text.slice(last);if(rem)result+=`<p style="white-space:pre-wrap;word-break:break-word">${esc(rem)}</p>`;
+  return result||`<p style="white-space:pre-wrap;word-break:break-word">${esc(text)}</p>`;
+}
+
+async function readGitHub(){
+  const url=document.getElementById('githubUrl').value.trim();if(!url)return;
+  try{
+    const r=await req('/api/chat/read-github','POST',{url});
+    if(r.success){const ta=document.getElementById('testMsg');ta.value=(ta.value?ta.value+'\n\n':'')+`\`\`\`${r.language}\n${r.content}\n\`\`\``;autoGrow(ta);}
+  }catch(e){alert('Error: '+e.message);}
+}
+
+function handleImgUpload(input){
+  const f=input.files[0];if(!f)return;
+  const r=new FileReader();r.onload=e=>setDevImg(e.target.result.split(',')[1],f.type,e.target.result);r.readAsDataURL(f);
+}
+function handlePaste(e){
+  const items=(e.clipboardData||e.originalEvent.clipboardData).items;
+  for(const item of items)if(item.type.startsWith('image/')){
+    e.preventDefault();const blob=item.getAsFile();const r=new FileReader();
+    r.onload=ev=>setDevImg(ev.target.result.split(',')[1],item.type,ev.target.result);r.readAsDataURL(blob);return;
+  }
+}
+async function pasteImgClipboard(){
+  try{
+    const items=await navigator.clipboard.read();
+    for(const item of items)for(const t of item.types)if(t.startsWith('image/')){
+      const blob=await item.getType(t);const r=new FileReader();
+      r.onload=e=>setDevImg(e.target.result.split(',')[1],t,e.target.result);r.readAsDataURL(blob);return;
+    }
+  }catch{alert('No hay imagen en el portapapeles o sin permiso.');}
+}
+function setDevImg(b64,mime,prev){
+  devImgB64=b64;devImgMime=mime;
+  document.getElementById('imgPrev').src=prev;
+  document.getElementById('imgPrevWrap').style.display='block';
+}
+function clearImg(){devImgB64=null;document.getElementById('imgPrevWrap').style.display='none';document.getElementById('imgInput').value='';}
+
+async function sendTestMsg(){
+  const ta=document.getElementById('testMsg');
+  const msg=ta.value.trim();if(!msg&&!devImgB64)return;
+  ta.value='';ta.style.height='42px';const c=document.getElementById('charCount');if(c)c.textContent='0 / 100,000';
+  const mode=document.getElementById('test-mode').value;
+  const msgs=document.getElementById('chatMessages');
+  msgs.querySelector('.chat-empty')&&msgs.querySelector('.chat-empty').remove();
+  const uw=document.createElement('div');uw.className='msg-wrap user';
+  if(devImgB64){const im=document.createElement('img');im.src=`data:${devImgMime};base64,${devImgB64}`;im.style.cssText='max-width:200px;border-radius:8px;border:1px solid #2d3561';uw.appendChild(im);}
+  if(msg){const b=document.createElement('div');b.className='bubble';b.textContent=msg;uw.appendChild(b);}
+  msgs.appendChild(uw);msgs.scrollTop=msgs.scrollHeight;
+  const bw=document.createElement('div');bw.className='msg-wrap bot';
+  const tb=document.createElement('div');tb.className='bubble';tb.innerHTML='<span style="color:var(--text2)">⏳ Pensando...</span>';
+  bw.appendChild(tb);msgs.appendChild(bw);msgs.scrollTop=msgs.scrollHeight;
+  const t0=Date.now();
+  try{
+    let result;
+    if(devImgB64){result=await req('/api/chat/analyze-image','POST',{image_b64:devImgB64,message:msg||'Describe esta imagen en español',mime_type:devImgMime});}
+    else{result=await req('/api/chat','POST',{message:msg,mode,history:chatHistory});}
+    chatHistory.push({role:'user',content:msg});
+    const resp=result.response||result.error||'Sin respuesta';
+    chatHistory.push({role:'assistant',content:resp});
+    tb.innerHTML=renderMsg(resp);
+    tb.querySelectorAll('pre code').forEach(b=>{if(typeof hljs!=='undefined')hljs.highlightElement(b);});
+    const meta=document.createElement('div');meta.className='msg-meta';
+    meta.textContent=`${result.provider||'?'} · ${result.tokens_used||0} tokens · ${((Date.now()-t0)/1000).toFixed(1)}s`;
+    bw.appendChild(meta);
+    document.getElementById('testInfo').textContent=`${result.provider||'?'} | ${result.model||'?'} | ${result.tokens_used||0} tokens | historial: ${chatHistory.length/2|0}`;
+  }catch(e){tb.innerHTML=`<span style="color:var(--red)">⚠️ ${esc(e.message)}</span>`;}
+  clearImg();devImgB64=null;msgs.scrollTop=msgs.scrollHeight;
+}
+
+/* HISTORIAL */
+async function loadRecentChats(){
+  try{
+    const r=await req('/api/chat/history?per_page=20');
+    allHistory=r.conversations||[];
+    const el=document.getElementById('recentChatList');
+    if(!allHistory.length){el.innerHTML='<div style="color:var(--text2);font-size:.78rem;padding:8px">Sin conversaciones</div>';return;}
+    el.innerHTML=allHistory.slice(0,12).map(c=>`
+      <div onclick="loadConvInChat('${esc(c.user_message.slice(0,200)).replace(/'/g,"\\'")}','${esc(c.bot_response.slice(0,500)).replace(/'/g,"\\'")}'')" 
+        style="cursor:pointer;background:var(--bg3);border:1px solid #2d3561;border-radius:8px;padding:8px 10px;min-width:170px;max-width:190px;flex-shrink:0">
+        <div style="font-size:.77rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(c.user_message.slice(0,45))}</div>
+        <div style="font-size:.66rem;color:var(--text2);margin-top:2px">${new Date(c.timestamp).toLocaleDateString()}</div>
+      </div>`).join('');
+  }catch{}
+}
+function loadConvInChat(userMsg,botResp){
+  closeHistModal();
+  const msgs=document.getElementById('chatMessages');
+  msgs.querySelector('.chat-empty')&&msgs.querySelector('.chat-empty').remove();
+  const uw=document.createElement('div');uw.className='msg-wrap user';
+  const ub=document.createElement('div');ub.className='bubble';ub.textContent=userMsg;uw.appendChild(ub);msgs.appendChild(uw);
+  const bw=document.createElement('div');bw.className='msg-wrap bot';
+  const bb=document.createElement('div');bb.className='bubble';bb.innerHTML=renderMsg(botResp);
+  bb.querySelectorAll('pre code').forEach(b=>{if(typeof hljs!=='undefined')hljs.highlightElement(b);});
+  bw.appendChild(bb);msgs.appendChild(bw);msgs.scrollTop=msgs.scrollHeight;
+}
+function openHistModal(){document.getElementById('histModal').style.display='flex';renderHistModal(allHistory);}
+function closeHistModal(){document.getElementById('histModal').style.display='none';}
+function filterHistModal(q){renderHistModal(allHistory.filter(c=>c.user_message.toLowerCase().includes(q.toLowerCase())));}
+function renderHistModal(items){
+  const el=document.getElementById('histModalList');
+  if(!items.length){el.innerHTML='<div style="padding:20px;text-align:center;color:var(--text2)">Sin resultados</div>';return;}
+  el.innerHTML=items.map(c=>`
+    <div onclick="loadConvInChat('${esc(c.user_message.slice(0,200)).replace(/'/g,"\\'")}','${esc(c.bot_response.slice(0,500)).replace(/'/g,"\\'")}'')"
+      style="padding:12px 16px;border-bottom:1px solid #1e2340;cursor:pointer" onmouseover="this.style.background='rgba(108,99,255,.06)'" onmouseout="this.style.background=''">
+      <div style="font-size:.82rem;font-weight:600;margin-bottom:3px">${esc(c.user_message.slice(0,80))}</div>
+      <div style="font-size:.75rem;color:var(--text2)">${esc(c.bot_response.slice(0,80))}...</div>
+      <div style="font-size:.68rem;color:var(--text2);margin-top:3px">${new Date(c.timestamp).toLocaleString()}</div>
+    </div>`).join('');
+}
+function closeHistory(){document.getElementById('historyPanel').classList.remove('open');}
+function filterHistory(q){
+  document.getElementById('histList').innerHTML=allHistory.filter(c=>c.user_message.toLowerCase().includes(q.toLowerCase())).map(c=>`
+    <div class="history-item" onclick="loadConvInChat('${esc(c.user_message.slice(0,200)).replace(/'/g,"\\'")}','${esc(c.bot_response.slice(0,500)).replace(/'/g,"\\'")}''")">
+      <div class="hi-msg">${esc(c.user_message.slice(0,60))}</div>
+      <div class="hi-meta">${new Date(c.timestamp).toLocaleString()}</div>
+    </div>`).join('');
+}
+
+/* ══════════════════ DASHBOARD ══════════════════ */
+async function loadDashboard(){
+  try{
+    const d=await req('/api/dev/stats');
+    document.getElementById('d-mem').textContent=(d.system?.total_memories||0).toLocaleString();
+    document.getElementById('d-conv').textContent=(d.system?.total_conversations||0).toLocaleString();
+    document.getElementById('d-kb').textContent=(d.system?.manual_knowledge||0).toLocaleString();
+    document.getElementById('d-today').textContent=d.today?.conversations||0;
+    const prov=d.ai_config?.provider||'—';
+    const ok=d.ai_config?.has_groq||d.ai_config?.has_anthropic||d.ai_config?.has_openai;
+    document.getElementById('d-ai').innerHTML=`<span class="dot ${ok?'dot-green':'dot-red'}"></span><span style="font-size:1rem">${prov}</span>`;
+    if(!ok)showAlert('dashAlert','⚠️ No hay API Key de IA configurada. La IA usará modo fallback. Configura GROQ_API_KEY o ANTHROPIC_API_KEY como variable de entorno.','warn');
+    const rc=document.getElementById('recentConvs');
+    if(d.recent_conversations?.length){
+      rc.innerHTML=d.recent_conversations.map(c=>`<div style="padding:8px 0;border-bottom:1px solid #1e2340">
+        <div style="font-size:.8rem;color:var(--text2)">👤 ${esc(c.user.substring(0,60))}</div>
+        <div style="font-size:.8rem;margin-top:2px">🤖 ${esc(c.bot.substring(0,60))}</div>
+        <div style="font-size:.7rem;color:var(--text2);margin-top:2px">${new Date(c.time).toLocaleString()}</div>
+      </div>`).join('');
+    }else rc.innerHTML='<div style="color:var(--text2);font-size:.83rem">Sin conversaciones aún</div>';
+    const wa=document.getElementById('weekActivity');
+    if(d.week_activity?.length){
+      wa.innerHTML='<table style="width:100%"><thead><tr><th>Fecha</th><th>Msgs</th><th>Aprendido</th></tr></thead><tbody>'+
+        d.week_activity.map(w=>`<tr><td style="font-size:.8rem">${w.date}</td><td>${w.conversations}</td><td>${w.auto_learned}</td></tr>`).join('')+'</tbody></table>';
+    }else wa.innerHTML='<div style="color:var(--text2);font-size:.83rem">Sin actividad</div>';
+    const mb=document.getElementById('memBadge');if(mb)mb.textContent=d.system?.total_memories||'';
+  }catch(e){showAlert('dashAlert','Error: '+e.message,'err');}
+}
+
+/* ══════════════════ CONOCIMIENTO ══════════════════ */
+let kbPage=1;const kbCats=new Set();
+async function loadKnowledge(page=1){
+  kbPage=page;
+  const text=document.getElementById('kb-filter-text')?.value.trim()||'';
+  const cat=document.getElementById('kb-filter-cat')?.value||'';
+  let url=`/api/dev/knowledge?page=${page}`;if(cat)url+=`&category=${encodeURIComponent(cat)}`;
+  try{
+    const d=await req(url);
+    let items=d.knowledge||[];
+    if(text)items=items.filter(k=>k.title.toLowerCase().includes(text.toLowerCase())||k.content.toLowerCase().includes(text.toLowerCase()));
+    const pl={1:'<span class="badge badge-blue">Normal</span>',2:'<span class="badge badge-yellow">Alta</span>',3:'<span class="badge badge-red">Crítica</span>'};
+    document.getElementById('kbTable').innerHTML=items.length?items.map(k=>`<tr>
+      <td><strong style="font-size:.83rem">${esc(k.title)}</strong></td>
+      <td><span class="badge badge-purple">${esc(k.category||'—')}</span></td>
+      <td>${pl[k.priority]||k.priority}</td>
+      <td style="color:var(--text2);font-size:.78rem;max-width:200px">${esc(k.content)}</td>
+      <td style="font-size:.75rem;color:var(--text2)">${new Date(k.created).toLocaleDateString()}</td>
+      <td><button class="btn btn-red btn-sm" onclick="deleteKnowledge(${k.id})">🗑️</button></td>
+    </tr>`).join(''):'<tr><td colspan="6" style="text-align:center;color:var(--text2);padding:16px">Sin resultados</td></tr>';
+    renderPag('kbPag',d.pages,kbPage,loadKnowledge);
+    items.forEach(k=>{if(k.category)kbCats.add(k.category);});
+    const cs=document.getElementById('kb-filter-cat');const cc=cs.value;
+    cs.innerHTML='<option value="">Todas las categorías</option>'+[...kbCats].map(c=>`<option value="${esc(c)}" ${c===cc?'selected':''}>${esc(c)}</option>`).join('');
+  }catch(e){document.getElementById('kbTable').innerHTML=`<tr><td colspan="6" style="color:var(--red)">${e.message}</td></tr>`;}
+}
+async function addKnowledge(){
+  const title=document.getElementById('kb-title').value.trim();
+  const content=document.getElementById('kb-content').value.trim();
+  const category=document.getElementById('kb-category').value.trim();
+  const tags=document.getElementById('kb-tags').value.split(',').map(t=>t.trim()).filter(Boolean);
+  const priority=parseInt(document.getElementById('kb-priority').value);
+  if(!title||!content)return showAlert('kbAddAlert','Título y contenido requeridos','err');
+  try{
+    showAlert('kbAddAlert','Guardando...','info');
+    const r=await req('/api/dev/knowledge','POST',{title,content,category,tags,priority});
+    showAlert('kbAddAlert','✅ '+r.message,'ok');
+    ['kb-title','kb-content','kb-category','kb-tags'].forEach(id=>document.getElementById(id).value='');
+    if(category)kbCats.add(category);loadKnowledge(kbPage);
+  }catch(e){showAlert('kbAddAlert','❌ '+e.message,'err');}
+}
+async function deleteKnowledge(id){
+  if(!confirm('¿Desactivar?'))return;
+  try{await req(`/api/dev/knowledge/${id}`,'DELETE');loadKnowledge(kbPage);}catch(e){alert(e.message);}
+}
+
+/* ══════════════════ APRENDIZAJE ══════════════════ */
+async function forceLearning(){
+  const topic=document.getElementById('learn-topic').value.trim();
+  const content=document.getElementById('learn-content').value.trim();
+  if(!topic)return showAlert('learnAlert','El tema es requerido','err');
+  try{
+    showAlert('learnAlert','⏳ Aprendiendo...','info');
+    const r=await req('/api/dev/learn','POST',{topic,content:content||undefined});
+    showAlert('learnAlert',`✅ ${r.web_learned} memorias aprendidas${r.manual_saved?' + guardado':''}`, 'ok');
+    loadLearningLog();
+  }catch(e){showAlert('learnAlert','❌ '+e.message,'err');}
+}
+async function bulkLearning(){
+  const topics=document.getElementById('bulk-topics').value.split('\n').map(t=>t.trim()).filter(Boolean);
+  if(!topics.length)return showAlert('bulkAlert','Agrega al menos un tema','err');
+  try{
+    showAlert('bulkAlert',`⏳ Procesando ${topics.length} temas...`,'info');
+    const r=await req('/api/dev/learn/bulk','POST',{items:topics.map(t=>({topic:t}))});
+    showAlert('bulkAlert',`✅ ${r.processed} temas · ${r.total_learned} memorias`,'ok');
+    loadLearningLog();
+  }catch(e){showAlert('bulkAlert','❌ '+e.message,'err');}
+}
+async function loadLearningLog(){
+  const el=document.getElementById('learningLog');if(!el)return;
+  try{
+    const d=await req('/api/dev/stats');
+    if(d.week_activity?.length){
+      el.innerHTML=d.week_activity.map(w=>`<div style="display:flex;gap:16px;padding:7px 0;border-bottom:1px solid #1e2340;font-size:.83rem">
+        <span style="width:100px;color:var(--text2)">${w.date}</span>
+        <span><strong>${w.conversations}</strong> msgs</span>
+        <span><strong style="color:var(--green)">${w.auto_learned}</strong> aprendidos</span>
+      </div>`).join('');
+    }else el.innerHTML='<div style="color:var(--text2);font-size:.83rem">Sin actividad</div>';
+  }catch(e){el.innerHTML=`<div style="color:var(--red);font-size:.83rem">Error: ${e.message}</div>`;}
+}
+
+/* ══════════════════ MEMORIAS ══════════════════ */
+let memPage=1;
+async function loadMemories(page=1){
+  memPage=page;
+  const topic=document.getElementById('mem-search').value.trim();
+  const source=document.getElementById('mem-source').value;
+  const sort=document.getElementById('mem-sort')?.value||'recent';
+  const df=document.getElementById('mem-date-from').value;
+  const dt=document.getElementById('mem-date-to').value;
+  let url=`/api/dev/memories?page=${page}&per_page=20&sort=${sort}`;
+  if(topic)url+=`&topic=${encodeURIComponent(topic)}`;if(source)url+=`&source=${source}`;
+  try{
+    const d=await req(url);
+    let items=d.memories||[];
+    if(df)items=items.filter(m=>new Date(m.created)>=new Date(df));
+    if(dt)items=items.filter(m=>new Date(m.created)<=new Date(dt+'T23:59:59'));
+    document.getElementById('memCount').textContent=`${d.total} memorias totales`;
+    const mb=document.getElementById('memBadge');if(mb)mb.textContent=d.total||'';
+    document.getElementById('memTable').innerHTML=items.length?items.map(m=>`<tr>
+      <td style="max-width:140px;font-size:.8rem">${esc((m.topic||'—').substring(0,45))}</td>
+      <td><span class="badge ${m.source==='manual_dev'?'badge-blue':m.source==='auto_learning'?'badge-green':'badge-yellow'}">${m.source}</span></td>
+      <td>${(m.score||0).toFixed(2)}</td><td>${m.accesses}</td>
+      <td style="font-size:.75rem;color:var(--text2)">${new Date(m.created).toLocaleDateString()}</td>
+      <td style="color:var(--text2);font-size:.78rem;max-width:180px">${esc(m.content)}</td>
+      <td><button class="btn btn-red btn-sm" onclick="deleteMemory(${m.id})">🗑️</button></td>
+    </tr>`).join(''):'<tr><td colspan="7" style="text-align:center;color:var(--text2);padding:16px">Sin memorias</td></tr>';
+    renderPag('memPag',d.pages,memPage,loadMemories);
+  }catch(e){document.getElementById('memTable').innerHTML=`<tr><td colspan="7" style="color:var(--red)">${e.message}</td></tr>`;}
+}
+async function deleteMemory(id){
+  if(!confirm('¿Eliminar?'))return;
+  try{await req(`/api/dev/memories/${id}`,'DELETE');loadMemories(memPage);}catch(e){alert(e.message);}
+}
+function clearMemoriesPrompt(){
+  const source=document.getElementById('mem-source').value;
+  if(!confirm(source?`¿Limpiar memorias de "${source}"?`:'¿Limpiar TODAS las memorias?'))return;
+  req('/api/dev/memories/clear','POST',{source:source||undefined,confirm:'CONFIRMAR'})
+    .then(r=>{alert(`✅ ${r.deleted} memorias eliminadas`);loadMemories(1);})
+    .catch(e=>alert(e.message));
+}
+
+/* ══════════════════ CONFIGURACIÓN ══════════════════ */
+async function loadConfig(){
+  try{
+    const d=await req('/api/dev/config');const c=d.config;const v=k=>c[k]?.value||'';
+    const prov=v('ai_provider')||'groq';const sel=document.getElementById('cfg-provider');
+    if([...sel.options].some(o=>o.value===prov))sel.value=prov;else sel.value='groq';
+    document.getElementById('cfg-model').value=v('ai_model')||'llama-3.1-8b-instant';
+    document.getElementById('cfg-tokens').value=v('max_tokens')||'1000';
+    document.getElementById('cfg-autolearn').value=v('auto_learning_enabled')||'true';
+    document.getElementById('cfg-interval').value=v('auto_learning_interval_hours')||'1';
+    document.getElementById('cfg-websearch').value=v('web_search_enabled')||'true';
+    document.getElementById('cfg-prompt').value=v('system_prompt')||'Eres Cic_IA, un asistente inteligente en español.';
+  }catch(e){showAlert('cfgAIAlert','Error: '+e.message,'err');}
+}
+async function saveAIConfig(){
+  try{
+    await req('/api/dev/config','PUT',{updates:{ai_provider:document.getElementById('cfg-provider').value,ai_model:document.getElementById('cfg-model').value,max_tokens:document.getElementById('cfg-tokens').value}});
+    showAlert('cfgAIAlert','✅ Guardado','ok');
+  }catch(e){showAlert('cfgAIAlert','❌ '+e.message,'err');}
+}
+async function saveLearningConfig(){
+  try{
+    await req('/api/dev/config','PUT',{updates:{auto_learning_enabled:document.getElementById('cfg-autolearn').value,auto_learning_interval_hours:document.getElementById('cfg-interval').value,web_search_enabled:document.getElementById('cfg-websearch').value}});
+    showAlert('cfgLearnAlert','✅ Guardado','ok');
+  }catch(e){showAlert('cfgLearnAlert','❌ '+e.message,'err');}
+}
+async function savePrompt(){
+  const prompt=document.getElementById('cfg-prompt').value.trim();
+  if(!prompt)return showAlert('cfgPromptAlert','No puede estar vacío','err');
+  try{await req('/api/dev/config/prompt','PUT',{prompt});showAlert('cfgPromptAlert','✅ Prompt actualizado','ok');}
+  catch(e){showAlert('cfgPromptAlert','❌ '+e.message,'err');}
+}
+function resetPrompt(){document.getElementById('cfg-prompt').value='Eres Cic_IA, un asistente inteligente en español. Responde de forma clara, útil y amigable.';}
+
+/* ══════════════════ USUARIOS ══════════════════ */
+async function loadUsers(){
+  try{
+    const d=await req('/api/dev/users');
+    document.getElementById('usersTable').innerHTML=d.users.map(u=>`<tr>
+      <td>${u.id}</td>
+      <td><strong style="font-size:.83rem">${esc(u.username)}</strong></td>
+      <td>${u.is_developer?'<span class="badge badge-red">Dev</span>':'<span class="badge badge-green">Usuario</span>'}</td>
+      <td>${u.is_active?'<span class="badge badge-green">Activo</span>':'<span class="badge badge-red">Inactivo</span>'}</td>
+      <td>${u.conversations}</td>
+      <td style="font-size:.75rem;color:var(--text2)">${new Date(u.created_at).toLocaleDateString()}</td>
+      <td><button class="btn btn-outline btn-sm" onclick="toggleDev(${u.id})">${u.is_developer?'Quitar dev':'Hacer dev'}</button></td>
+    </tr>`).join('');
+  }catch(e){document.getElementById('usersTable').innerHTML=`<tr><td colspan="7" style="color:var(--red)">Error: ${e.message}</td></tr>`;}
+}
+async function toggleDev(id){try{await req(`/api/dev/users/${id}/toggle-dev`,'POST');loadUsers();}catch(e){alert(e.message);}}
+
+/* ══════════════════ CREAR IMAGEN ══════════════════ */
+function setImgP(p){document.getElementById('imgPrompt').value=p;}
+function clearImgResult(){document.getElementById('imgResultPanel').innerHTML='<div style="text-align:center;padding:40px 0;color:var(--text2)"><div style="font-size:3rem">🎨</div><div style="margin-top:12px;font-size:.88rem">Las imágenes aparecerán aquí</div></div>';}
+
+async function generateImage(){
+  const prompt=document.getElementById('imgPrompt').value.trim();
+  if(!prompt)return showAlert('imgAlert','Describe la imagen primero','err');
+  const btn=document.getElementById('imgBtn');btn.disabled=true;btn.textContent='⏳ Generando...';
+  showAlert('imgAlert','🎨 Generando...','info');
+  const t0=Date.now();
+  try{
+    const style=document.getElementById('imgStyle').value;
+    const format=document.getElementById('imgFormat').value;
+    const quality=document.getElementById('imgQuality').value;
+    const motor=document.getElementById('imgMotor').value;
+    const ep=`${prompt}, style:${style}${quality==='hd'?', high quality, 8k':''}`;
+    let src='';let used='';let fmt='';
+
+    if(motor==='auto'||motor==='pollinations'){
+      try{
+        const dims={square:'512x512',landscape:'768x432',portrait:'432x768',wide:'960x400'}[format]||'512x512';
+        const [w,h]=dims.split('x');
+        const url=`https://image.pollinations.ai/prompt/${encodeURIComponent(ep)}?width=${w}&height=${h}&seed=${Date.now()%10000}&nologo=true`;
+        const r=await fetch(url);
+        if(r.ok){const blob=await r.blob();const b64=await new Promise(res=>{const fr=new FileReader();fr.onload=e=>res(e.target.result);fr.readAsDataURL(blob);});src=b64;used='pollinations';fmt='jpg';}
+      }catch{}
+    }
+
+    if(!src){
+      // SVG motor propio
+      const pal={fotorrealista:['#4080c0','#60a060','#c08030'],anime:['#ff6eb4','#a0c0ff','#fff070'],fractal:['#6c63ff','#48dbfb','#ff6b6b'],digital_art:['#1dd1a1','#ffd93d','#6c63ff'],default:['#6c63ff','#48dbfb','#1dd1a1']}[style]||['#6c63ff','#48dbfb','#1dd1a1'];
+      const dims={square:[512,512],landscape:[768,432],portrait:[432,768],wide:[960,400]}[format]||[512,512];
+      const [w,h]=dims;const words=prompt.split(' ').slice(0,4);
+      const svgStr=`<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"><defs><linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" style="stop-color:${pal[0]}"/><stop offset="50%" style="stop-color:${pal[1]}"/><stop offset="100%" style="stop-color:${pal[2]}"/></linearGradient></defs><rect width="${w}" height="${h}" fill="url(#g)"/><circle cx="${w*.7}" cy="${h*.3}" r="${Math.min(w,h)*.22}" fill="${pal[0]}" opacity="0.28"/><circle cx="${w*.25}" cy="${h*.72}" r="${Math.min(w,h)*.18}" fill="${pal[2]}" opacity="0.22"/><text x="${w/2}" y="${h/2-8}" text-anchor="middle" fill="white" font-family="system-ui" font-size="${Math.min(w,h)*.042}" font-weight="bold" opacity="0.88">${esc(words[0]||'')}</text><text x="${w/2}" y="${h/2+28}" text-anchor="middle" fill="white" font-family="system-ui" font-size="${Math.min(w,h)*.03}" opacity="0.7">${esc(words.slice(1).join(' '))}</text><text x="${w/2}" y="${h-18}" text-anchor="middle" fill="white" font-family="system-ui" font-size="${Math.min(w,h)*.022}" opacity="0.45">Cic_IA · Motor propio</text></svg>`;
+      src='data:image/svg+xml;base64,'+btoa(svgStr);used='svg_propio';fmt='svg';
+    }
+
+    const elapsed=((Date.now()-t0)/1000).toFixed(1);
+    document.getElementById('imgResultPanel').innerHTML=`
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">
+        <span class="badge badge-green">✅ ${esc(used)}</span>
+        <span class="badge badge-blue">${esc(format)}</span>
+        <span class="badge badge-blue">${esc(style)}</span>
+        <span class="badge">${elapsed}s</span>
+      </div>
+      <img src="${src}" style="max-width:100%;border-radius:8px;display:block" alt="imagen"/>
+      <div style="margin-top:10px;display:flex;gap:8px;align-items:center">
+        <a href="${src}" download="cic_img_${Date.now()}.${fmt}" class="btn btn-primary btn-sm">⬇️ Descargar</a>
+        <span style="font-size:.73rem;color:var(--text2)">${esc(prompt.slice(0,60))}</span>
       </div>`;
-
-    showAlert('videoAlert', `✅ Video generado en ${elapsed}s con motor <strong>${esc(d.motor)}</strong>`, 'ok');
-
-  } catch(e) {
-    showAlert('videoAlert', `❌ Error: ${e.message}`, 'err');
-  } finally {
-    btn.disabled = false;
-    btn.textContent = '🎬 Generar Video';
-  }
+    showAlert('imgAlert',`✅ ${used} · ${elapsed}s`,'ok');
+    document.getElementById('imgMotorStatus').textContent=`✓ Motor: ${used} · ${elapsed}s`;
+  }catch(e){showAlert('imgAlert','❌ '+e.message,'err');}
+  finally{btn.disabled=false;btn.textContent='🎨 Generar imagen';}
 }
 
-async function trainVideoMotor() {
-  const prompt     = document.getElementById('videoTrainPrompt').value.trim() || 'prueba de entrenamiento CicVideo';
-  const effect     = document.getElementById('videoTrainEffect').value;
-  const resolution = document.getElementById('videoTrainRes').value;
-  const duration   = document.getElementById('videoTrainDur').value;
-
-  const btn = document.getElementById('videoBtnTrain');
-  btn.disabled = true;
-  btn.textContent = '⏳ Entrenando...';
-  showAlert('videoTrainAlert', '🔧 Ejecutando entrenamiento del motor matemático...', 'info');
-
-  try {
-    const d = await api('/api/video/train', 'POST', { prompt, effect, resolution, duration });
-    const icon = d.success ? '✅' : '❌';
-    const msg = d.success
-      ? `${icon} Entrenamiento OK · motor: ${esc(d.motor)} · efecto: ${esc(d.effect_used)} · ${d.frames} frames · ${d.generation_time}s · formato: ${esc(d.format)}`
-      : `${icon} Error: ${esc(d.error || 'desconocido')}`;
-    showAlert('videoTrainAlert', msg, d.success ? 'ok' : 'err');
-  } catch(e) {
-    showAlert('videoTrainAlert', `❌ ${e.message}`, 'err');
-  } finally {
-    btn.disabled = false;
-    btn.textContent = '🔧 Ejecutar Entrenamiento';
-  }
+/* ══════════════════ CICVIDEO ══════════════════ */
+async function loadVideoMotors(){
+  try{
+    const d=await req('/api/video/motors');
+    const motors=d.motors||{};
+    document.getElementById('videoMotorStatus').innerHTML=Object.entries(motors).map(([k,v])=>`
+      <div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid #1e2340">
+        <span class="dot ${v.available?'dot-green':'dot-red'}"></span>
+        <span style="font-weight:600;min-width:170px;font-size:.82rem">${k}</span>
+        <span class="badge badge-blue">${v.type}</span>
+        <span style="color:var(--text2);font-size:.77rem">${v.cost}</span>
+      </div>`).join('');
+  }catch(e){document.getElementById('videoMotorStatus').innerHTML=`<div style="color:var(--text2);font-size:.82rem">No se pudo cargar: ${esc(e.message)}</div>`;}
+}
+function videoHandleRef(input){
+  const f=input.files[0];if(!f)return;
+  const r=new FileReader();r.onload=e=>{
+    videoRefB64=e.target.result.split(',')[1];
+    document.getElementById('videoRefPreview').innerHTML=`<img src="${e.target.result}" style="max-height:80px;border-radius:6px;margin-top:6px;border:1px solid #2d3561"/><div style="font-size:.72rem;color:var(--green);margin-top:3px">✅ Imagen cargada</div>`;
+  };r.readAsDataURL(f);
+}
+async function generateVideo(){
+  const prompt=document.getElementById('videoPrompt').value.trim();
+  const resolution=document.getElementById('videoResolution').value;
+  const duration=document.getElementById('videoDuration').value;
+  const motor=document.getElementById('videoMotor').value;
+  const effect=document.getElementById('videoEffect').value;
+  if(!prompt)return showAlert('vidAlert','Escribe un prompt primero','err');
+  const btn=document.getElementById('videoBtnGenerate');btn.disabled=true;btn.textContent='⏳ Generando...';
+  document.getElementById('videoResult').innerHTML='<div style="text-align:center;padding:60px;color:var(--text2)">⏳ Generando video...</div>';
+  showAlert('vidAlert','🎬 Generando video...','info');
+  const t0=Date.now();
+  try{
+    const body={prompt,resolution,duration,motor,effect};if(videoRefB64)body.ref_image=videoRefB64;
+    const d=await req('/api/video/generate','POST',body);
+    if(!d.success){showAlert('vidAlert','❌ '+d.error,'err');document.getElementById('videoResult').innerHTML=`<div style="text-align:center;padding:40px;color:var(--red)">${esc(d.error)}</div>`;return;}
+    const elapsed=((Date.now()-t0)/1000).toFixed(1);
+    const mime=d.format==='mp4'?'video/mp4':d.format==='webp'?'image/webp':'image/gif';
+    const src=`data:${mime};base64,${d.data}`;
+    document.getElementById('videoResult').innerHTML=`
+      <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:10px">
+        <span class="badge badge-green">✅ ${esc(d.motor)}</span>
+        <span class="badge badge-blue">${esc(d.resolution)}</span>
+        <span class="badge badge-blue">${esc(d.duration)}</span>
+        <span class="badge badge-blue">${d.frames}f·${d.fps}fps</span>
+        <span class="badge badge-blue">${esc(d.effect_used)}</span>
+        <span class="badge">${elapsed}s</span>
+      </div>
+      ${d.format==='mp4'?`<video src="${src}" autoplay loop muted playsinline style="max-width:100%;border-radius:8px;display:block"></video>`:`<img src="${src}" style="max-width:100%;border-radius:8px;display:block" alt="video">`}
+      <div style="margin-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <a href="${src}" download="cicvideo_${Date.now()}.${d.format}" class="btn btn-primary btn-sm">⬇️ .${d.format}</a>
+        <span style="font-size:.73rem;color:var(--text2)">${esc((d.prompt_original||'').slice(0,60))}</span>
+      </div>
+      <div style="margin-top:10px">
+        <div style="font-size:.77rem;color:var(--text2);margin-bottom:5px">¿Cómo quedó? (feedback para mejorar CicVideo)</div>
+        <div style="display:flex;gap:5px">${[1,2,3,4,5].map(n=>`<button class="btn btn-sm btn-outline" onclick="sendVideoFeedback(${n},'${esc(d.motor)}')">${'⭐'.repeat(n)}</button>`).join('')}</div>
+      </div>`;
+    showAlert('vidAlert',`✅ Generado en ${elapsed}s · motor: <strong>${esc(d.motor)}</strong>`,'ok');
+  }catch(e){
+    showAlert('vidAlert','❌ '+e.message,'err');
+    document.getElementById('videoResult').innerHTML=`<div style="text-align:center;padding:40px;color:var(--red)">Error: ${esc(e.message)}</div>`;
+  }finally{btn.disabled=false;btn.textContent='🎬 Generar Video';}
+}
+async function trainVideoMotor(){
+  const prompt=document.getElementById('videoTrainPrompt').value.trim()||'prueba CicVideo';
+  const effect=document.getElementById('videoTrainEffect').value;
+  const resolution=document.getElementById('videoTrainRes').value;
+  const duration=document.getElementById('videoTrainDur').value;
+  const btn=document.getElementById('videoBtnTrain');btn.disabled=true;btn.textContent='⏳...';
+  showAlert('videoTrainAlert','🔧 Ejecutando motor matemático...','info');
+  try{
+    const d=await req('/api/video/train','POST',{prompt,effect,resolution,duration});
+    showAlert('videoTrainAlert',d.success?`✅ ${esc(d.motor)} · ${esc(d.effect_used)} · ${d.frames} frames · ${d.generation_time}s · ${esc(d.format)}`:`❌ ${esc(d.error||'error')}`,d.success?'ok':'err');
+  }catch(e){showAlert('videoTrainAlert','❌ '+e.message,'err');}
+  finally{btn.disabled=false;btn.textContent='🔧 Ejecutar Entrenamiento';}
+}
+async function sendVideoFeedback(rating,motor){
+  try{const d=await req('/api/video/feedback','POST',{rating,motor});showAlert('vidAlert','⭐ '+d.message,'ok');}
+  catch(e){showAlert('vidAlert','Error feedback: '+e.message,'err');}
 }
 
-async function sendVideoFeedback(rating, motor) {
-  try {
-    const d = await api('/api/video/feedback', 'POST', { rating, motor });
-    showAlert('videoAlert', `⭐ ${d.message}`, 'ok');
-  } catch(e) {
-    showAlert('videoAlert', `Error enviando feedback: ${e.message}`, 'err');
-  }
-}
-
-// ============ UTILS ============
-
-function esc(str) {
-  return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-}
-
-function renderPagination(containerId, totalPages, currentPage, loadFn) {
-  const el = document.getElementById(containerId);
-  if (totalPages <= 1) { el.innerHTML = ''; return; }
-  let html = '';
-  for (let i = 1; i <= totalPages; i++) {
-    html += `<button class="btn btn-sm ${i === currentPage ? 'btn-primary' : 'btn-outline'}" onclick="${loadFn.name}(${i})">${i}</button>`;
-  }
-  el.innerHTML = html;
-}
-
-// ============ INIT ============
-
-window.addEventListener('load', async () => {
-  if (TOKEN) {
-    try {
-      const r = await api('/api/auth/verify', 'GET');
-      if (r.success && r.user.is_developer) {
-        currentUser = r.user;
-        showPanel();
-        return;
-      }
-    } catch {}
-    TOKEN = ''; localStorage.removeItem('dev_token');
-  }
-});
 </script>
 </body>
 </html>
