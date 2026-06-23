@@ -1379,19 +1379,21 @@ def list_modules():
         {'id': 'chat',          'name': 'Chat IA',              'icon': '🤖', 'status': 'active'},
         {'id': 'web_search',    'name': 'Búsqueda Web',         'icon': '🔍', 'status': 'active'},
         {'id': 'memory',        'name': 'Memoria',              'icon': '🧠', 'status': 'active'},
+        {'id': 'imggen',        'name': 'Crear Imagen',         'icon': '🎨', 'status': 'active'},
+        {'id': 'vidgen',        'name': 'CicVideo',             'icon': '🎬', 'status': 'active'},
         {'id': 'data_analysis', 'name': 'Análisis de Datos',    'icon': '📊', 'status': 'available'},
-        {'id': 'code_assistant','name': 'Asistente de Código',  'icon': '💻', 'status': 'available'},
-        {'id': 'file_manager',  'name': 'Archivos',             'icon': '📁', 'status': 'available'},
-        {'id': 'video_gen',     'name': 'CicVideo',             'icon': '🎬', 'status': 'active'},
+        {'id': 'code_assistant','name': 'Ejecutor Código',      'icon': '⚙️', 'status': 'available'},
+        {'id': 'tts',           'name': 'Voz / TTS',            'icon': '🎙️', 'status': 'available'},
+        {'id': 'docsgen',       'name': 'Análisis Docs',        'icon': '📄', 'status': 'available'},
     ]})
 
-# ========== REGISTRO DE MÓDULO DE VIDEO ==========
+# ── Registro módulo video ──────────────────────────────────────────────────
 try:
     from modules.video_gen.routes import register_video_routes
     register_video_routes(app, db, token_required, dev_required)
-    logger.info("✅ CicVideo módulo cargado")
+    logger.info('✅ CicVideo módulo registrado')
 except Exception as _ve:
-    logger.warning(f"CicVideo no cargado (no crítico): {_ve}")
+    logger.warning(f'CicVideo no cargado (no crítico): {_ve}')
 
 # ==========================================
 # ========== PANEL DESARROLLADOR ==========
