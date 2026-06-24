@@ -45,7 +45,7 @@ async function submitCDFeedback(){
   if(!_cdRating)return showAlert('cdFeedbackAlert','Selecciona al menos 1 estrella','err');
   const detail=document.getElementById('cdFeedbackDetail').value.trim();
   try{
-    await req('/api/image/cicdream/feedback','POST',{generation_id:_cdLastGenId,rating:_cdRating,detail});
+    await req('/api/image/feedback','POST',{generation_id:_cdLastGenId,rating:_cdRating,details:detail,tags:[]});
     showAlert('cdFeedbackAlert','✅ Feedback registrado — CicDream aprenderá de esto','ok');
     document.getElementById('cdFeedbackDetail').value='';_cdRating=0;
     document.querySelectorAll('#cdStars button').forEach(b=>{b.style.background='';b.style.color='var(--accent)';});
@@ -290,16 +290,243 @@ async function runCode(){
   finally{btn.disabled=false;btn.textContent='▶ Ejecutar (Ctrl+Enter)';}
 }
 
-/* ══════════════════ IMGGEN — patch generateImage to show CD feedback ══════════════════ */
-const _origGenImage = generateImage;
-window.generateImage = async function(){
-  await _origGenImage();
-  // Show feedback panel after generation
-  setTimeout(()=>{
-    const panel=document.getElementById('cdFeedbackPanel');
-    if(panel)panel.style.display='block';
-  }, 800);
+/* ═══════════════════════════════════════════════════════════════════════════
+   PATCH: generateImage con Feedback CicDream integrado
+   ───────────────────────────────────────────────────────────────────────────
+   Reemplaza la función generateImage original con una versión que:
+   1. Llama al backend /api/image/generate para obtener generation_id
+   2. Muestra el feedback panel DIRECTAMENTE bajo la imagen generada
+   3. Usa estrellas individuales + tags rápidos (igual que diseño anterior)
+   4. Fallback a Pollinations browser-side si el backend no responde
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Estado global feedback ─────────────────────────────────────────────── */
+let _imgLastGenId   = null;   // ID de la última generación (para feedback)
+let _imgFeedRating  = 0;      // Estrellas seleccionadas
+let _imgFeedSending = false;  // Evitar doble envío
+
+/* ── Seleccionar estrellas (panel inline) ───────────────────────────────── */
+function imgSetRating(n) {
+  _imgFeedRating = n;
+  document.querySelectorAll('.img-star-btn').forEach((b, i) => {
+    b.style.color      = i < n ? '#ffd93d' : 'var(--text2)';
+    b.style.textShadow = i < n ? '0 0 6px #ffd93d88' : 'none';
+    b.style.transform  = i < n ? 'scale(1.15)' : 'scale(1)';
+  });
+}
+
+/* ── Añadir tag al campo de detalle ─────────────────────────────────────── */
+function imgAddTag(tag) {
+  const inp = document.getElementById('imgFeedDetail');
+  if (!inp) return;
+  const cur = inp.value.trim();
+  inp.value = cur ? cur + ', ' + tag : tag;
+  inp.focus();
+}
+
+/* ── Enviar feedback al backend ─────────────────────────────────────────── */
+async function imgSendFeedback() {
+  if (_imgFeedSending) return;
+  if (!_imgLastGenId) return showImgFeedMsg('⚠️ Sin ID de generación', 'warn');
+  if (!_imgFeedRating) return showImgFeedMsg('Selecciona al menos 1 estrella ★', 'err');
+
+  _imgFeedSending = true;
+  const btn = document.getElementById('imgFeedBtn');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Enviando...'; }
+
+  try {
+    const detail = (document.getElementById('imgFeedDetail')?.value || '').trim();
+    await req('/api/image/feedback', 'POST', {
+      generation_id: _imgLastGenId,
+      rating:        _imgFeedRating,
+      details:       detail,
+      tags:          detail ? detail.split(',').map(t => t.trim()).filter(Boolean) : [],
+    });
+    showImgFeedMsg('✅ ¡CicDream aprendió! Gracias por el feedback', 'ok');
+    // Reset estrellas
+    imgSetRating(0);
+    if (document.getElementById('imgFeedDetail')) document.getElementById('imgFeedDetail').value = '';
+    // Actualizar estadísticas del panel lateral
+    if (typeof loadCicDreamStatus === 'function') loadCicDreamStatus();
+  } catch(e) {
+    showImgFeedMsg('Error: ' + e.message, 'err');
+  } finally {
+    _imgFeedSending = false;
+    if (btn) { btn.disabled = false; btn.textContent = 'Enviar feedback'; }
+  }
+}
+
+function showImgFeedMsg(msg, type) {
+  const el = document.getElementById('imgFeedMsg');
+  if (!el) return;
+  const colors = { ok: 'var(--green)', err: 'var(--red)', warn: 'var(--yellow)', info: 'var(--accent2)' };
+  el.style.color   = colors[type] || 'var(--text2)';
+  el.style.display = msg ? 'block' : 'none';
+  el.textContent   = msg;
+}
+
+/* ── HTML del panel de feedback (pegado a la imagen) ───────────────────── */
+function buildFeedbackPanel(genId, motor, elapsed) {
+  _imgLastGenId  = genId;
+  _imgFeedRating = 0;
+  return `
+    <div id="imgFeedPanel" style="margin-top:12px;background:var(--bg2);border:1px solid rgba(108,99,255,.35);border-radius:10px;padding:14px 16px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+        <span style="font-size:.8rem;font-weight:600;color:var(--accent)">🧠 Ayuda a CicDream a aprender</span>
+        ${genId ? `<span style="font-size:.68rem;color:var(--text2);margin-left:auto">gen #${genId}</span>` : '<span style="font-size:.68rem;color:var(--yellow);margin-left:auto">⚠️ sin ID (motor externo)</span>'}
+      </div>
+
+      <!-- Estrellas individuales -->
+      <div style="display:flex;gap:6px;margin-bottom:10px">
+        ${[1,2,3,4,5].map(n => `
+          <button class="img-star-btn" onclick="imgSetRating(${n})"
+            style="background:none;border:none;font-size:1.5rem;cursor:pointer;color:var(--text2);transition:all .15s;padding:2px 4px"
+            title="${n} estrella${n>1?'s':''}">★</button>`).join('')}
+      </div>
+
+      <!-- Campo de detalle -->
+      <input type="text" id="imgFeedDetail"
+        placeholder="¿Qué mejorarías? Ej: más oscuro, más detalle..."
+        style="width:100%;background:var(--bg3);border:1px solid #2d3561;border-radius:7px;padding:7px 10px;color:var(--text);font-size:.82rem;margin-bottom:8px"/>
+
+      <!-- Tags rápidos -->
+      <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:10px">
+        ${['más oscuro','más detalle','más colorido','colores incorrectos','no corresponde al prompt','perfecto ✓'].map(tag =>
+          `<button onclick="imgAddTag('${tag}')"
+             style="background:var(--bg3);border:1px solid #2d3561;border-radius:20px;padding:3px 10px;font-size:.73rem;color:var(--text2);cursor:pointer;transition:border-color .15s"
+             onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='#2d3561'"
+           >${tag}</button>`).join('')}
+      </div>
+
+      <!-- Botón enviar -->
+      <div style="display:flex;align-items:center;gap:10px">
+        <button id="imgFeedBtn" onclick="imgSendFeedback()"
+          class="btn btn-primary btn-sm" style="padding:6px 16px">Enviar feedback</button>
+        <span id="imgFeedMsg" style="font-size:.78rem;display:none"></span>
+      </div>
+    </div>`;
+}
+
+/* ── generateImage PRINCIPAL (reemplaza la versión anterior) ────────────── */
+window.generateImage = async function() {
+  const prompt = document.getElementById('imgPrompt')?.value?.trim();
+  if (!prompt) return showAlert('imgAlert', 'Describe la imagen primero', 'err');
+
+  const btn = document.getElementById('imgBtn');
+  btn.disabled = true; btn.textContent = '⏳ Generando...';
+  showAlert('imgAlert', '🎨 Generando imagen...', 'info');
+
+  const t0     = Date.now();
+  const style  = document.getElementById('imgStyle')?.value  || 'fotorrealista';
+  const format = document.getElementById('imgFormat')?.value || 'square';
+  const quality= document.getElementById('imgQuality')?.value|| 'standard';
+  const motor  = document.getElementById('imgMotor')?.value  || 'auto';
+  const count  = parseInt(document.getElementById('imgCount')?.value || '1');
+
+  let src = '', used = '', fmt = 'jpg', genId = null;
+
+  /* ── 1. Intentar backend (obtiene generation_id para que CicDream aprenda) ── */
+  try {
+    const res = await req('/api/image/generate', 'POST', {
+      prompt, style, size: format, quality, count: count || 1, model: motor
+    });
+
+    if (res?.success && res?.images?.length) {
+      const img = res.images[0];
+      src   = img.url || img.data || '';
+      used  = res.provider || res.engine || motor;
+      fmt   = img.format || 'jpg';
+      genId = img.generation_id || res.generation_id || null;
+    }
+  } catch(e) {
+    console.warn('[imggen] Backend falló, usando fallback browser:', e.message);
+  }
+
+  /* ── 2. Fallback: Pollinations browser-side ─────────────────────────────── */
+  if (!src) {
+    try {
+      const styleMap = {
+        fotorrealista: 'photorealistic, 8K, sharp focus, cinematic lighting',
+        anime: 'anime art style, vibrant colors, Studio Ghibli',
+        digital_art: 'digital painting, concept art, ArtStation trending',
+        fractal: 'fractal art, mathematical beauty, colorful geometry',
+      };
+      const ep   = `${prompt}, ${styleMap[style] || 'artistic, detailed'}`;
+      const dims = {square:'512x512',landscape:'768x432',portrait:'432x768',wide:'960x400'}[format]||'512x512';
+      const [w,h]= dims.split('x');
+      const url  = `https://image.pollinations.ai/prompt/${encodeURIComponent(ep)}?width=${w}&height=${h}&seed=${Date.now()%9999}&nologo=true`;
+      const r    = await fetch(url);
+      if (r.ok) {
+        const blob = await r.blob();
+        src  = await new Promise(res => { const fr = new FileReader(); fr.onload = e => res(e.target.result); fr.readAsDataURL(blob); });
+        used = 'pollinations (fallback)';
+        fmt  = 'jpg';
+      }
+    } catch(e) { console.warn('[imggen] Pollinations fallback falló:', e.message); }
+  }
+
+  /* ── 3. Último fallback: SVG propio ─────────────────────────────────────── */
+  if (!src) {
+    const pal = {
+      fotorrealista:['#4080c0','#60a060','#c08030'],
+      anime:['#ff6eb4','#a0c0ff','#fff070'],
+      fractal:['#6c63ff','#48dbfb','#ff6b6b'],
+      digital_art:['#1dd1a1','#ffd93d','#6c63ff'],
+    }[style] || ['#6c63ff','#48dbfb','#1dd1a1'];
+    const dims = {square:[512,512],landscape:[768,432],portrait:[432,768],wide:[960,400]}[format]||[512,512];
+    const [w,h]= dims; const words = prompt.split(' ').slice(0, 4);
+    const svgStr = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
+      <defs><linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%"   style="stop-color:${pal[0]}"/>
+        <stop offset="50%"  style="stop-color:${pal[1]}"/>
+        <stop offset="100%" style="stop-color:${pal[2]}"/>
+      </linearGradient></defs>
+      <rect width="${w}" height="${h}" fill="url(#g)"/>
+      <circle cx="${w*.7}" cy="${h*.3}" r="${Math.min(w,h)*.22}" fill="${pal[0]}" opacity="0.28"/>
+      <circle cx="${w*.25}" cy="${h*.72}" r="${Math.min(w,h)*.18}" fill="${pal[2]}" opacity="0.22"/>
+      <text x="${w/2}" y="${h/2-8}" text-anchor="middle" fill="white" font-family="system-ui"
+        font-size="${Math.min(w,h)*.042}" font-weight="bold" opacity="0.88">${esc(words[0]||'')}</text>
+      <text x="${w/2}" y="${h/2+28}" text-anchor="middle" fill="white" font-family="system-ui"
+        font-size="${Math.min(w,h)*.03}" opacity="0.7">${esc(words.slice(1).join(' '))}</text>
+      <text x="${w/2}" y="${h-18}" text-anchor="middle" fill="white" font-family="system-ui"
+        font-size="${Math.min(w,h)*.022}" opacity="0.45">Cic_IA · Motor propio</text>
+    </svg>`;
+    src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgStr)));
+    used = 'svg_propio'; fmt = 'svg';
+  }
+
+  const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
+
+  /* ── 4. Renderizar resultado + panel feedback ───────────────────────────── */
+  document.getElementById('imgResultPanel').innerHTML = `
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">
+      <span class="badge badge-green">✅ ${esc(used)}</span>
+      <span class="badge badge-blue">${esc(format)}</span>
+      <span class="badge badge-blue">${esc(style)}</span>
+      <span class="badge">${elapsed}s</span>
+      ${genId ? `<span class="badge" style="background:rgba(108,99,255,.2);color:var(--accent)">CicDream #${genId}</span>` : ''}
+    </div>
+
+    <img src="${src}"
+      style="max-width:100%;border-radius:10px;display:block;border:1px solid #2d3561"
+      alt="${esc(prompt.slice(0,60))}"/>
+
+    <div style="margin-top:8px;font-size:.72rem;color:var(--text2)">${esc(prompt.slice(0,80))}</div>
+
+    <div style="margin-top:10px;display:flex;gap:8px;align-items:center">
+      <a href="${src}" download="cic_img_${Date.now()}.${fmt}"
+         class="btn btn-primary btn-sm">⬇️ Descargar</a>
+      <button class="btn btn-outline btn-sm" onclick="generateImage()">🔄 Regenerar</button>
+    </div>
+
+    ${buildFeedbackPanel(genId, used, elapsed)}
+  `;
+
+  showAlert('imgAlert', `✅ ${used} · ${elapsed}s`, 'ok');
+  document.getElementById('imgMotorStatus').textContent = `✓ Motor: ${used} · ${elapsed}s`;
+  btn.disabled = false; btn.textContent = '🎨 Generar imagen';
 };
+
 
 </script>
 <style>
