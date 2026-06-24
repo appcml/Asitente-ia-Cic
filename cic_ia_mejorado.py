@@ -1395,6 +1395,16 @@ try:
 except Exception as _ve:
     logger.warning(f'CicVideo no cargado (no crítico): {_ve}')
 
+# ── Registro módulo image_generator ────────────────────────────────────────
+try:
+    from modules.image_generator.routes import register as register_image_routes
+    register_image_routes(app)
+    logger.info('✅ CicImage módulo registrado (image_generator)')
+except Exception as _ie:
+    import traceback
+    logger.warning(f'CicImage no cargado (no crítico): {_ie}')
+    logger.warning(f'Traceback: {traceback.format_exc()}')
+
 # ==========================================
 # ========== PANEL DESARROLLADOR ==========
 # ==========================================
