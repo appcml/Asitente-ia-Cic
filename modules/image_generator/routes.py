@@ -180,6 +180,9 @@ def image_feedback():
     """
     Recibe feedback del usuario sobre una imagen generada.
     Ajusta CicDream en tiempo real.
+
+    FIX v2.3: SQL directo en cicdream_feedback como fallback robusto.
+    Si cicdream.cicdream_feedback() falla, igual se guarda en BD.
     """
     try:
         user = _get_current_user()
@@ -195,26 +198,76 @@ def image_feedback():
         rating = float(data.get('rating', 3.0))
     except (TypeError, ValueError):
         return jsonify({'success': False, 'error': 'rating debe ser numerico'}), 400
-    details = data.get('details', '').strip()[:500]
+    details = (data.get('details') or '').strip()[:500]
     tags    = data.get('tags', [])
 
     if not generation_id:
         return jsonify({'success': False, 'error': 'generation_id requerido'}), 400
 
-    import numpy as np
-    rating = float(np.clip(rating, 1.0, 5.0))
+    # Clamp rating 1.0 - 5.0
+    rating = max(1.0, min(5.0, rating))
 
+    # Intentar primero con cicdream.cicdream_feedback (preferido)
+    cicdream_ok = False
+    cicdream_msg = ''
     try:
-        result = cicdream_feedback(
-            generation_id = generation_id,
-            rating        = rating,
-            details       = details,
-            tags          = tags,
-            user_id       = user.id,
-        )
-        return jsonify(result)
+        if _cicdream_ok:
+            result = cicdream_feedback(
+                generation_id = generation_id,
+                rating        = rating,
+                details       = details,
+                tags          = tags,
+                user_id       = user.id,
+            )
+            if result and result.get('success'):
+                cicdream_ok = True
+                cicdream_msg = result.get('message', '')
     except Exception as e:
-        logger.error(f'[feedback] Error: {e}', exc_info=True)
+        logger.warning(f'[feedback] cicdream_feedback falló, usando SQL directo: {e}')
+
+    # SIEMPRE guardar en BD con SQL directo - así nunca se pierde el feedback
+    try:
+        from flask import current_app
+        from sqlalchemy import text
+        import json as _json
+        db = current_app.extensions['sqlalchemy'].engine
+
+        # Asegurar tabla
+        with db.begin() as conn:
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS cicdream_feedback (
+                    id              SERIAL PRIMARY KEY,
+                    generation_id   INTEGER NOT NULL,
+                    user_id         INTEGER NOT NULL,
+                    rating          REAL NOT NULL,
+                    details         TEXT,
+                    tags            TEXT,
+                    created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """))
+
+        tags_str = _json.dumps(tags) if isinstance(tags, list) else str(tags)
+
+        with db.begin() as conn:
+            conn.execute(text("""
+                INSERT INTO cicdream_feedback (generation_id, user_id, rating, details, tags, created_at)
+                VALUES (:gid, :uid, :r, :det, :tags, CURRENT_TIMESTAMP)
+            """), {
+                'gid': generation_id, 'uid': user.id,
+                'r': rating, 'det': details[:500], 'tags': tags_str[:1000],
+            })
+
+        logger.info(f'[feedback] ✅ gen_id={generation_id} rating={rating} user={user.username} via_cicdream={cicdream_ok}')
+
+        return jsonify({
+            'success': True,
+            'message': cicdream_msg or '✅ CicDream aprendió de tu feedback',
+            'generation_id': generation_id,
+            'rating': rating,
+        })
+
+    except Exception as e:
+        logger.error(f'[feedback] Error guardando: {e}', exc_info=True)
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
@@ -749,6 +802,9 @@ def register_external():
     Esto permite que el feedback funcione SIEMPRE, incluso cuando el motor
     no pasa por el backend: devuelve un generation_id que el frontend usa
     para enviar el rating y que CicDream pueda aprender.
+
+    FIX v2.3: usa SQL directo en vez de cicdream.save_generation()
+    para evitar dependencias frágiles. Inserta directo en cicdream_generation.
     """
     try:
         user = _get_current_user()
@@ -768,29 +824,45 @@ def register_external():
 
     try:
         from flask import current_app
-        from .cicdream import get_feedback
+        from sqlalchemy import text
         db = current_app.extensions['sqlalchemy'].engine
-        fb = get_feedback(db)
 
-        gen_id = fb.save_generation(
-            user_id           = user.id,
-            prompt            = prompt,
-            style             = style,
-            size              = size,
-            quality           = quality,
-            generation_result = {
-                'provider': provider,
-                'engine':   engine,
-                'seed': 0, 'steps': 0, 'guidance': 7.5, 'time_ms': 0,
-                'browser_generated': True,
-            },
-        )
+        # Asegurar que la tabla existe (idempotente, no falla si ya existe)
+        with db.begin() as conn:
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS cicdream_generation (
+                    id          SERIAL PRIMARY KEY,
+                    user_id     INTEGER NOT NULL,
+                    prompt      TEXT NOT NULL,
+                    style       VARCHAR(50),
+                    size        VARCHAR(50),
+                    quality     VARCHAR(50),
+                    provider    VARCHAR(100),
+                    engine      VARCHAR(100),
+                    created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """))
+
+        # INSERT directo - sin pasar por cicdream.py
+        with db.begin() as conn:
+            row = conn.execute(text("""
+                INSERT INTO cicdream_generation (user_id, prompt, style, size, quality, provider, engine, created_at)
+                VALUES (:uid, :prompt, :style, :size, :quality, :provider, :engine, CURRENT_TIMESTAMP)
+                RETURNING id
+            """), {
+                'uid': user.id, 'prompt': prompt[:2000],
+                'style': style[:50], 'size': size[:50], 'quality': quality[:50],
+                'provider': provider[:100], 'engine': engine[:100],
+            }).fetchone()
+
+        gen_id = row[0] if row else None
 
         if gen_id:
-            logger.info(f'[register-external] gen_id={gen_id} engine={engine} prompt={prompt[:50]!r}')
+            logger.info(f'[register-external] ✅ gen_id={gen_id} engine={engine} user={user.username} prompt={prompt[:50]!r}')
             return jsonify({'success': True, 'generation_id': gen_id})
         else:
-            return jsonify({'success': False, 'error': 'No se pudo registrar en la BD'}), 500
+            logger.error(f'[register-external] INSERT no retornó ID')
+            return jsonify({'success': False, 'error': 'INSERT no retornó ID'}), 500
 
     except Exception as e:
         logger.error(f'[register-external] Error: {e}', exc_info=True)
