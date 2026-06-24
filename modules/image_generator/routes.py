@@ -4,38 +4,43 @@ modules/image_generator/routes.py
 Blueprint del módulo de generación de imágenes.
 Incluye rutas de feedback para CicDream.
 
-FIXES v2.1:
-- BUG #1: /training/analyze leía 'image_base64' pero frontend envía 'image_b64' → corregido
-- BUG #2: /training/manual ignoraba 'image_b64' del frontend → ahora lo acepta opcionalmente
-- NUEVO: /cicdream/top — ruta que el frontend llama en loadCDTopGens()
-- NUEVO: /dataset/export acepta ?min_rating y ?limit correctamente
+VERSIÓN v2.3 (24-jun-2026):
+- /register-external: registra imágenes generadas browser-side (Pollinations)
+- /feedback: ahora usa SQL directo como fallback robusto
+- Imports defensivos: el módulo SIEMPRE carga, aunque cicdream.py o main.py fallen
+- Logs explícitos en cada paso del arranque
 """
 from flask import Blueprint, request, jsonify
 from datetime import datetime
 import logging
 
 logger = logging.getLogger('cic_ia.image_generator')
+logger.info('═══ [image_generator] routes.py v2.3 iniciando carga ═══')
 
 bp = Blueprint('image_generator', __name__, url_prefix='/api/image')
+logger.info('[image_generator] Blueprint creado con prefix=/api/image')
 
 # ── Cargar motores ────────────────────────────────────────────────────────
+_ok = False
+_motor_err_msg = ''
 try:
     from .main import generar
     _ok = True
-    logger.info('Motor de imágenes cargado')
+    logger.info('[image_generator] ✅ main.generar importado')
 except Exception as e:
-    _ok = False
     _motor_err_msg = str(e)
-    logger.warning(f'Motor no disponible: {_motor_err_msg}')
+    logger.warning(f'[image_generator] ⚠️ main no disponible: {_motor_err_msg}')
     def generar(**kw):
         return {'success': False, 'error': f'Motor no disponible: {_motor_err_msg}'}
 
 # ── Cargar CicDream para feedback ─────────────────────────────────────────
+_cicdream_ok = False
 try:
     from .cicdream import cicdream_feedback, cicdream_status, CicDream
     _cicdream_ok = True
+    logger.info('[image_generator] ✅ cicdream importado')
 except Exception as e:
-    _cicdream_ok = False
+    logger.warning(f'[image_generator] ⚠️ cicdream no disponible: {e} (se usará SQL directo)')
     def cicdream_feedback(**kw): return {'success': False, 'error': 'CicDream no disponible'}
     def cicdream_status(**kw):   return {'ready': False}
 
@@ -421,15 +426,17 @@ def list_models():
 
 @bp.route('/status', methods=['GET'])
 def status():
-    """Estado del módulo."""
+    """Estado del módulo - útil para verificar despliegue."""
     return jsonify({
         'module':     'image_generator',
-        'version':    '2.1',
+        'version':    '2.3',
+        'deployed':   '✅ register-external + SQL direct feedback',
         'engine_ok':  _ok,
         'cicdream':   _cicdream_ok,
         'routes': [
             'POST /api/image/generate',
             'POST /api/image/feedback',
+            'POST /api/image/register-external',  # ← NUEVA en v2.3
             'GET  /api/image/history',
             'GET  /api/image/models',
             'GET  /api/image/cicdream/status',
@@ -870,5 +877,19 @@ def register_external():
 
 
 def register(app):
-    app.register_blueprint(bp)
-    logger.info('Rutas /api/image/* registradas (v2.2 — CicDream dataset + external register)')
+    """Registra el blueprint en la app Flask — llamado desde app.py o __init__.py"""
+    try:
+        app.register_blueprint(bp)
+        # Listar rutas registradas para verificar en logs
+        rutas = [str(r) for r in app.url_map.iter_rules() if str(r).startswith('/api/image')]
+        logger.info('═══════════════════════════════════════════════════════')
+        logger.info(f'✅ image_generator v2.3 REGISTRADO — {len(rutas)} rutas:')
+        for ruta in sorted(rutas):
+            logger.info(f'    {ruta}')
+        logger.info('═══════════════════════════════════════════════════════')
+        return True
+    except Exception as e:
+        logger.error(f'❌ Error registrando image_generator: {e}', exc_info=True)
+        raise
+
+logger.info('═══ [image_generator] routes.py v2.3 cargado completamente ═══')
