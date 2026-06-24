@@ -2067,7 +2067,22 @@ async function imgSendFeedback() {
       }
     } catch(regErr) {
       console.error('[feedback] No se pudo registrar para enviar feedback:', regErr);
-      showImgFeedMsg('❌ Backend no respondió. Verifica que routes.py esté en Render.', 'err');
+      // Guardar el feedback en localStorage como respaldo
+      const detail = (document.getElementById('imgFeedDetail')?.value || '').trim();
+      const pendingKey = '_cd_pending_feedback';
+      const pending = JSON.parse(localStorage.getItem(pendingKey) || '[]');
+      pending.push({
+        prompt: document.getElementById('imgPrompt')?.value?.trim() || '',
+        style:  document.getElementById('imgStyle')?.value || '',
+        rating: _imgFeedRating,
+        details: detail,
+        timestamp: new Date().toISOString(),
+        error: regErr.message
+      });
+      localStorage.setItem(pendingKey, JSON.stringify(pending));
+      console.log('[feedback] Feedback guardado en localStorage para reintento:', pending);
+
+      showImgFeedMsg(`❌ Backend no respondió (${regErr.message}). Feedback guardado localmente — se enviará al restaurar el backend.`, 'err');
       _imgFeedSending = false;
       if (btn) { btn.disabled = false; btn.textContent = 'Enviar feedback'; }
       return;
