@@ -2036,30 +2036,65 @@ function imgAddTag(tag) {
 /* ── Enviar feedback al backend ─────────────────────────────────────────── */
 async function imgSendFeedback() {
   if (_imgFeedSending) return;
-  if (!_imgLastGenId) return showImgFeedMsg('⚠️ Sin ID de generación', 'warn');
   if (!_imgFeedRating) return showImgFeedMsg('Selecciona al menos 1 estrella ★', 'err');
 
   _imgFeedSending = true;
   const btn = document.getElementById('imgFeedBtn');
   if (btn) { btn.disabled = true; btn.textContent = '⏳ Enviando...'; }
 
+  // Si no hay ID, intentar registrar AHORA con los datos del último prompt
+  // Esto recupera el feedback aunque el registro inicial haya fallado
+  if (!_imgLastGenId) {
+    showImgFeedMsg('⏳ Registrando imagen primero...', 'info');
+    try {
+      const lastPrompt = document.getElementById('imgPrompt')?.value?.trim() || 'imagen';
+      const lastStyle  = document.getElementById('imgStyle')?.value || 'fotorrealista';
+      const lastFmt    = document.getElementById('imgFormat')?.value || 'square';
+      const lastQual   = document.getElementById('imgQuality')?.value || 'standard';
+      console.log('[feedback] Sin ID — registrando ahora con:', {lastPrompt, lastStyle});
+      const reg = await req('/api/image/register-external', 'POST', {
+        prompt: lastPrompt, style: lastStyle, size: lastFmt, quality: lastQual,
+        engine: 'pollinations_browser', provider: 'Pollinations (browser, recovered)'
+      });
+      console.log('[feedback] Registro recovery resultado:', reg);
+      if (reg?.success && reg?.generation_id) {
+        _imgLastGenId = reg.generation_id;
+        // Actualizar badge en el panel
+        const badge = document.querySelector('#imgFeedPanel [style*="margin-left:auto"]');
+        if (badge) badge.innerHTML = `✓ guardando en motor propio #${_imgLastGenId}`;
+      } else {
+        throw new Error('No se obtuvo ID — ' + (reg?.error || 'respuesta vacía'));
+      }
+    } catch(regErr) {
+      console.error('[feedback] No se pudo registrar para enviar feedback:', regErr);
+      showImgFeedMsg('❌ Backend no respondió. Verifica que routes.py esté en Render.', 'err');
+      _imgFeedSending = false;
+      if (btn) { btn.disabled = false; btn.textContent = 'Enviar feedback'; }
+      return;
+    }
+  }
+
   try {
     const detail = (document.getElementById('imgFeedDetail')?.value || '').trim();
-    await req('/api/image/feedback', 'POST', {
+    const payload = {
       generation_id: _imgLastGenId,
       rating:        _imgFeedRating,
       details:       detail,
       tags:          detail ? detail.split(',').map(t => t.trim()).filter(Boolean) : [],
-    });
+    };
+    console.log('[feedback] Enviando:', payload);
+    const r = await req('/api/image/feedback', 'POST', payload);
+    console.log('[feedback] Respuesta:', r);
     showImgFeedMsg('✅ ¡CicDream aprendió! Gracias por el feedback', 'ok');
     // Reset estrellas y label
     imgSetRating(0);
     const lbl=document.getElementById('imgFeedLabel');if(lbl)lbl.textContent='';
     if (document.getElementById('imgFeedDetail')) document.getElementById('imgFeedDetail').value = '';
-    // Actualizar estadísticas del panel lateral
+    // Actualizar estadísticas
     if (typeof loadCicDreamStatus === 'function') loadCicDreamStatus();
     if (typeof loadTrainDatasetInfo === 'function') loadTrainDatasetInfo();
   } catch(e) {
+    console.error('[feedback] Error:', e);
     showImgFeedMsg('Error: ' + e.message, 'err');
   } finally {
     _imgFeedSending = false;
@@ -2181,14 +2216,23 @@ window.generateImage = async function() {
 
         // Registrar la imagen en el backend para obtener generation_id
         // → así el feedback funciona y CicDream puede aprender
+        console.log('[imggen] Intentando registrar en CicDream...', {prompt, style, format});
         try {
           const reg = await req('/api/image/register-external', 'POST', {
             prompt, style, size: format, quality,
             engine: 'pollinations_browser', provider: 'Pollinations (browser)'
           });
-          if (reg?.success && reg?.generation_id) genId = reg.generation_id;
+          console.log('[imggen] Respuesta de register-external:', reg);
+          if (reg?.success && reg?.generation_id) {
+            genId = reg.generation_id;
+            console.log('[imggen] ✅ Generation ID obtenido:', genId);
+          } else {
+            console.warn('[imggen] register-external respondió sin ID:', reg);
+          }
         } catch(regErr) {
-          console.warn('[imggen] No se pudo registrar imagen externa:', regErr.message);
+          console.error('[imggen] ❌ ERROR al registrar imagen externa:', regErr.message);
+          console.error('[imggen] Esto significa que /api/image/register-external no existe o falló');
+          console.error('[imggen] Verifica que routes.py esté actualizado en Render');
         }
       }
     } catch(e) { console.warn('[imggen] Pollinations fallback falló:', e.message); }
