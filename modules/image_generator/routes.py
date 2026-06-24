@@ -740,6 +740,63 @@ def dataset_export():
         return jsonify({'error': str(e)}), 500
 
 
+@bp.route('/register-external', methods=['POST'])
+def register_external():
+    """
+    Registra en la BD una imagen generada en el navegador (ej. Pollinations
+    llamado browser-side por las restricciones de Render free tier).
+
+    Esto permite que el feedback funcione SIEMPRE, incluso cuando el motor
+    no pasa por el backend: devuelve un generation_id que el frontend usa
+    para enviar el rating y que CicDream pueda aprender.
+    """
+    try:
+        user = _get_current_user()
+    except PermissionError as e:
+        return jsonify({'success': False, 'error': str(e)}), 401
+
+    data    = request.get_json(force=True, silent=True) or {}
+    prompt  = (data.get('prompt') or '').strip()
+    style   = data.get('style',   'realistic')
+    size    = data.get('size',    'square')
+    quality = data.get('quality', 'standard')
+    engine  = data.get('engine',  'pollinations_browser')
+    provider= data.get('provider', engine)
+
+    if not prompt:
+        return jsonify({'success': False, 'error': 'prompt requerido'}), 400
+
+    try:
+        from flask import current_app
+        from .cicdream import get_feedback
+        db = current_app.extensions['sqlalchemy'].engine
+        fb = get_feedback(db)
+
+        gen_id = fb.save_generation(
+            user_id           = user.id,
+            prompt            = prompt,
+            style             = style,
+            size              = size,
+            quality           = quality,
+            generation_result = {
+                'provider': provider,
+                'engine':   engine,
+                'seed': 0, 'steps': 0, 'guidance': 7.5, 'time_ms': 0,
+                'browser_generated': True,
+            },
+        )
+
+        if gen_id:
+            logger.info(f'[register-external] gen_id={gen_id} engine={engine} prompt={prompt[:50]!r}')
+            return jsonify({'success': True, 'generation_id': gen_id})
+        else:
+            return jsonify({'success': False, 'error': 'No se pudo registrar en la BD'}), 500
+
+    except Exception as e:
+        logger.error(f'[register-external] Error: {e}', exc_info=True)
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 def register(app):
     app.register_blueprint(bp)
-    logger.info('Rutas /api/image/* registradas (v2.1 — CicDream dataset fixes)')v
+    logger.info('Rutas /api/image/* registradas (v2.2 — CicDream dataset + external register)')
