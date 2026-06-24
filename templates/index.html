@@ -2082,9 +2082,14 @@ function buildFeedbackPanel(genId, motor, elapsed) {
   _imgFeedRating = 0;
   return `
     <div id="imgFeedPanel" style="margin-top:12px;background:var(--bg2);border:1px solid rgba(108,99,255,.35);border-radius:10px;padding:14px 16px">
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
-        <span style="font-size:.8rem;font-weight:600;color:var(--accent)">🧠 Ayuda a CicDream a aprender</span>
-        ${genId ? `<span style="font-size:.68rem;color:var(--text2);margin-left:auto">gen #${genId}</span>` : '<span style="font-size:.68rem;color:var(--yellow);margin-left:auto">⚠️ sin ID (motor externo)</span>'}
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;flex-wrap:wrap">
+        <span style="font-size:.85rem;font-weight:600;color:var(--accent)">🧠 Ayuda a CicDream a aprender</span>
+        ${genId
+          ? `<span style="font-size:.68rem;color:var(--green);margin-left:auto;font-weight:600">✓ guardando en motor propio #${genId}</span>`
+          : '<span style="font-size:.68rem;color:var(--yellow);margin-left:auto">⏳ registrando...</span>'}
+      </div>
+      <div style="font-size:.72rem;color:var(--text2);margin-bottom:10px;line-height:1.4">
+        Cada calificación entrena <strong>tu motor CicDream</strong> — aprende qué prompts, estilos y composiciones funcionan${motor && motor.includes('pollinations') ? ' <em>(esta imagen externa servirá como referencia)</em>' : ''}.
       </div>
 
       <!-- Estrellas individuales -->
@@ -2173,6 +2178,18 @@ window.generateImage = async function() {
         src  = await new Promise(res => { const fr = new FileReader(); fr.onload = e => res(e.target.result); fr.readAsDataURL(blob); });
         used = 'pollinations (fallback)';
         fmt  = 'jpg';
+
+        // Registrar la imagen en el backend para obtener generation_id
+        // → así el feedback funciona y CicDream puede aprender
+        try {
+          const reg = await req('/api/image/register-external', 'POST', {
+            prompt, style, size: format, quality,
+            engine: 'pollinations_browser', provider: 'Pollinations (browser)'
+          });
+          if (reg?.success && reg?.generation_id) genId = reg.generation_id;
+        } catch(regErr) {
+          console.warn('[imggen] No se pudo registrar imagen externa:', regErr.message);
+        }
       }
     } catch(e) { console.warn('[imggen] Pollinations fallback falló:', e.message); }
   }
@@ -2205,6 +2222,17 @@ window.generateImage = async function() {
     </svg>`;
     src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgStr)));
     used = 'svg_propio'; fmt = 'svg';
+
+    // Registrar también el SVG fallback para tener generation_id y poder dar feedback
+    try {
+      const reg = await req('/api/image/register-external', 'POST', {
+        prompt, style, size: format, quality,
+        engine: 'svg_propio', provider: 'SVG (motor propio)'
+      });
+      if (reg?.success && reg?.generation_id) genId = reg.generation_id;
+    } catch(regErr) {
+      console.warn('[imggen] No se pudo registrar SVG fallback:', regErr.message);
+    }
   }
 
   const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
