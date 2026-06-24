@@ -3,6 +3,12 @@ modules/image_generator/routes.py
 ===================================
 Blueprint del módulo de generación de imágenes.
 Incluye rutas de feedback para CicDream.
+
+FIXES v2.1:
+- BUG #1: /training/analyze leía 'image_base64' pero frontend envía 'image_b64' → corregido
+- BUG #2: /training/manual ignoraba 'image_b64' del frontend → ahora lo acepta opcionalmente
+- NUEVO: /cicdream/top — ruta que el frontend llama en loadCDTopGens()
+- NUEVO: /dataset/export acepta ?min_rating y ?limit correctamente
 """
 from flask import Blueprint, request, jsonify
 from datetime import datetime
@@ -107,8 +113,19 @@ def _get_current_user():
     return SimpleUser(user_row[0], user_row[1])
 
 
+def _is_developer(user_id, engine):
+    """Verifica si el usuario es desarrollador."""
+    from sqlalchemy import text
+    with engine.connect() as conn:
+        row = conn.execute(
+            text('SELECT is_developer FROM "user" WHERE id = :uid LIMIT 1'),
+            {'uid': user_id}
+        ).fetchone()
+    return bool(row and row[0])
+
+
 # ══════════════════════════════════════════════════════════════════════════
-# RUTAS
+# RUTAS PRINCIPALES
 # ══════════════════════════════════════════════════════════════════════════
 
 @bp.route('/generate', methods=['POST'])
@@ -163,12 +180,6 @@ def image_feedback():
     """
     Recibe feedback del usuario sobre una imagen generada.
     Ajusta CicDream en tiempo real.
-
-    Body JSON:
-        generation_id  (int)   — ID retornado por /generate
-        rating         (float) — 1.0 a 5.0
-        details        (str)   — "más oscuro", "más detalle", etc.
-        tags           (list)  — ["buena composición", "colores incorrectos"]
     """
     try:
         user = _get_current_user()
@@ -268,6 +279,62 @@ def cicdream_stats():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@bp.route('/cicdream/top', methods=['GET'])
+def cicdream_top():
+    """
+    Devuelve las mejores generaciones de CicDream (mayor rating).
+    Usado por el panel CicDream Studio para mostrar 'Mejores generaciones'.
+    """
+    try:
+        _get_current_user()
+    except PermissionError as e:
+        return jsonify({'success': False, 'error': str(e)}), 401
+
+    try:
+        limit = min(int(request.args.get('limit', 6)), 20)
+    except (TypeError, ValueError):
+        limit = 6
+
+    try:
+        from flask import current_app
+        from sqlalchemy import text
+        db = current_app.extensions['sqlalchemy'].engine
+
+        with db.connect() as conn:
+            rows = conn.execute(text("""
+                SELECT
+                    g.id,
+                    g.prompt,
+                    g.style,
+                    g.created_at,
+                    COALESCE(AVG(f.rating), 0) as avg_rating,
+                    COUNT(f.id) as feedback_count
+                FROM cicdream_generation g
+                LEFT JOIN cicdream_feedback f ON f.generation_id = g.id
+                GROUP BY g.id, g.prompt, g.style, g.created_at
+                HAVING COALESCE(AVG(f.rating), 0) >= 3.5
+                ORDER BY avg_rating DESC, g.created_at DESC
+                LIMIT :lim
+            """), {'lim': limit}).fetchall()
+
+        top = []
+        for row in rows:
+            top.append({
+                'id':             row[0],
+                'prompt':         (row[1] or '')[:120],
+                'style':          row[2],
+                'created_at':     str(row[3]),
+                'rating':         round(float(row[4]), 2),
+                'feedback_count': int(row[5]),
+            })
+
+        return jsonify({'success': True, 'top': top, 'total': len(top)})
+
+    except Exception as e:
+        logger.error(f'[cicdream/top] Error: {e}', exc_info=True)
+        return jsonify({'success': False, 'error': str(e), 'top': []}), 500
+
+
 @bp.route('/models', methods=['GET'])
 def list_models():
     """Lista todos los motores disponibles."""
@@ -304,7 +371,7 @@ def status():
     """Estado del módulo."""
     return jsonify({
         'module':     'image_generator',
-        'version':    '2.0',
+        'version':    '2.1',
         'engine_ok':  _ok,
         'cicdream':   _cicdream_ok,
         'routes': [
@@ -314,9 +381,17 @@ def status():
             'GET  /api/image/models',
             'GET  /api/image/cicdream/status',
             'GET  /api/image/cicdream/stats',
+            'GET  /api/image/cicdream/top',
+            'POST /api/image/training/manual',
+            'POST /api/image/training/analyze',
+            'GET  /api/image/dataset/export',
         ]
     })
 
+
+# ══════════════════════════════════════════════════════════════════════════
+# RUTAS DE ENTRENAMIENTO CICDREAM
+# ══════════════════════════════════════════════════════════════════════════
 
 @bp.route('/training/manual', methods=['POST'])
 def manual_training():
@@ -324,6 +399,9 @@ def manual_training():
     Permite al desarrollador enseñar a CicDream manualmente.
     Recibe imagen + descripción + metadatos y los guarda como
     dato de entrenamiento en la BD.
+
+    FIX v2.1: Ahora acepta 'image_b64' (clave que envía el frontend)
+    además de 'image_base64' para compatibilidad total.
     """
     try:
         user = _get_current_user()
@@ -335,12 +413,7 @@ def manual_training():
         from flask import current_app
         from sqlalchemy import text
         db = current_app.extensions['sqlalchemy'].engine
-        with db.connect() as conn:
-            row = conn.execute(
-                text('SELECT is_developer FROM "user" WHERE id = :uid LIMIT 1'),
-                {'uid': user.id}
-            ).fetchone()
-        if not row or not row[0]:
+        if not _is_developer(user.id, db):
             return jsonify({'success': False, 'error': 'Solo desarrolladores'}), 403
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
@@ -350,6 +423,8 @@ def manual_training():
     style  = data.get('style', 'realistic')
     notes  = data.get('notes', '').strip()
     tags   = data.get('tags', [])
+    # FIX: aceptar 'image_b64' O 'image_base64' (el frontend envía 'image_b64')
+    b64    = data.get('image_b64', '') or data.get('image_base64', '')
     try:
         rating = float(data.get('rating', 5.0))
     except (ValueError, TypeError):
@@ -358,7 +433,7 @@ def manual_training():
     if not prompt:
         return jsonify({'success': False, 'error': 'El prompt es obligatorio'}), 400
 
-    # Enriquecer prompt con notas si existen
+    # Si viene imagen pero sin prompt detallado, aceptar igual
     full_prompt = prompt
     if notes:
         full_prompt = f"{prompt}. Notas técnicas: {notes}"
@@ -369,7 +444,6 @@ def manual_training():
         db = current_app.extensions['sqlalchemy'].engine
         fb = get_feedback(db)
 
-        # Guardar como generación manual
         gen_result = {
             'provider': 'Manual Training',
             'engine':   'manual',
@@ -378,29 +452,34 @@ def manual_training():
             'guidance': 7.5,
             'time_ms':  0,
         }
+
+        # Añadir info de imagen si vino
+        if b64:
+            gen_result['has_image'] = True
+            gen_result['image_size_kb'] = round(len(b64) * 3 / 4 / 1024, 1)
+
         gen_id = fb.save_generation(
-            user_id          = user.id,
-            prompt           = full_prompt,
-            style            = style,
-            size             = 'square',
-            quality          = 'standard',
+            user_id           = user.id,
+            prompt            = full_prompt,
+            style             = style,
+            size              = 'square',
+            quality           = 'standard',
             generation_result = gen_result,
         )
 
         if gen_id:
-            # Guardar feedback con la calificación dada
             fb.submit(
                 generation_id = gen_id,
                 user_id       = user.id,
                 rating        = rating,
                 details       = notes,
-                tags          = tags,
+                tags          = tags if isinstance(tags, list) else [t.strip() for t in str(tags).split(',') if t.strip()],
             )
-            logger.info(f'[training/manual] gen_id={gen_id} prompt={prompt[:50]!r} rating={rating}')
+            logger.info(f'[training/manual] gen_id={gen_id} prompt={prompt[:50]!r} rating={rating} has_img={bool(b64)}')
             return jsonify({
                 'success':       True,
                 'generation_id': gen_id,
-                'message':       f'CicDream aprendió: "{prompt[:60]}..."',
+                'message':       f'CicDream aprendió: "{prompt[:60]}"',
             })
         else:
             return jsonify({'success': False, 'error': 'No se pudo guardar en la BD'}), 500
@@ -419,6 +498,9 @@ def analyze_training_image():
     - Composición y estructura
     - Parámetros técnicos
     Luego guarda todo como dato de entrenamiento para CicDream.
+
+    FIX v2.1: El frontend envía 'image_b64' pero antes se leía 'image_base64'.
+    Ahora acepta ambas claves correctamente.
     """
     try:
         user = _get_current_user()
@@ -430,18 +512,12 @@ def analyze_training_image():
         from flask import current_app
         from sqlalchemy import text
         db = current_app.extensions['sqlalchemy'].engine
-        with db.connect() as conn:
-            row = conn.execute(
-                text('SELECT is_developer FROM "user" WHERE id = :uid LIMIT 1'),
-                {'uid': user.id}
-            ).fetchone()
-        if not row or not row[0]:
+        if not _is_developer(user.id, db):
             return jsonify({'success': False, 'error': 'Solo desarrolladores'}), 403
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
     data     = request.json or {}
-    b64      = data.get('image_base64', '')
     filename = data.get('filename', 'imagen')
     style    = data.get('style', 'realistic')
     try:
@@ -449,23 +525,34 @@ def analyze_training_image():
     except (ValueError, TypeError):
         rating = 4.0
 
-    if not b64:
-        return jsonify({'success': False, 'error': 'imagen requerida'}), 400
+    # FIX CRÍTICO: el frontend envía 'image_b64', antes se leía 'image_base64' → siempre vacío
+    b64 = data.get('image_b64', '') or data.get('image_base64', '')
 
-    # Analizar imagen con visión IA (Groq o Anthropic)
+    if not b64:
+        return jsonify({
+            'success': False,
+            'error':   'imagen requerida — enviar campo "image_b64" con base64 de la imagen'
+        }), 400
+
+    # Analizar imagen con visión IA (Groq Vision)
     try:
         from flask import current_app as _app
         prompt_generado = None
         notas_tecnicas  = None
+        tags_ia         = []
 
-        # Intentar análisis con Groq Vision
-        import os, requests as _req
+        import os
+        import requests as _req
         groq_key = os.environ.get('GROQ_API_KEY', '')
+
         if groq_key:
             try:
                 r = _req.post(
                     'https://api.groq.com/openai/v1/chat/completions',
-                    headers={'Authorization': f'Bearer {groq_key}', 'Content-Type': 'application/json'},
+                    headers={
+                        'Authorization': f'Bearer {groq_key}',
+                        'Content-Type':  'application/json'
+                    },
                     json={
                         'model': 'meta-llama/llama-4-scout-17b-16e-instruct',
                         'messages': [{
@@ -473,45 +560,51 @@ def analyze_training_image():
                             'content': [
                                 {
                                     'type': 'text',
-                                    'text': '''Analiza esta imagen en detalle para entrenamiento de IA generativa.
-Responde en JSON con este formato exacto:
-{
-  "prompt": "descripción detallada de la imagen para generar algo similar",
-  "tags": ["tag1", "tag2", "tag3"],
-  "colores": ["color1", "color2"],
-  "composicion": "descripción de la composición visual",
-  "notas_tecnicas": "parámetros matemáticos, gradientes, texturas, iluminación, estructura visual"
-}'''
+                                    'text': (
+                                        'Analiza esta imagen en detalle para entrenamiento de IA generativa.\n'
+                                        'Responde SOLO en JSON con este formato exacto (sin markdown, sin texto extra):\n'
+                                        '{\n'
+                                        '  "prompt": "descripción detallada en inglés para generar algo similar",\n'
+                                        '  "tags": ["tag1", "tag2", "tag3"],\n'
+                                        '  "colores": ["color1", "color2"],\n'
+                                        '  "composicion": "descripción de la composición visual",\n'
+                                        '  "notas_tecnicas": "parámetros matemáticos, gradientes, texturas, iluminación"\n'
+                                        '}'
+                                    )
                                 },
                                 {
-                                    'type': 'image_url',
+                                    'type':      'image_url',
                                     'image_url': {'url': f'data:image/jpeg;base64,{b64}'}
                                 }
                             ]
                         }],
-                        'max_tokens': 600,
+                        'max_tokens': 700,
                     },
                     timeout=30
                 )
                 if r.status_code == 200:
                     import json as _json
                     content = r.json()['choices'][0]['message']['content']
-                    # Extraer JSON de la respuesta
                     start = content.find('{')
                     end   = content.rfind('}') + 1
                     if start >= 0 and end > start:
-                        parsed = _json.loads(content[start:end])
-                        prompt_generado = parsed.get('prompt', '')
+                        parsed          = _json.loads(content[start:end])
+                        prompt_generado = parsed.get('prompt', '').strip()
                         tags_ia         = parsed.get('tags', [])
-                        notas_tecnicas  = f"Colores: {', '.join(parsed.get('colores', []))}. Composición: {parsed.get('composicion', '')}. {parsed.get('notas_tecnicas', '')}"
+                        colores         = parsed.get('colores', [])
+                        composicion     = parsed.get('composicion', '')
+                        notas_tecnicas  = f"Colores: {', '.join(colores)}. Composición: {composicion}. {parsed.get('notas_tecnicas', '')}"
+                else:
+                    logger.warning(f'[training/analyze] Groq Vision HTTP {r.status_code}: {r.text[:200]}')
             except Exception as ve:
                 logger.warning(f'[training/analyze] Groq Vision error: {ve}')
 
-        # Si no se pudo analizar, usar nombre de archivo como prompt base
+        # Si no se pudo analizar con IA, usar nombre de archivo como fallback
         if not prompt_generado:
             prompt_generado = filename.rsplit('.', 1)[0].replace('_', ' ').replace('-', ' ')
-            notas_tecnicas  = f'Imagen subida manualmente: {filename}'
-            tags_ia = []
+            notas_tecnicas  = f'Imagen subida manualmente sin análisis IA: {filename}'
+            tags_ia         = []
+            logger.info(f'[training/analyze] Fallback a nombre de archivo: {prompt_generado!r}')
 
         # Guardar en BD
         from .cicdream import get_feedback
@@ -531,8 +624,9 @@ Responde en JSON con este formato exacto:
             quality  = 'standard',
             generation_result = {
                 'provider': 'Mass Training',
-                'engine':   'manual',
+                'engine':   'manual_analyze',
                 'seed': 0, 'steps': 0, 'guidance': 7.5, 'time_ms': 0,
+                'filename': filename,
             },
         )
 
@@ -544,12 +638,15 @@ Responde en JSON con este formato exacto:
                 details       = notas_tecnicas or '',
                 tags          = tags_ia,
             )
+            logger.info(f'[training/analyze] Guardado gen_id={gen_id} file={filename!r} prompt={prompt_generado[:60]!r}')
 
         return jsonify({
-            'success':        True,
-            'generation_id':  gen_id,
+            'success':         True,
+            'generation_id':   gen_id,
             'prompt_extraido': prompt_generado,
-            'filename':       filename,
+            'tags':            tags_ia,
+            'filename':        filename,
+            'analyzed_by_ai':  bool(groq_key and prompt_generado and 'Imagen subida' not in prompt_generado),
         })
 
     except Exception as e:
@@ -557,58 +654,70 @@ Responde en JSON con este formato exacto:
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+# ══════════════════════════════════════════════════════════════════════════
+# DATASET EXPORT
+# ══════════════════════════════════════════════════════════════════════════
+
 @bp.route('/dataset/export', methods=['GET'])
 def dataset_export():
     """
     Exporta el dataset de imágenes con feedback para entrenar CicDream.
-    Usado por el notebook de Colab.
+    Usado por el notebook de Colab y el panel de CicDream Studio.
+
+    Query params:
+        min_rating  (float) — rating mínimo para filtrar (default: 0)
+        limit       (int)   — máximo de registros (default: 2000)
     """
     try:
         user = _get_current_user()
 
-        # Solo desarrolladores pueden exportar el dataset
         from flask import current_app
         from sqlalchemy import text
         db = current_app.extensions['sqlalchemy'].engine
 
-        with db.connect() as conn:
-            is_dev = conn.execute(
-                text('SELECT is_developer FROM "user" WHERE id = :uid LIMIT 1'),
-                {'uid': user.id}
-            ).scalar()
-
-        if not is_dev:
+        if not _is_developer(user.id, db):
             return jsonify({'error': 'Solo desarrolladores pueden exportar el dataset'}), 403
+
+        # Parámetros de filtrado
+        try:
+            min_rating = float(request.args.get('min_rating', 0))
+        except (ValueError, TypeError):
+            min_rating = 0.0
+        try:
+            limit = min(int(request.args.get('limit', 2000)), 5000)
+        except (ValueError, TypeError):
+            limit = 2000
 
         from .cicdream import get_feedback
         fb = get_feedback(db)
 
-        # Obtener todas las generaciones con feedback
         with db.connect() as conn:
             rows = conn.execute(text("""
                 SELECT
                     g.id, g.prompt, g.style, g.size, g.quality,
                     g.created_at,
-                    COALESCE(f.rating, 0) as rating,
-                    COALESCE(f.details, '') as details
+                    COALESCE(AVG(f.rating), 0) as rating,
+                    STRING_AGG(COALESCE(f.details, ''), ' | ') as details
                 FROM cicdream_generation g
                 LEFT JOIN cicdream_feedback f ON f.generation_id = g.id
-                ORDER BY g.created_at DESC
-                LIMIT 2000
-            """)).fetchall()
+                GROUP BY g.id, g.prompt, g.style, g.size, g.quality, g.created_at
+                HAVING COALESCE(AVG(f.rating), 0) >= :min_r
+                ORDER BY rating DESC, g.created_at DESC
+                LIMIT :lim
+            """), {'min_r': min_rating, 'lim': limit}).fetchall()
 
         dataset = []
         for row in rows:
             dataset.append({
-                'id':       row[0],
-                'prompt':   row[1],
-                'style':    row[2],
-                'size':     row[3],
-                'quality':  row[4],
+                'id':         row[0],
+                'prompt':     row[1],
+                'style':      row[2],
+                'size':       row[3],
+                'quality':    row[4],
                 'created_at': str(row[5]),
-                'rating':   float(row[6]) if row[6] else 0,
-                'details':  row[7] or '',
-                'tags':     [],
+                'rating':     round(float(row[6]) if row[6] else 0.0, 2),
+                'details':    row[7] or '',
+                'tags':       [],
             })
 
         total = len(dataset)
@@ -616,11 +725,12 @@ def dataset_export():
         ready = len(good) >= 10
 
         return jsonify({
-            'success':          True,
-            'total':            total,
+            'success':            True,
+            'total':              total,
             'ready_for_training': ready,
-            'dataset':          dataset,
-            'message':          f'{total} imágenes encontradas, {len(good)} con buena calificación',
+            'min_rating_filter':  min_rating,
+            'dataset':            dataset,
+            'message':            f'{total} registros encontrados, {len(good)} con rating ≥ 3.5',
         })
 
     except PermissionError as e:
@@ -632,5 +742,4 @@ def dataset_export():
 
 def register(app):
     app.register_blueprint(bp)
-    logger.info('Rutas /api/image/* registradas (v2 con CicDream)')
-  
+    logger.info('Rutas /api/image/* registradas (v2.1 — CicDream dataset fixes)')v
