@@ -1405,6 +1405,16 @@ except Exception as _ie:
     logger.warning(f'CicImage no cargado (no crítico): {_ie}')
     logger.warning(f'Traceback: {traceback.format_exc()}')
 
+# ── Registro módulo CicCode IDE ─────────────────────────────────────────────
+try:
+    from modules.code_executor.routes import bp as ciccode_bp
+    app.register_blueprint(ciccode_bp)
+    logger.info('✅ CicCode IDE módulo registrado (/api/code)')
+except Exception as _ce:
+    import traceback
+    logger.warning(f'CicCode no cargado (no crítico): {_ce}')
+    logger.warning(traceback.format_exc())
+
 # ==========================================
 # ========== PANEL DESARROLLADOR ==========
 # ==========================================
