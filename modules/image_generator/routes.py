@@ -302,17 +302,120 @@ def image_history():
 
 @bp.route('/cicdream/status', methods=['GET'])
 def cicdream_engine_status():
-    """Estado del motor CicDream."""
+    """
+    Estado del motor CicDream.
+    Devuelve estructura PLANA que el frontend lee directamente:
+      d.total_generations, d.avg_rating, d.dataset_size,
+      d.learned_params, d.version, d.mode, d.hf_model,
+      d.last_trained, d.status_msg
+    FIX v2.4: SQL directo a las tablas reales, sin depender de cicdream.status()
+    """
     try:
         _get_current_user()
     except PermissionError as e:
         return jsonify({'success': False, 'error': str(e)}), 401
 
     try:
-        status = cicdream_status()
-        return jsonify({'success': True, 'cicdream': status})
+        from flask import current_app
+        from sqlalchemy import text
+        import os
+
+        db = current_app.extensions['sqlalchemy'].engine
+
+        # ── Consultar tablas reales en BD ────────────────────────────────
+        total_generations = 0
+        avg_rating        = None
+        dataset_size      = 0
+        concepts_learned  = 0
+        last_trained      = None
+
+        try:
+            with db.connect() as conn:
+                # Total generaciones guardadas
+                r = conn.execute(text(
+                    "SELECT COUNT(*) FROM cicdream_generation"
+                )).scalar()
+                total_generations = int(r or 0)
+
+                # Rating promedio de feedbacks
+                r = conn.execute(text(
+                    "SELECT AVG(rating) FROM cicdream_feedback"
+                )).scalar()
+                avg_rating = round(float(r), 2) if r else None
+
+                # Tamaño del dataset (generaciones con al menos 1 feedback)
+                r = conn.execute(text("""
+                    SELECT COUNT(DISTINCT g.id)
+                    FROM cicdream_generation g
+                    INNER JOIN cicdream_feedback f ON f.generation_id = g.id
+                """)).scalar()
+                dataset_size = int(r or 0)
+
+                # Conceptos / parámetros aprendidos
+                try:
+                    r = conn.execute(text(
+                        "SELECT COUNT(*) FROM cicdream_learned"
+                    )).scalar()
+                    concepts_learned = int(r or 0)
+                except Exception:
+                    concepts_learned = 0
+
+                # Último entrenamiento (última fila en cicdream_feedback)
+                try:
+                    r = conn.execute(text(
+                        "SELECT MAX(created_at) FROM cicdream_feedback"
+                    )).scalar()
+                    if r:
+                        last_trained = str(r)[:16].replace('T', ' ')
+                except Exception:
+                    last_trained = None
+
+        except Exception as sql_err:
+            logger.warning(f'[cicdream/status] Error SQL: {sql_err}')
+
+        # ── Determinar estado del motor ──────────────────────────────────
+        hf_model   = os.environ.get('HF_CICDREAM_MODEL', '')
+        hf_display = hf_model.split('/')[-1] if hf_model else 'No configurado'
+
+        if total_generations > 0:
+            status_msg = f'Motor activo · {total_generations} generaciones · {dataset_size} en dataset'
+        else:
+            status_msg = 'Motor funcionando en modo fallback PIL'
+
+        learned_display = str(concepts_learned) if concepts_learned > 0 else '—'
+
+        return jsonify({
+            'success':           True,
+            # ── Campos planos que lee el frontend ──
+            'total_generations': total_generations,
+            'avg_rating':        avg_rating,
+            'dataset_size':      dataset_size,
+            'learned_params':    learned_display,
+            # ── Campos para cdFullStatus ──
+            'version':           'v1.0',
+            'mode':              'learning',
+            'hf_model':          hf_display,
+            'last_trained':      last_trained or 'Nunca',
+            'status_msg':        status_msg,
+            # ── Compat. legado ──
+            'ready':             True,
+        })
+
     except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
+        logger.error(f'[cicdream/status] Error: {e}', exc_info=True)
+        return jsonify({
+            'success':           False,
+            'error':             str(e),
+            'total_generations': 0,
+            'avg_rating':        None,
+            'dataset_size':      0,
+            'learned_params':    '—',
+            'version':           'v1.0',
+            'mode':              'error',
+            'hf_model':          'No configurado',
+            'last_trained':      'Nunca',
+            'status_msg':        f'Error: {str(e)}',
+        }), 500
 
 
 @bp.route('/cicdream/stats', methods=['GET'])
