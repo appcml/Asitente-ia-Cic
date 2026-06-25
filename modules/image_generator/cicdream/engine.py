@@ -16,11 +16,12 @@ from datetime import datetime
 from PIL import Image, ImageEnhance, ImageFilter
 
 logger = logging.getLogger('cicdream.engine')
-# Agregar después de los imports existentes
+
 try:
     from peft import PeftModel
 except ImportError:
     logger.warning("Peft no instalado. Instalalo con: pip install peft")
+
 try:
     from .embeddings import CicDreamEmbeddings, get_embeddings
     from .palette    import CicDreamPalette,    get_palette
@@ -123,7 +124,6 @@ def _get_learned_palette(prompt: str, style: str) -> list:
         if not rows:
             return []
 
-        # Calcular similitud con cada registro
         best_colors = []
         best_score  = 0.0
 
@@ -133,12 +133,9 @@ def _get_learned_palette(prompt: str, style: str) -> list:
             db_details = row[2] or ''
             db_rating  = float(row[3] or 0)
 
-            # Similitud de prompt
             sim = _prompt_similarity(prompt, db_prompt)
-            # Bonus si el estilo coincide
             if db_style == style:
                 sim += 0.15
-            # Peso por rating
             sim *= (db_rating / 5.0)
 
             if sim > best_score:
@@ -163,7 +160,10 @@ class CicDreamEngine:
         if not _imports_ok:
             raise ImportError("Componentes de CicDream no disponibles")
 
-        # === Cargar modelo CicDream v1 con LoRA ===
+        # === Intentar cargar modelo CicDream v1 con LoRA desde HuggingFace ===
+        self._has_custom_model = False
+        self._custom_pipe = None
+
         try:
             from diffusers import StableDiffusionPipeline
             from peft import PeftModel
@@ -177,28 +177,25 @@ class CicDreamEngine:
                 safety_checker=None,
                 use_auth_token=os.environ.get('HUGGINGFACE_TOKEN', '')
             )
-            self._custom_pipe = self._custom_pipe.to("cuda" if torch.cuda.is_available() else "cpu")
+            self._custom_pipe = self._custom_pipe.to(
+                "cuda" if torch.cuda.is_available() else "cpu"
+            )
 
-            # Cargar tu LoRA entrenado
+            # Cargar LoRA entrenado
             self._custom_pipe.unet = PeftModel.from_pretrained(
                 self._custom_pipe.unet,
                 "cmarinanlincopan/cicdream-v1"
             )
 
             self._has_custom_model = True
-            logger.info("[CicDream] ✅ CicDream v1 (LoRA) cargado correctamente desde Hugging Face")
-            
+            logger.info("[CicDream] ✅ CicDream v1 (LoRA) cargado correctamente desde HuggingFace")
+
         except Exception as e:
             self._has_custom_model = False
             self._custom_pipe = None
-            logger.error(f"[CicDream] Error cargando modelo LoRA: {e}")
-                self._has_custom_model = False
-                self._custom_pipe = None
-                logger.warning(f"[CicDream] No se pudo cargar modelo propio: {e}")
-        else:
-            self._has_custom_model = False
-            self._custom_pipe = None
+            logger.warning(f"[CicDream] No se pudo cargar modelo LoRA (se usará motor local): {e}")
 
+        # === Inicializar componentes locales siempre ===
         self.embeddings = CicDreamEmbeddings()
         self.palette    = CicDreamPalette()
         self.config     = DiffusionConfig()
@@ -209,7 +206,7 @@ class CicDreamEngine:
         self._state_path = '/tmp/cicdream_engine_state.json'
         self._load_state()
 
-        logger.info(f"[{ENGINE_NAME}] v{ENGINE_VERSION} iniciado")
+        logger.info(f"[{ENGINE_NAME}] v{ENGINE_VERSION} iniciado — LoRA activo: {self._has_custom_model}")
 
     def generate(self, prompt: str,
                   style:   str = 'realistic',
@@ -267,14 +264,12 @@ class CicDreamEngine:
         t0        = time.time()
         embedding = self.embeddings.encode(enhanced)
 
-        # ✅ NUEVO: intentar usar paleta aprendida del dataset
+        # Intentar usar paleta aprendida del dataset
         learned_colors = _get_learned_palette(prompt, style)
         if learned_colors:
-            # Convertir colores aprendidos al formato que espera palette
             palette_arr = self.palette.build_from_colors(learned_colors, W, H)
             logger.info(f"[CicDream] Usando paleta aprendida de {len(learned_colors)} colores")
         else:
-            # Paleta matemática por defecto
             palette_arr = self.palette.build_gradient_fast(
                 self.palette.get_palette(enhanced, embedding), W, H
             )
