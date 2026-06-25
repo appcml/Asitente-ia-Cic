@@ -942,48 +942,207 @@ tr:hover td{background:rgba(108,99,255,.04);}
           <span class="badge badge-purple" style="margin-top:16px;display:inline-block">🔧 DEV — Próximamente activo</span>
         </div>
       </section>
+      <!-- CICCODE IDE ─────────────────────────────────────────────────────── -->
       <section id="sec-codeexec" class="section">
-        <h2>⚙️ Ejecutor de Código</h2>
-        <p class="subtitle">Sandbox seguro para Python y JavaScript</p>
-        <div class="grid2">
-          <div class="panel">
-            <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">
-              <select id="codeLang" style="width:auto">
-                <option value="python">🐍 Python</option>
-                <option value="javascript">🟨 JavaScript</option>
-              </select>
-              <select id="codeTemplate" style="flex:1" onchange="applyCodeTemplate()">
-                <option value="">— Plantilla —</option>
-                <option value="hello">Hola mundo</option>
-                <option value="fibonacci">Fibonacci</option>
-                <option value="list">Manipular lista</option>
-                <option value="math">Matemáticas</option>
-              </select>
-              <button class="btn btn-sm btn-outline" onclick="clearCode()">✕</button>
+        <h2>⚙️ CicCode IDE</h2>
+        <p class="subtitle">Asistente de código con IA · Genera proyectos · Analiza repositorios · Ejecuta código</p>
+
+        <!-- TABS PRINCIPALES -->
+        <div style="display:flex;gap:4px;margin-bottom:16px;flex-wrap:wrap">
+          <button id="cc-tab-chat"    class="btn btn-primary btn-sm"   onclick="ccTab('chat')"   >💬 Chat con IA</button>
+          <button id="cc-tab-exec"    class="btn btn-outline btn-sm"   onclick="ccTab('exec')"   >▶ Ejecutar</button>
+          <button id="cc-tab-project" class="btn btn-outline btn-sm"   onclick="ccTab('project')">📁 Proyecto</button>
+          <button id="cc-tab-gen"     class="btn btn-outline btn-sm"   onclick="ccTab('gen')"    >🚀 Generar</button>
+        </div>
+
+        <!-- ══ TAB: CHAT CON IA ══ -->
+        <div id="cc-panel-chat">
+          <div class="grid2" style="align-items:start">
+
+            <!-- Panel izquierdo: input + archivos adjuntos -->
+            <div class="panel" style="display:flex;flex-direction:column;gap:10px">
+
+              <!-- Archivos adjuntos en sesión -->
+              <div id="cc-files-bar" style="display:none;padding:8px;background:var(--bg3);border-radius:8px;font-size:.77rem">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+                  <span style="font-weight:600">📎 Archivos en sesión</span>
+                  <button class="btn btn-sm btn-outline" onclick="ccClearFiles()" style="font-size:.7rem;padding:2px 6px">Limpiar todo</button>
+                </div>
+                <div id="cc-files-list"></div>
+              </div>
+
+              <!-- Zona drop + upload -->
+              <div id="cc-drop-zone"
+                style="border:2px dashed var(--border);border-radius:10px;padding:16px;text-align:center;cursor:pointer;transition:border-color .2s;font-size:.82rem;color:var(--text2)"
+                onclick="document.getElementById('cc-file-input').click()"
+                ondrop="ccHandleDrop(event)" ondragover="event.preventDefault();this.style.borderColor='var(--accent)'" ondragleave="this.style.borderColor='var(--border)'">
+                📂 Arrastra archivos aquí o haz clic<br>
+                <span style="font-size:.72rem">Código · ZIP · PDF · Imágenes · Cualquier archivo de texto</span>
+              </div>
+              <input type="file" id="cc-file-input" multiple style="display:none"
+                accept=".py,.js,.ts,.jsx,.tsx,.html,.css,.json,.yaml,.yml,.md,.txt,.sql,.sh,.env,.toml,.cfg,.xml,.csv,.zip,.pdf,.png,.jpg,.jpeg,.webp"
+                onchange="ccUploadFiles(this.files)">
+
+              <!-- Input del mensaje -->
+              <textarea id="cc-msg-input" rows="5"
+                style="font-family:var(--font-mono,monospace);font-size:.83rem;resize:vertical;width:100%;box-sizing:border-box"
+                placeholder="Escribe aquí... Ejemplos:&#10;• Analiza este proyecto y dime qué hace&#10;• Crea un juego de cartas en Python&#10;• Hay un bug en este código: [pega aquí]&#10;• Refactoriza la función X para que sea más eficiente"
+                onkeydown="if(event.ctrlKey&&event.key==='Enter'){event.preventDefault();ccSendChat();}"></textarea>
+
+              <!-- Pegar código rápido -->
+              <div style="display:flex;gap:6px;flex-wrap:wrap">
+                <button class="btn btn-primary" style="flex:1;min-width:120px" id="cc-send-btn" onclick="ccSendChat()">💬 Enviar (Ctrl+Enter)</button>
+                <button class="btn btn-outline btn-sm" onclick="ccClearChat()" title="Limpiar historial">🗑️</button>
+                <button class="btn btn-outline btn-sm" onclick="ccInsertCodeBlock()" title="Insertar bloque de código">&lt;/&gt;</button>
+              </div>
+              <div id="cc-chat-alert" style="font-size:.78rem"></div>
             </div>
-            <textarea id="codeInput" rows="14" style="font-family:monospace;font-size:.83rem;resize:vertical"
-              placeholder="# Escribe tu código..." onkeydown="if(event.ctrlKey&&event.key==='Enter'){event.preventDefault();runCode();}"></textarea>
-            <div style="display:flex;gap:8px;margin-top:10px">
-              <button class="btn btn-primary" style="flex:1" id="codeRunBtn" onclick="runCode()">▶ Ejecutar (Ctrl+Enter)</button>
-              <button class="btn btn-outline btn-sm" onclick="navigator.clipboard.writeText(document.getElementById('codeInput').value)">📋</button>
+
+            <!-- Panel derecho: respuesta de la IA -->
+            <div class="panel" style="min-height:400px">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+                <h3 style="font-size:.88rem">🤖 CicCode responde</h3>
+                <div style="display:flex;gap:6px">
+                  <button class="btn btn-sm btn-outline" onclick="ccCopyLastResponse()" title="Copiar respuesta">📋</button>
+                  <button class="btn btn-sm btn-outline" onclick="document.getElementById('cc-chat-history').innerHTML=''">✕</button>
+                </div>
+              </div>
+              <!-- Historial de conversación -->
+              <div id="cc-chat-history" style="max-height:480px;overflow-y:auto;display:flex;flex-direction:column;gap:12px">
+                <div style="color:var(--text2);font-size:.82rem;text-align:center;padding:20px">
+                  💡 Empieza una conversación, sube archivos o pide que genere un proyecto completo
+                </div>
+              </div>
             </div>
-            <div id="codeAlert" style="margin-top:8px"></div>
           </div>
-          <div class="panel">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-              <h3 style="font-size:.88rem">📤 Output</h3>
-              <button class="btn btn-sm btn-outline" onclick="document.getElementById(&apos;codeOutput&apos;).innerHTML=&apos;&lt;span style=color:var(--text2)&gt;Limpiado&lt;/span&gt;&apos;">✕</button>
+
+          <!-- Archivos generados por la IA -->
+          <div id="cc-gen-files-panel" style="display:none" class="panel" style="margin-top:0">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+              <h3 style="font-size:.88rem">📦 Archivos generados</h3>
+              <div style="display:flex;gap:6px">
+                <button class="btn btn-sm btn-primary" onclick="ccDownloadAllFiles()">⬇️ Descargar todos</button>
+                <button class="btn btn-sm btn-outline" onclick="ccAddGenFilesToSession()">➕ Añadir al proyecto</button>
+              </div>
             </div>
-            <div id="codeOutput" style="font-family:monospace;font-size:.82rem;background:var(--bg3);border-radius:8px;padding:12px;min-height:220px;white-space:pre-wrap;overflow-y:auto;max-height:360px;color:var(--green)">
-              <span style="color:var(--text2)">El output aparecerá aquí...</span>
-            </div>
-            <div id="codeRunInfo" style="margin-top:6px;font-size:.72rem;color:var(--text2)"></div>
+            <div id="cc-gen-files-list" style="display:flex;flex-direction:column;gap:6px"></div>
           </div>
         </div>
-        <div class="panel" style="margin-top:0">
-          <h3 style="font-size:.85rem;margin-bottom:8px">📜 Historial</h3>
-          <div id="codeHistory" style="font-size:.79rem;color:var(--text2)">Sin ejecuciones aún</div>
+
+        <!-- ══ TAB: EJECUTOR SANDBOX ══ -->
+        <div id="cc-panel-exec" style="display:none">
+          <div class="grid2">
+            <div class="panel">
+              <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">
+                <select id="codeLang" style="width:auto">
+                  <option value="python">🐍 Python</option>
+                  <option value="javascript">🟨 JavaScript</option>
+                </select>
+                <select id="codeTemplate" style="flex:1" onchange="applyCodeTemplate()">
+                  <option value="">— Plantilla —</option>
+                  <option value="hello">Hola mundo</option>
+                  <option value="fibonacci">Fibonacci</option>
+                  <option value="list">Manipular lista</option>
+                  <option value="math">Matemáticas</option>
+                </select>
+                <button class="btn btn-sm btn-outline" onclick="clearCode()">✕</button>
+              </div>
+              <textarea id="codeInput" rows="14"
+                style="font-family:monospace;font-size:.83rem;resize:vertical;width:100%;box-sizing:border-box"
+                placeholder="# Escribe tu código..."
+                onkeydown="if(event.ctrlKey&&event.key==='Enter'){event.preventDefault();runCode();}"></textarea>
+              <div style="display:flex;gap:8px;margin-top:10px">
+                <button class="btn btn-primary" style="flex:1" id="codeRunBtn" onclick="runCode()">▶ Ejecutar (Ctrl+Enter)</button>
+                <button class="btn btn-outline btn-sm" onclick="ccSendToChat()" title="Enviar al chat con IA">🤖</button>
+                <button class="btn btn-outline btn-sm" onclick="navigator.clipboard.writeText(document.getElementById('codeInput').value)">📋</button>
+              </div>
+              <div id="codeAlert" style="margin-top:8px"></div>
+            </div>
+            <div class="panel">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+                <h3 style="font-size:.88rem">📤 Output</h3>
+                <button class="btn btn-sm btn-outline" onclick="document.getElementById('codeOutput').innerHTML='<span style=color:var(--text2)>—</span>'">✕</button>
+              </div>
+              <div id="codeOutput" style="font-family:monospace;font-size:.82rem;background:var(--bg3);border-radius:8px;padding:12px;min-height:220px;white-space:pre-wrap;overflow-y:auto;max-height:360px;color:var(--green)">
+                <span style="color:var(--text2)">El output aparecerá aquí...</span>
+              </div>
+              <div id="codeRunInfo" style="margin-top:6px;font-size:.72rem;color:var(--text2)"></div>
+            </div>
+          </div>
+          <div class="panel" style="margin-top:0">
+            <h3 style="font-size:.85rem;margin-bottom:8px">📜 Historial</h3>
+            <div id="codeHistory" style="font-size:.79rem;color:var(--text2)">Sin ejecuciones aún</div>
+          </div>
         </div>
+
+        <!-- ══ TAB: PROYECTO ══ -->
+        <div id="cc-panel-project" style="display:none">
+          <div class="grid2" style="align-items:start">
+            <div class="panel">
+              <h3 style="font-size:.88rem;margin-bottom:10px">📁 Archivos del proyecto</h3>
+              <div style="font-size:.78rem;color:var(--text2);margin-bottom:8px">
+                Sube un ZIP de tu repositorio o agrega archivos uno a uno
+              </div>
+              <div style="display:flex;gap:6px;margin-bottom:10px">
+                <button class="btn btn-primary btn-sm" onclick="document.getElementById('cc-proj-input').click()">📂 Subir ZIP o archivos</button>
+                <button class="btn btn-outline btn-sm" onclick="ccAnalyzeProject()">🔍 Analizar proyecto</button>
+                <button class="btn btn-outline btn-sm" onclick="ccClearFiles()">🗑️ Limpiar</button>
+              </div>
+              <input type="file" id="cc-proj-input" multiple style="display:none"
+                accept=".py,.js,.ts,.jsx,.tsx,.html,.css,.json,.yaml,.yml,.md,.txt,.sql,.sh,.zip,.pdf,.png,.jpg"
+                onchange="ccUploadFiles(this.files)">
+              <div id="cc-proj-tree" style="font-family:monospace;font-size:.78rem;background:var(--bg3);border-radius:8px;padding:10px;min-height:200px;max-height:400px;overflow-y:auto">
+                <span style="color:var(--text2)">Sin archivos cargados</span>
+              </div>
+              <div id="cc-proj-stats" style="font-size:.72rem;color:var(--text2);margin-top:6px"></div>
+            </div>
+            <div class="panel">
+              <h3 style="font-size:.88rem;margin-bottom:10px">🔍 Análisis del proyecto</h3>
+              <textarea id="cc-proj-question" rows="3"
+                style="width:100%;box-sizing:border-box;font-size:.83rem;resize:vertical;margin-bottom:8px"
+                placeholder="Pregunta sobre el proyecto: ¿Qué hace esta función? ¿Cómo mejorarías esto? ¿Dónde está el bug?"></textarea>
+              <button class="btn btn-primary" style="width:100%;margin-bottom:12px" onclick="ccAnalyzeProject()">🔍 Analizar con IA</button>
+              <div id="cc-proj-analysis" style="font-size:.82rem;max-height:380px;overflow-y:auto;color:var(--text)">
+                <span style="color:var(--text2)">El análisis aparecerá aquí...</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ══ TAB: GENERAR PROYECTO ══ -->
+        <div id="cc-panel-gen" style="display:none">
+          <div class="grid2" style="align-items:start">
+            <div class="panel">
+              <h3 style="font-size:.88rem;margin-bottom:10px">🚀 Generar proyecto completo</h3>
+              <label style="font-size:.8rem;color:var(--text2)">Describe qué quieres construir</label>
+              <textarea id="cc-gen-desc" rows="6"
+                style="width:100%;box-sizing:border-box;font-size:.83rem;resize:vertical;margin:6px 0 10px"
+                placeholder="Ejemplos:&#10;• Un juego de cartas en Python con interfaz de texto&#10;• Una API REST con Flask para gestionar tareas (CRUD)&#10;• Una app web con HTML/CSS/JS para calcular el IMC&#10;• Un bot de Telegram que responde preguntas sobre el clima&#10;• Un script para procesar y analizar un CSV de ventas"></textarea>
+              <label style="font-size:.8rem;color:var(--text2)">Stack tecnológico (opcional)</label>
+              <input id="cc-gen-stack" type="text" style="width:100%;box-sizing:border-box;margin:6px 0 10px;font-size:.83rem"
+                placeholder="Ej: Python + Flask + SQLite  /  React + Node.js  /  Auto-detectar">
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;font-size:.82rem">
+                <input type="checkbox" id="cc-gen-tests">
+                <label for="cc-gen-tests">Incluir tests básicos</label>
+              </div>
+              <button class="btn btn-primary" style="width:100%" id="cc-gen-btn" onclick="ccGenerateProject()">🚀 Generar proyecto</button>
+              <div id="cc-gen-alert" style="margin-top:8px;font-size:.78rem"></div>
+            </div>
+            <div class="panel">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+                <h3 style="font-size:.88rem">📦 Proyecto generado</h3>
+                <div id="cc-gen-actions" style="display:none;display:flex;gap:6px">
+                  <button class="btn btn-sm btn-primary" onclick="ccDownloadAllFiles()">⬇️ Descargar ZIP</button>
+                  <button class="btn btn-sm btn-outline" onclick="ccAddGenFilesToSession()">📁 Añadir al proyecto</button>
+                </div>
+              </div>
+              <div id="cc-gen-output" style="font-size:.82rem;max-height:480px;overflow-y:auto">
+                <span style="color:var(--text2)">El proyecto generado aparecerá aquí, archivo por archivo...</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
       </section>
 
       <!-- CICDREAM STUDIO -->
@@ -1961,6 +2120,376 @@ function applyCodeTemplate(){
   document.getElementById('codeTemplate').value='';
 }
 function clearCode(){document.getElementById('codeInput').value='';document.getElementById('codeOutput').innerHTML='<span style="color:var(--text2)">Limpiado</span>';document.getElementById('codeRunInfo').textContent='';}
+/* ══════════════════════════════════════════════════════════════════════════
+   CICCODE IDE — Sistema completo de asistente de código con IA
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Estado global CicCode ─────────────────────────────────────────────── */
+let _ccHistory   = [];          // Historial de conversación con la IA
+let _ccFiles     = [];          // Archivos en sesión (proyecto)
+let _ccGenFiles  = [];          // Archivos generados por la IA en la última respuesta
+let _ccLastResp  = '';          // Última respuesta de la IA (para copiar)
+
+/* ── Tabs del IDE ──────────────────────────────────────────────────────── */
+function ccTab(name) {
+  ['chat','exec','project','gen'].forEach(t => {
+    document.getElementById('cc-panel-'+t).style.display = (t===name) ? '' : 'none';
+    const btn = document.getElementById('cc-tab-'+t);
+    if(btn) {
+      btn.className = (t===name) ? 'btn btn-primary btn-sm' : 'btn btn-outline btn-sm';
+    }
+  });
+}
+
+/* ── Upload de archivos ────────────────────────────────────────────────── */
+function ccHandleDrop(e) {
+  e.preventDefault();
+  e.currentTarget.style.borderColor = 'var(--border)';
+  ccUploadFiles(e.dataTransfer.files);
+}
+
+async function ccUploadFiles(fileList) {
+  if (!fileList || !fileList.length) return;
+  showAlert('cc-chat-alert', '⏳ Cargando archivos...', 'info');
+  for (const file of fileList) {
+    const fd = new FormData();
+    fd.append('file', file);
+    try {
+      const r = await fetch('/api/code/upload', {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('cic_token') || '') },
+        body: fd
+      });
+      const d = await r.json();
+      if (!d.success) { showAlert('cc-chat-alert', 'Error: ' + d.error, 'err'); continue; }
+
+      if (d.type === 'project_zip') {
+        // Agregar todos los archivos del ZIP
+        d.files.forEach(f => { if (!_ccFiles.find(x => x.path===f.path)) _ccFiles.push(f); });
+        showAlert('cc-chat-alert', `✅ ${d.message}`, 'ok');
+      } else if (d.type === 'image') {
+        _ccFiles.push({ path: d.filename, content: '[imagen]', lang: 'image', base64: d.base64, mime: d.mime_type, type: 'image' });
+        showAlert('cc-chat-alert', `✅ ${d.message}`, 'ok');
+      } else {
+        _ccFiles.push({ path: d.path || d.filename, content: d.content || d.text || '', lang: d.lang || 'text', type: d.type });
+        showAlert('cc-chat-alert', `✅ ${d.message}`, 'ok');
+      }
+    } catch(e) {
+      showAlert('cc-chat-alert', 'Error subiendo archivo: ' + e.message, 'err');
+    }
+  }
+  ccRenderFilesList();
+  ccRenderProjectTree();
+}
+
+function ccRenderFilesList() {
+  const bar  = document.getElementById('cc-files-bar');
+  const list = document.getElementById('cc-files-list');
+  if (!bar || !list) return;
+  if (!_ccFiles.length) { bar.style.display = 'none'; return; }
+  bar.style.display = '';
+  list.innerHTML = _ccFiles.map((f,i) => `
+    <div style="display:flex;align-items:center;gap:6px;padding:3px 0;border-bottom:1px solid var(--border)">
+      <span style="font-size:.75rem;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--accent)">${esc(f.path)}</span>
+      <span style="font-size:.7rem;color:var(--text2)">${f.lang}</span>
+      <button onclick="_ccFiles.splice(${i},1);ccRenderFilesList();ccRenderProjectTree();"
+        style="background:none;border:none;color:var(--text2);cursor:pointer;font-size:.8rem;padding:0 2px">✕</button>
+    </div>`).join('');
+}
+
+function ccRenderProjectTree() {
+  const el = document.getElementById('cc-proj-tree');
+  const st = document.getElementById('cc-proj-stats');
+  if (!el) return;
+  if (!_ccFiles.length) {
+    el.innerHTML = '<span style="color:var(--text2)">Sin archivos cargados</span>';
+    if(st) st.textContent = '';
+    return;
+  }
+  el.innerHTML = _ccFiles.map(f =>
+    `<div style="padding:2px 0;cursor:pointer;color:var(--accent)" onclick="ccPreviewFile('${esc(f.path)}')">
+      📄 ${esc(f.path)}<span style="color:var(--text2);font-size:.7rem;margin-left:6px">${f.lang}</span>
+    </div>`
+  ).join('');
+  if(st) st.textContent = `${_ccFiles.length} archivos · ${_ccFiles.reduce((a,f) => a+(f.content||'').length,0).toLocaleString()} chars`;
+}
+
+function ccPreviewFile(path) {
+  const f = _ccFiles.find(x => x.path === path);
+  if (!f) return;
+  document.getElementById('cc-proj-question').value = `Explícame qué hace el archivo ${path}`;
+}
+
+function ccClearFiles() {
+  _ccFiles = [];
+  ccRenderFilesList();
+  ccRenderProjectTree();
+}
+
+/* ── Chat con IA ───────────────────────────────────────────────────────── */
+async function ccSendChat() {
+  const input = document.getElementById('cc-msg-input');
+  const msg   = (input.value || '').trim();
+  if (!msg) return showAlert('cc-chat-alert', 'Escribe un mensaje', 'err');
+
+  const btn = document.getElementById('cc-send-btn');
+  btn.disabled = true; btn.textContent = '⏳ Pensando...';
+  showAlert('cc-chat-alert', '', '');
+
+  // Agregar mensaje del usuario al historial visual
+  _ccHistory.push({ role: 'user', content: msg });
+  ccRenderChatHistory();
+  input.value = '';
+
+  try {
+    const body = {
+      message:       msg,
+      history:       _ccHistory.slice(-14),
+      project_files: _ccFiles.filter(f => f.type !== 'image').slice(0, 20),
+    };
+    const d = await req('/api/code/chat', 'POST', body);
+    if (!d.success) throw new Error(d.error || 'Error desconocido');
+
+    _ccLastResp = d.response;
+    _ccHistory.push({ role: 'assistant', content: d.response });
+    _ccGenFiles = d.generated_files || [];
+    ccRenderChatHistory();
+    ccRenderGeneratedFiles();
+  } catch(e) {
+    showAlert('cc-chat-alert', 'Error: ' + e.message, 'err');
+    _ccHistory.pop(); // revertir el mensaje del usuario
+    ccRenderChatHistory();
+    input.value = msg;
+  } finally {
+    btn.disabled = false; btn.textContent = '💬 Enviar (Ctrl+Enter)';
+  }
+}
+
+function ccRenderChatHistory() {
+  const el = document.getElementById('cc-chat-history');
+  if (!el) return;
+  if (!_ccHistory.length) {
+    el.innerHTML = '<div style="color:var(--text2);font-size:.82rem;text-align:center;padding:20px">💡 Empieza una conversación...</div>';
+    return;
+  }
+  el.innerHTML = _ccHistory.map(h => {
+    const isUser = h.role === 'user';
+    const bg     = isUser ? 'var(--bg3)' : 'var(--bg2)';
+    const align  = isUser ? 'flex-end' : 'flex-start';
+    const label  = isUser ? '👤 Tú' : '🤖 CicCode';
+    const color  = isUser ? 'var(--accent)' : 'var(--green)';
+    return `<div style="display:flex;flex-direction:column;align-items:${align};gap:4px">
+      <span style="font-size:.7rem;color:${color};font-weight:600">${label}</span>
+      <div style="background:${bg};border-radius:10px;padding:10px 14px;max-width:92%;font-size:.83rem;white-space:pre-wrap;word-break:break-word;line-height:1.5">
+        ${ccFormatMessage(h.content)}
+      </div>
+    </div>`;
+  }).join('');
+  el.scrollTop = el.scrollHeight;
+}
+
+function ccFormatMessage(text) {
+  // Resaltar bloques de código
+  return esc(text).replace(/```(\w+)?(?::([^
+]+))?
+([\s\S]*?)```/g, (m, lang, path, code) => {
+    const label = path ? `${lang||''}:${path}` : (lang||'código');
+    const id    = 'cccode_' + Math.random().toString(36).slice(2,8);
+    return `<div style="margin:6px 0;border-radius:6px;overflow:hidden;border:1px solid var(--border)">
+      <div style="background:var(--bg3);padding:4px 10px;font-size:.7rem;color:var(--accent);display:flex;justify-content:space-between">
+        <span>${esc(label)}</span>
+        <button onclick="navigator.clipboard.writeText(document.getElementById('${id}').textContent)" 
+          style="background:none;border:none;color:var(--text2);cursor:pointer;font-size:.7rem">📋</button>
+      </div>
+      <pre id="${id}" style="margin:0;padding:8px 10px;font-size:.78rem;overflow-x:auto;background:var(--bg3)">${esc(code)}</pre>
+    </div>`;
+  });
+}
+
+function ccClearChat() {
+  _ccHistory = [];
+  _ccGenFiles = [];
+  _ccLastResp = '';
+  ccRenderChatHistory();
+  document.getElementById('cc-gen-files-panel').style.display = 'none';
+}
+
+function ccCopyLastResponse() {
+  if (_ccLastResp) navigator.clipboard.writeText(_ccLastResp);
+}
+
+function ccInsertCodeBlock() {
+  const ta = document.getElementById('cc-msg-input');
+  const pos = ta.selectionStart;
+  const val = ta.value;
+  ta.value = val.slice(0,pos) + '
+```python
+
+```
+' + val.slice(pos);
+  ta.focus();
+  ta.selectionStart = ta.selectionEnd = pos + 10;
+}
+
+/* ── Archivos generados ────────────────────────────────────────────────── */
+function ccRenderGeneratedFiles() {
+  const panel = document.getElementById('cc-gen-files-panel');
+  const list  = document.getElementById('cc-gen-files-list');
+  if (!panel || !list || !_ccGenFiles.length) {
+    if(panel) panel.style.display = 'none';
+    return;
+  }
+  panel.style.display = '';
+  list.innerHTML = _ccGenFiles.map((f,i) => `
+    <div style="border:1px solid var(--border);border-radius:8px;overflow:hidden">
+      <div style="background:var(--bg3);padding:6px 12px;display:flex;justify-content:space-between;align-items:center">
+        <span style="font-size:.78rem;font-weight:600;color:var(--accent)">📄 ${esc(f.path)}</span>
+        <div style="display:flex;gap:4px">
+          <button onclick="navigator.clipboard.writeText(_ccGenFiles[${i}].content)"
+            class="btn btn-sm btn-outline" style="font-size:.7rem;padding:2px 6px">📋</button>
+          <button onclick="ccDownloadFile(${i})"
+            class="btn btn-sm btn-outline" style="font-size:.7rem;padding:2px 6px">⬇️</button>
+          <button onclick="ccLoadToEditor(${i})"
+            class="btn btn-sm btn-outline" style="font-size:.7rem;padding:2px 6px">▶ Ejecutar</button>
+        </div>
+      </div>
+      <pre style="margin:0;padding:8px 12px;font-size:.76rem;max-height:200px;overflow-y:auto;background:var(--bg2)">${esc(f.content.slice(0,2000))}${f.content.length>2000?'
+...':''}
+</pre>
+    </div>`).join('');
+}
+
+function ccDownloadFile(i) {
+  const f   = _ccGenFiles[i];
+  const blob = new Blob([f.content], { type: 'text/plain' });
+  const a    = document.createElement('a');
+  a.href     = URL.createObjectURL(blob);
+  a.download = f.path.split('/').pop();
+  a.click();
+}
+
+function ccDownloadAllFiles() {
+  const files = _ccGenFiles.length ? _ccGenFiles : _ccFiles;
+  if (!files.length) return;
+  // Descargar uno por uno si hay varios
+  files.forEach((f,i) => setTimeout(() => ccDownloadFile ? null : null, i*200));
+  // Si hay un solo archivo, descarga directo
+  if (files.length === 1) {
+    const f    = files[0];
+    const blob = new Blob([f.content], { type: 'text/plain' });
+    const a    = document.createElement('a');
+    a.href     = URL.createObjectURL(blob);
+    a.download = f.path.split('/').pop() || 'archivo.txt';
+    a.click();
+    return;
+  }
+  // Múltiples archivos: descargar cada uno
+  files.forEach((f,i) => {
+    setTimeout(() => {
+      const blob = new Blob([f.content], { type: 'text/plain' });
+      const a    = document.createElement('a');
+      a.href     = URL.createObjectURL(blob);
+      a.download = f.path.split('/').pop() || `archivo_${i}.txt`;
+      a.click();
+    }, i * 300);
+  });
+}
+
+function ccAddGenFilesToSession() {
+  _ccGenFiles.forEach(f => { if (!_ccFiles.find(x => x.path===f.path)) _ccFiles.push(f); });
+  ccRenderFilesList();
+  ccRenderProjectTree();
+  showAlert('cc-chat-alert', `✅ ${_ccGenFiles.length} archivos añadidos al proyecto`, 'ok');
+}
+
+function ccLoadToEditor(i) {
+  const f = _ccGenFiles[i];
+  document.getElementById('codeInput').value = f.content;
+  const lang = f.language === 'javascript' ? 'javascript' : 'python';
+  document.getElementById('codeLang').value = lang;
+  ccTab('exec');
+}
+
+/* ── Análisis de proyecto ──────────────────────────────────────────────── */
+async function ccAnalyzeProject() {
+  if (!_ccFiles.length) return showAlert('cc-chat-alert', 'Primero sube los archivos del proyecto', 'err');
+  const qEl = document.getElementById('cc-proj-question');
+  const question = qEl ? qEl.value.trim() : 'Analiza este proyecto completo';
+  const outEl = document.getElementById('cc-proj-analysis');
+  if (outEl) outEl.innerHTML = '<span style="color:var(--text2)">⏳ Analizando...</span>';
+  try {
+    const d = await req('/api/code/analyze', 'POST', {
+      files:    _ccFiles.filter(f => f.type !== 'image'),
+      question: question || 'Analiza este proyecto completo',
+    });
+    if (!d.success) throw new Error(d.error);
+    if (outEl) outEl.innerHTML = `<pre style="white-space:pre-wrap;font-size:.82rem">${esc(d.analysis)}</pre>`;
+    // También añadir al historial de chat
+    _ccHistory.push({ role: 'user', content: question || 'Analiza el proyecto' });
+    _ccHistory.push({ role: 'assistant', content: d.analysis });
+  } catch(e) {
+    if (outEl) outEl.innerHTML = `<span style="color:var(--red)">Error: ${esc(e.message)}</span>`;
+  }
+}
+
+/* ── Generador de proyectos ────────────────────────────────────────────── */
+async function ccGenerateProject() {
+  const desc  = (document.getElementById('cc-gen-desc').value || '').trim();
+  const stack = (document.getElementById('cc-gen-stack').value || '').trim();
+  const tests = document.getElementById('cc-gen-tests').checked;
+  if (!desc) return showAlert('cc-gen-alert', 'Describe qué quieres generar', 'err');
+
+  const btn    = document.getElementById('cc-gen-btn');
+  const outEl  = document.getElementById('cc-gen-output');
+  const actEl  = document.getElementById('cc-gen-actions');
+  btn.disabled = true; btn.textContent = '⏳ Generando proyecto...';
+  if (outEl) outEl.innerHTML = '<span style="color:var(--text2)">⏳ La IA está generando tu proyecto...</span>';
+  showAlert('cc-gen-alert', '', '');
+
+  try {
+    const d = await req('/api/code/generate', 'POST', {
+      description:   desc,
+      tech_stack:    stack || 'auto',
+      include_tests: tests,
+      history:       _ccHistory.slice(-6),
+    });
+    if (!d.success) throw new Error(d.error);
+
+    _ccGenFiles = d.generated_files || [];
+
+    // Renderizar respuesta con archivos
+    if (outEl) {
+      outEl.innerHTML = `<pre style="white-space:pre-wrap;font-size:.82rem;margin-bottom:12px">${esc(d.response)}</pre>`;
+    }
+    if (actEl && _ccGenFiles.length) actEl.style.display = 'flex';
+    showAlert('cc-gen-alert', `✅ Proyecto generado: ${_ccGenFiles.length} archivos`, 'ok');
+
+    // Añadir al historial del chat
+    _ccHistory.push({ role: 'user', content: `Genera: ${desc}` });
+    _ccHistory.push({ role: 'assistant', content: d.response });
+  } catch(e) {
+    showAlert('cc-gen-alert', 'Error: ' + e.message, 'err');
+    if (outEl) outEl.innerHTML = `<span style="color:var(--red)">Error: ${esc(e.message)}</span>`;
+  } finally {
+    btn.disabled = false; btn.textContent = '🚀 Generar proyecto';
+  }
+}
+
+/* ── Enviar código del editor al chat ──────────────────────────────────── */
+function ccSendToChat() {
+  const code = document.getElementById('codeInput').value.trim();
+  const lang = document.getElementById('codeLang').value;
+  if (!code) return;
+  const ta = document.getElementById('cc-msg-input');
+  ta.value = `Analiza este código y dime cómo mejorarlo:
+\`\`\`${lang}
+${code}
+\`\`\``;
+  ccTab('chat');
+  ta.focus();
+}
+
+/* ── Ejecutor sandbox (backward compat) ────────────────────────────────── */
 async function runCode(){
   const code=document.getElementById('codeInput').value.trim();
   const lang=document.getElementById('codeLang').value;
@@ -1971,10 +2500,17 @@ async function runCode(){
   try{
     const d=await req('/api/code/execute','POST',{code,language:lang,timeout:10});
     const elapsed=((Date.now()-t0)/1000).toFixed(2);
-    const out=d.output||d.result||d.error||'Sin output';
-    const ok=!d.error&&d.success!==false;
-    document.getElementById('codeOutput').innerHTML=`<span style="color:${ok?'var(--green)':'var(--red)'}">${esc(out)}</span>`;
-    document.getElementById('codeRunInfo').textContent=`Ejecutado en ${elapsed}s · ${lang}`;
+    // El backend ahora retorna stdout/stderr
+    const out  = d.stdout || d.output || d.result || '';
+    const err  = d.stderr || '';
+    const ok   = d.success !== false && !d.error;
+    let html   = '';
+    if(out) html += `<span style="color:var(--green)">${esc(out)}</span>`;
+    if(err) html += `<span style="color:var(--yellow)">[stderr] ${esc(err)}</span>`;
+    if(d.error) html += `<span style="color:var(--red)">Error: ${esc(d.error)}</span>`;
+    if(!html) html = '<span style="color:var(--text2)">Sin output</span>';
+    document.getElementById('codeOutput').innerHTML=html;
+    document.getElementById('codeRunInfo').textContent=`Ejecutado en ${elapsed}s · ${lang} · exit ${d.exit_code??0}`;
     showAlert('codeAlert','','');
     _codeRunHistory.unshift({code:code.slice(0,60),lang,time:new Date().toLocaleTimeString(),elapsed,ok});
     if(_codeRunHistory.length>10)_codeRunHistory.pop();
