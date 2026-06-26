@@ -353,12 +353,48 @@ def code_chat():
     if not message:
         return jsonify({'success': False, 'error': 'Mensaje vacío'}), 400
 
-    # Construir contexto del proyecto si hay archivos
+    # ── Búsqueda inteligente de archivos mencionados en el mensaje ─────
+    # Si el usuario menciona un archivo (ej: "index.html"), priorizar ese archivo
+    # y enviarlo COMPLETO en lugar de truncado.
+    msg_lower = message.lower()
+    mentioned_files = []
+    other_files     = []
+
+    for f in project:
+        path = (f.get('path') or '').lower()
+        fname = path.rsplit('/', 1)[-1]
+        # Coincide si el nombre del archivo (con o sin ruta) aparece en el mensaje
+        if fname and fname in msg_lower:
+            mentioned_files.append(f)
+        elif path and path in msg_lower:
+            mentioned_files.append(f)
+        else:
+            other_files.append(f)
+
+    # Construir contexto del proyecto
     project_ctx = ''
     if project:
         project_ctx = '\n\n## Archivos del proyecto en sesión:\n'
-        for f in project[:20]:  # máx 20 archivos en contexto
-            project_ctx += f"\n### {f.get('path', 'archivo')}\n```{f.get('lang','')}\n{f.get('content','')[:3000]}\n```\n"
+        project_ctx += f'Total archivos disponibles: {len(project)}\n'
+
+        # Archivos mencionados explícitamente → enviar COMPLETOS (hasta 40k chars c/u)
+        for f in mentioned_files[:5]:
+            content_full = f.get('content', '') or ''
+            project_ctx += f"\n### 📌 {f.get('path', 'archivo')} (archivo mencionado, contenido completo)\n"
+            project_ctx += f"```{f.get('lang','')}\n{content_full[:40000]}\n```\n"
+
+        # Resto de archivos → resumen + primeras líneas
+        remaining_slots = max(0, 25 - len(mentioned_files))
+        for f in other_files[:remaining_slots]:
+            preview = (f.get('content', '') or '')[:1500]
+            project_ctx += f"\n### {f.get('path', 'archivo')}\n```{f.get('lang','')}\n{preview}\n```\n"
+
+        # Lista de archivos restantes (solo nombres)
+        not_shown = len(other_files) - remaining_slots
+        if not_shown > 0:
+            project_ctx += f"\n### Otros archivos disponibles (no mostrados aquí):\n"
+            for f in other_files[remaining_slots:remaining_slots+30]:
+                project_ctx += f"- {f.get('path', 'archivo')}\n"
 
     # System prompt especializado en código
     system = f"""Eres CicCode, el asistente de programación de Cic_IA.
