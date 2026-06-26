@@ -960,12 +960,12 @@ tr:hover td{background:rgba(108,99,255,.04);}
           <div class="grid2" style="align-items:start">
 
             <!-- Panel izquierdo: input + archivos adjuntos -->
-            <div class="panel" style="display:flex;flex-direction:column;gap:10px">
+            <div class="panel" style="display:flex;flex-direction:column;gap:10px;max-height:680px">
 
-              <!-- Archivos adjuntos en sesión -->
-              <div id="cc-files-bar" style="display:none;padding:8px;background:var(--bg3);border-radius:8px;font-size:.77rem">
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-                  <span style="font-weight:600">📎 Archivos en sesión</span>
+              <!-- Archivos adjuntos en sesión - con scroll vertical y altura limitada -->
+              <div id="cc-files-bar" style="display:none;padding:8px;background:var(--bg3);border-radius:8px;font-size:.77rem;max-height:200px;overflow-y:auto;flex-shrink:0">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;position:sticky;top:0;background:var(--bg3);padding-bottom:4px;z-index:2">
+                  <span style="font-weight:600">📎 Archivos en sesión (<span id="cc-files-count">0</span>)</span>
                   <button class="btn btn-sm btn-outline" onclick="ccClearFiles()" style="font-size:.7rem;padding:2px 6px">Limpiar todo</button>
                 </div>
                 <div id="cc-files-list"></div>
@@ -999,16 +999,16 @@ tr:hover td{background:rgba(108,99,255,.04);}
             </div>
 
             <!-- Panel derecho: respuesta de la IA -->
-            <div class="panel" style="min-height:400px">
-              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+            <div class="panel" style="min-height:680px;max-height:680px;display:flex;flex-direction:column">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-shrink:0">
                 <h3 style="font-size:.88rem">🤖 CicCode responde</h3>
                 <div style="display:flex;gap:6px">
                   <button class="btn btn-sm btn-outline" onclick="ccCopyLastResponse()" title="Copiar respuesta">📋</button>
                   <button class="btn btn-sm btn-outline" onclick="document.getElementById('cc-chat-history').innerHTML=''">✕</button>
                 </div>
               </div>
-              <!-- Historial de conversación -->
-              <div id="cc-chat-history" style="max-height:480px;overflow-y:auto;display:flex;flex-direction:column;gap:12px">
+              <!-- Historial de conversación - ocupa todo el espacio restante -->
+              <div id="cc-chat-history" style="flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:12px;padding-right:4px">
                 <div style="color:var(--text2);font-size:.82rem;text-align:center;padding:20px">
                   💡 Empieza una conversación, sube archivos o pide que genere un proyecto completo
                 </div>
@@ -1091,7 +1091,7 @@ tr:hover td{background:rgba(108,99,255,.04);}
               <input type="file" id="cc-proj-input" multiple style="display:none"
                 accept=".py,.js,.ts,.jsx,.tsx,.html,.css,.json,.yaml,.yml,.md,.txt,.sql,.sh,.zip,.pdf,.png,.jpg"
                 onchange="ccUploadFiles(this.files)">
-              <div id="cc-proj-tree" style="font-family:monospace;font-size:.78rem;background:var(--bg3);border-radius:8px;padding:10px;min-height:200px;max-height:400px;overflow-y:auto">
+              <div id="cc-proj-tree" style="font-family:monospace;font-size:.78rem;background:var(--bg3);border-radius:8px;padding:10px;height:480px;overflow-y:auto;overflow-x:auto;white-space:nowrap">
                 <span style="color:var(--text2)">Sin archivos cargados</span>
               </div>
               <div id="cc-proj-stats" style="font-size:.72rem;color:var(--text2);margin-top:6px"></div>
@@ -2178,17 +2178,20 @@ async function ccUploadFiles(fileList) {
 }
 
 function ccRenderFilesList() {
-  var bar  = document.getElementById('cc-files-bar');
-  var list = document.getElementById('cc-files-list');
+  var bar   = document.getElementById('cc-files-bar');
+  var list  = document.getElementById('cc-files-list');
+  var count = document.getElementById('cc-files-count');
   if (!bar || !list) return;
+  if (count) count.textContent = _ccFiles.length;
   if (!_ccFiles.length) { bar.style.display = 'none'; return; }
   bar.style.display = '';
   var html = '';
   _ccFiles.forEach(function(f, i) {
-    html += '<div style="display:flex;align-items:center;gap:6px;padding:3px 0;border-bottom:1px solid var(--border)">'
-      + '<span style="font-size:.75rem;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--accent)">' + esc(f.path) + '</span>'
-      + '<span style="font-size:.7rem;color:var(--text2)">' + (f.lang||'') + '</span>'
-      + '<button onclick="_ccFiles.splice('+i+',1);ccRenderFilesList();ccRenderProjectTree();" style="background:none;border:none;color:var(--text2);cursor:pointer;font-size:.8rem;padding:0 2px">✕</button>'
+    var shortPath = f.path.length > 48 ? '...' + f.path.slice(-45) : f.path;
+    html += '<div style="display:flex;align-items:center;gap:6px;padding:3px 0;border-bottom:1px solid var(--border)" title="'+esc(f.path)+'">'
+      + '<span style="font-size:.72rem;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--accent)">' + esc(shortPath) + '</span>'
+      + '<span style="font-size:.68rem;color:var(--text2);flex-shrink:0">' + (f.lang||'') + '</span>'
+      + '<button onclick="_ccFiles.splice('+i+',1);ccRenderFilesList();ccRenderProjectTree();" style="background:none;border:none;color:var(--text2);cursor:pointer;font-size:.8rem;padding:0 2px;flex-shrink:0">✕</button>'
       + '</div>';
   });
   list.innerHTML = html;
