@@ -67,28 +67,65 @@ MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
 # ═══════════════════════════════════════════════════════════════════════════
 
 def _get_current_user():
-    """Obtiene usuario del token JWT."""
+    """Verifica token contra BD — mismo mecanismo que token_required.
+    No importa cic_ia_mejorado para evitar importación circular.
+    """
     from flask import current_app
-    import jwt as pyjwt
-    token = None
-    auth  = request.headers.get('Authorization', '')
+    from sqlalchemy import text
+
+    auth = request.headers.get('Authorization', '')
     if auth.startswith('Bearer '):
-        token = auth.split(' ', 1)[1]
+        token = auth[7:]
+    else:
+        parts = auth.split()
+        token = parts[1] if len(parts) == 2 else None
     if not token:
-        token = request.headers.get('X-Token') or request.args.get('token')
+        token = request.args.get('token')
     if not token:
         raise PermissionError('Token requerido')
-    secret = current_app.config.get('SECRET_KEY', os.environ.get('SECRET_KEY', 'dev'))
-    try:
-        payload = pyjwt.decode(token, secret, algorithms=['HS256'])
-    except Exception:
-        raise PermissionError('Token inválido o expirado')
-    # Importar modelo User del contexto de la app
-    from cic_ia_mejorado import User
-    user = User.query.get(payload.get('user_id'))
-    if not user:
-        raise PermissionError('Usuario no encontrado')
-    return user
+
+    db     = current_app.extensions['sqlalchemy']
+    engine = db.engine
+
+    with engine.connect() as conn:
+        row = conn.execute(
+            text('SELECT id, user_id, expires_at FROM user_session WHERE token = :t LIMIT 1'),
+            {'t': token}
+        ).fetchone()
+
+    if not row:
+        raise PermissionError('Token inválido')
+
+    session_id, user_id, expires_at = row[0], row[1], row[2]
+
+    if expires_at and datetime.utcnow() > expires_at:
+        with engine.connect() as conn:
+            conn.execute(text('DELETE FROM user_session WHERE id = :id'), {'id': session_id})
+            conn.commit()
+        raise PermissionError('Token expirado')
+
+    with engine.connect() as conn:
+        conn.execute(
+            text('UPDATE user_session SET last_access = :now WHERE id = :id'),
+            {'now': datetime.utcnow(), 'id': session_id}
+        )
+        conn.commit()
+
+    with engine.connect() as conn:
+        user_row = conn.execute(
+            text('SELECT id, username, is_active FROM "user" WHERE id = :uid LIMIT 1'),
+            {'uid': user_id}
+        ).fetchone()
+
+    if not user_row or not user_row[2]:
+        raise PermissionError('Usuario inactivo')
+
+    class SimpleUser:
+        def __init__(self, id, username):
+            self.id       = id
+            self.username = username
+
+    return SimpleUser(user_row[0], user_row[1])
 
 
 def _call_groq_code(system: str, messages: list, max_tokens: int = 4096) -> str:
