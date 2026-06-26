@@ -1112,34 +1112,75 @@ tr:hover td{background:rgba(108,99,255,.04);}
         <!-- ══ TAB: GENERAR PROYECTO ══ -->
         <div id="cc-panel-gen" style="display:none">
           <div class="grid2" style="align-items:start">
-            <div class="panel">
-              <h3 style="font-size:.88rem;margin-bottom:10px">🚀 Generar proyecto completo</h3>
-              <label style="font-size:.8rem;color:var(--text2)">Describe qué quieres construir</label>
-              <textarea id="cc-gen-desc" rows="6"
-                style="width:100%;box-sizing:border-box;font-size:.83rem;resize:vertical;margin:6px 0 10px"
-                placeholder="Ejemplos:&#10;• Un juego de cartas en Python con interfaz de texto&#10;• Una API REST con Flask para gestionar tareas (CRUD)&#10;• Una app web con HTML/CSS/JS para calcular el IMC&#10;• Un bot de Telegram que responde preguntas sobre el clima&#10;• Un script para procesar y analizar un CSV de ventas"></textarea>
-              <label style="font-size:.8rem;color:var(--text2)">Stack tecnológico (opcional)</label>
-              <input id="cc-gen-stack" type="text" style="width:100%;box-sizing:border-box;margin:6px 0 10px;font-size:.83rem"
-                placeholder="Ej: Python + Flask + SQLite  /  React + Node.js  /  Auto-detectar">
-              <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;font-size:.82rem">
-                <input type="checkbox" id="cc-gen-tests">
-                <label for="cc-gen-tests">Incluir tests básicos</label>
+
+            <!-- ═══ COLUMNA IZQUIERDA ═══ -->
+            <div style="display:flex;flex-direction:column;gap:12px">
+
+              <!-- Lista de archivos generados (arriba) -->
+              <div class="panel" id="cc-gen-files-card" style="display:none">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+                  <h3 style="font-size:.88rem">📦 Archivos generados (<span id="cc-gen-count">0</span>)</h3>
+                  <div style="display:flex;gap:6px">
+                    <button class="btn btn-sm btn-primary" onclick="ccDownloadAllGenFiles()" title="Descargar todos">⬇️ Todos</button>
+                    <button class="btn btn-sm btn-outline" onclick="ccAddGenFilesToSession()" title="Añadir al proyecto">📁</button>
+                  </div>
+                </div>
+                <div id="cc-gen-files-grid" style="display:flex;flex-direction:column;gap:6px;max-height:240px;overflow-y:auto"></div>
               </div>
-              <button class="btn btn-primary" style="width:100%" id="cc-gen-btn" onclick="ccGenerateProject()">🚀 Generar proyecto</button>
-              <div id="cc-gen-alert" style="margin-top:8px;font-size:.78rem"></div>
+
+              <!-- Panel de descripción + chat continuo -->
+              <div class="panel">
+                <h3 style="font-size:.88rem;margin-bottom:10px">🚀 Generar proyecto completo</h3>
+                <label style="font-size:.8rem;color:var(--text2)">Describe qué quieres construir</label>
+                <textarea id="cc-gen-desc" rows="5"
+                  style="width:100%;box-sizing:border-box;font-size:.83rem;resize:vertical;margin:6px 0 10px"
+                  placeholder="Ejemplos:&#10;• Juego de cartas en Python con interfaz de texto&#10;• API REST con Flask para gestionar tareas (CRUD)&#10;• App web HTML/CSS/JS para calcular el IMC"></textarea>
+                <label style="font-size:.8rem;color:var(--text2)">Stack tecnológico (opcional)</label>
+                <input id="cc-gen-stack" type="text" style="width:100%;box-sizing:border-box;margin:6px 0 10px;font-size:.83rem"
+                  placeholder="Ej: Python + Flask · React + Node · Auto-detectar">
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;font-size:.82rem">
+                  <input type="checkbox" id="cc-gen-tests">
+                  <label for="cc-gen-tests">Incluir tests básicos</label>
+                </div>
+                <button class="btn btn-primary" style="width:100%" id="cc-gen-btn" onclick="ccGenerateProject()">🚀 Generar proyecto</button>
+                <div id="cc-gen-alert" style="margin-top:8px;font-size:.78rem"></div>
+              </div>
+
+              <!-- Chat continuo con la IA sobre el proyecto generado -->
+              <div class="panel" id="cc-gen-chat-card" style="display:none">
+                <h3 style="font-size:.88rem;margin-bottom:10px">💬 Iterar con la IA</h3>
+                <div id="cc-gen-chat-history" style="max-height:200px;overflow-y:auto;display:flex;flex-direction:column;gap:8px;margin-bottom:10px;padding:8px;background:var(--bg3);border-radius:6px"></div>
+                <textarea id="cc-gen-chat-input" rows="2"
+                  style="width:100%;box-sizing:border-box;font-size:.82rem;resize:vertical"
+                  placeholder="Pide ajustes: 'agrega un archivo de estilos', 'usa Tailwind', 'cambia los colores'..."
+                  onkeydown="if(event.ctrlKey&&event.key===&apos;Enter&apos;){event.preventDefault();ccGenChatSend();}"></textarea>
+                <button class="btn btn-outline" style="width:100%;margin-top:8px" id="cc-gen-chat-btn" onclick="ccGenChatSend()">📤 Enviar ajuste (Ctrl+Enter)</button>
+              </div>
+
             </div>
-            <div class="panel">
-              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-                <h3 style="font-size:.88rem">📦 Proyecto generado</h3>
-                <div id="cc-gen-actions" style="display:none;display:flex;gap:6px">
-                  <button class="btn btn-sm btn-primary" onclick="ccDownloadAllFiles()">⬇️ Descargar ZIP</button>
-                  <button class="btn btn-sm btn-outline" onclick="ccAddGenFilesToSession()">📁 Añadir al proyecto</button>
+
+            <!-- ═══ COLUMNA DERECHA: Visor de archivo ═══ -->
+            <div class="panel" style="min-height:680px;max-height:680px;display:flex;flex-direction:column">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-shrink:0;gap:8px;flex-wrap:wrap">
+                <h3 style="font-size:.88rem;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+                  <span id="cc-viewer-title">📄 Visor de archivo</span>
+                </h3>
+                <div id="cc-viewer-actions" style="display:none;gap:6px">
+                  <button class="btn btn-sm btn-primary" onclick="ccCopyViewerCode()" title="Copiar código">📋 Copiar</button>
+                  <button class="btn btn-sm btn-outline" onclick="ccDownloadViewerFile()" title="Descargar archivo">⬇️ Descargar</button>
+                  <button class="btn btn-sm btn-outline" onclick="ccOpenInEditor()" title="Abrir en editor">▶ Editor</button>
                 </div>
               </div>
-              <div id="cc-gen-output" style="font-size:.82rem;max-height:480px;overflow-y:auto">
-                <span style="color:var(--text2)">El proyecto generado aparecerá aquí, archivo por archivo...</span>
+
+              <!-- Visor del archivo seleccionado -->
+              <div id="cc-viewer-pane" style="flex:1;overflow:auto;background:var(--bg3);border-radius:8px;padding:0">
+                <pre id="cc-viewer-code" style="margin:0;padding:14px;font-family:var(--font-mono,monospace);font-size:.78rem;white-space:pre;color:var(--text);min-height:100%"><span style="color:var(--text2);font-family:inherit;font-size:.83rem">Selecciona un archivo de la lista para ver su código...</span></pre>
               </div>
+
+              <!-- Indicador de archivo actual -->
+              <div id="cc-viewer-info" style="font-size:.72rem;color:var(--text2);margin-top:6px;text-align:right;flex-shrink:0"></div>
             </div>
+
           </div>
         </div>
 
@@ -2422,35 +2463,207 @@ async function ccAnalyzeProject() {
   }
 }
 
-/* ── Generador de proyectos ────────────────────────────────────────────── */
+/* ── Generador de proyectos con visor de archivos ──────────────────────── */
+var _ccGenSelectedIdx = -1;   // Índice del archivo seleccionado en el visor
+var _ccGenChatHistory = [];   // Historial específico de iteración
+
 async function ccGenerateProject() {
   var desc  = (document.getElementById('cc-gen-desc').value || '').trim();
   var stack = (document.getElementById('cc-gen-stack').value || '').trim();
   var tests = document.getElementById('cc-gen-tests').checked;
   if (!desc) return showAlert('cc-gen-alert', 'Describe qué quieres generar', 'err');
-  var btn   = document.getElementById('cc-gen-btn');
-  var outEl = document.getElementById('cc-gen-output');
-  var actEl = document.getElementById('cc-gen-actions');
+  var btn = document.getElementById('cc-gen-btn');
   btn.disabled = true; btn.textContent = '⏳ Generando proyecto...';
-  if (outEl) outEl.innerHTML = '<span style="color:var(--text2)">⏳ La IA está generando tu proyecto...</span>';
-  showAlert('cc-gen-alert', '', '');
+  showAlert('cc-gen-alert', '⏳ La IA está generando tu proyecto, esto puede tardar 30-60s...', 'info');
   try {
     var d = await req('/api/code/generate', 'POST', {
       description: desc, tech_stack: stack||'auto', include_tests: tests, history: _ccHistory.slice(-6)
     });
     if (!d.success) throw new Error(d.error);
     _ccGenFiles = d.generated_files || [];
-    if (outEl) outEl.innerHTML = '<pre style="white-space:pre-wrap;font-size:.82rem;margin-bottom:12px">' + esc(d.response) + '</pre>';
-    if (actEl && _ccGenFiles.length) actEl.style.display = 'flex';
+    _ccGenSelectedIdx = -1;
+    _ccGenChatHistory = [
+      { role: 'user',      content: 'Genera: ' + desc },
+      { role: 'assistant', content: d.response }
+    ];
+    ccRenderGenFilesGrid();
+    ccRenderGenChatHistory();
+    if (_ccGenFiles.length > 0) {
+      ccSelectGenFile(0);  // Seleccionar el primer archivo automáticamente
+      document.getElementById('cc-gen-chat-card').style.display = '';
+    }
     showAlert('cc-gen-alert', '✅ Proyecto generado: ' + _ccGenFiles.length + ' archivos', 'ok');
     _ccHistory.push({ role: 'user',      content: 'Genera: ' + desc });
     _ccHistory.push({ role: 'assistant', content: d.response });
   } catch(e) {
     showAlert('cc-gen-alert', 'Error: ' + e.message, 'err');
-    if (outEl) outEl.innerHTML = '<span style="color:var(--red)">Error: ' + esc(e.message) + '</span>';
   } finally {
     btn.disabled = false; btn.textContent = '🚀 Generar proyecto';
   }
+}
+
+/* Renderizar la grilla de archivos generados como tarjetas seleccionables */
+function ccRenderGenFilesGrid() {
+  var card  = document.getElementById('cc-gen-files-card');
+  var grid  = document.getElementById('cc-gen-files-grid');
+  var count = document.getElementById('cc-gen-count');
+  if (!card || !grid) return;
+  if (count) count.textContent = _ccGenFiles.length;
+  if (!_ccGenFiles.length) { card.style.display = 'none'; return; }
+  card.style.display = '';
+  var html = '';
+  _ccGenFiles.forEach(function(f, i) {
+    var isSelected = (i === _ccGenSelectedIdx);
+    var icon       = ccGetFileIcon(f.path);
+    var sizeKb     = ((f.content||'').length/1024).toFixed(1);
+    var bg         = isSelected ? 'var(--accent)' : 'var(--bg3)';
+    var fg         = isSelected ? '#fff' : 'var(--text)';
+    html += '<div onclick="ccSelectGenFile('+i+')" style="cursor:pointer;background:'+bg+';color:'+fg+';border-radius:6px;padding:8px 10px;display:flex;align-items:center;gap:8px;transition:all .15s;border:1px solid '+(isSelected?'var(--accent)':'var(--border)')+'">'
+      + '<span style="font-size:1.1rem;flex-shrink:0">'+icon+'</span>'
+      + '<span style="flex:1;font-size:.78rem;font-family:var(--font-mono,monospace);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+esc(f.path)+'">'+esc(f.path)+'</span>'
+      + '<span style="font-size:.68rem;opacity:.7;flex-shrink:0">'+sizeKb+'KB</span>'
+      + '</div>';
+  });
+  grid.innerHTML = html;
+}
+
+/* Seleccionar archivo y mostrarlo en el visor */
+function ccSelectGenFile(i) {
+  if (i < 0 || i >= _ccGenFiles.length) return;
+  _ccGenSelectedIdx = i;
+  var f = _ccGenFiles[i];
+  var titleEl = document.getElementById('cc-viewer-title');
+  var codeEl  = document.getElementById('cc-viewer-code');
+  var infoEl  = document.getElementById('cc-viewer-info');
+  var actEl   = document.getElementById('cc-viewer-actions');
+  if (titleEl) titleEl.innerHTML = ccGetFileIcon(f.path) + ' ' + esc(f.path);
+  if (codeEl)  codeEl.textContent = f.content || '';
+  if (infoEl)  infoEl.textContent = (f.language||f.lang||'') + ' · ' + (f.content||'').length.toLocaleString() + ' caracteres · ' + ((f.content||'').split('\n').length) + ' líneas';
+  if (actEl)   actEl.style.display = 'flex';
+  ccRenderGenFilesGrid();  // Re-render para mostrar el seleccionado
+}
+
+/* Icono según extensión */
+function ccGetFileIcon(path) {
+  if (!path) return '📄';
+  var ext = path.split('.').pop().toLowerCase();
+  var map = {
+    'py': '🐍', 'js': '🟨', 'ts': '🔷', 'jsx': '⚛️', 'tsx': '⚛️',
+    'html': '🌐', 'css': '🎨', 'json': '📋', 'md': '📝', 'txt': '📄',
+    'yml': '⚙️', 'yaml': '⚙️', 'toml': '⚙️', 'env': '🔐',
+    'sh': '💻', 'bash': '💻', 'sql': '🗄️', 'xml': '📰',
+    'png': '🖼️', 'jpg': '🖼️', 'svg': '🎨',
+    'gitignore': '🚫', 'dockerfile': '🐳'
+  };
+  return map[ext] || '📄';
+}
+
+/* Acciones del visor */
+function ccCopyViewerCode() {
+  if (_ccGenSelectedIdx < 0) return;
+  var code = _ccGenFiles[_ccGenSelectedIdx].content || '';
+  navigator.clipboard.writeText(code);
+  showAlert('cc-gen-alert', '✅ Código copiado al portapapeles', 'ok');
+}
+
+function ccDownloadViewerFile() {
+  if (_ccGenSelectedIdx < 0) return;
+  var f    = _ccGenFiles[_ccGenSelectedIdx];
+  var blob = new Blob([f.content||''], { type: 'text/plain;charset=utf-8' });
+  var a    = document.createElement('a');
+  a.href     = URL.createObjectURL(blob);
+  a.download = f.path.split('/').pop() || 'archivo.txt';
+  a.click();
+}
+
+function ccOpenInEditor() {
+  if (_ccGenSelectedIdx < 0) return;
+  ccLoadToEditor(_ccGenSelectedIdx);
+}
+
+function ccDownloadAllGenFiles() {
+  if (!_ccGenFiles.length) return;
+  _ccGenFiles.forEach(function(f, i) {
+    setTimeout(function() {
+      var blob = new Blob([f.content||''], { type: 'text/plain;charset=utf-8' });
+      var a    = document.createElement('a');
+      a.href     = URL.createObjectURL(blob);
+      a.download = f.path.split('/').pop() || ('archivo_'+i+'.txt');
+      a.click();
+    }, i * 250);
+  });
+  showAlert('cc-gen-alert', '⬇️ Descargando ' + _ccGenFiles.length + ' archivos...', 'ok');
+}
+
+/* Chat de iteración sobre el proyecto generado */
+async function ccGenChatSend() {
+  var input = document.getElementById('cc-gen-chat-input');
+  var msg   = (input.value || '').trim();
+  if (!msg) return;
+  var btn = document.getElementById('cc-gen-chat-btn');
+  btn.disabled = true; btn.textContent = '⏳ Procesando ajuste...';
+  _ccGenChatHistory.push({ role: 'user', content: msg });
+  ccRenderGenChatHistory();
+  input.value = '';
+  try {
+    // Enviar como continuación: incluir los archivos actuales como contexto
+    var contextMsg = msg + '\n\n(Contexto: el proyecto actual tiene los siguientes archivos: ' + _ccGenFiles.map(function(f){return f.path;}).join(', ') + '. Si modificas o agregas archivos, devuélvelos completos con el formato ```lenguaje:ruta/archivo.ext)';
+    var d = await req('/api/code/chat', 'POST', {
+      message: contextMsg,
+      history: _ccGenChatHistory.slice(-10),
+      project_files: _ccGenFiles.map(function(f){
+        return { path: f.path, content: f.content, lang: f.language||f.lang||'text' };
+      })
+    });
+    if (!d.success) throw new Error(d.error);
+    _ccGenChatHistory.push({ role: 'assistant', content: d.response });
+    // Si la IA generó archivos nuevos, fusionarlos
+    if (d.generated_files && d.generated_files.length) {
+      d.generated_files.forEach(function(newF) {
+        var idx = _ccGenFiles.findIndex(function(f){return f.path===newF.path;});
+        if (idx >= 0) { _ccGenFiles[idx] = newF; }   // reemplazar
+        else          { _ccGenFiles.push(newF); }    // añadir
+      });
+      ccRenderGenFilesGrid();
+      // Si había un archivo seleccionado, refrescar el visor
+      if (_ccGenSelectedIdx >= 0 && _ccGenSelectedIdx < _ccGenFiles.length) {
+        ccSelectGenFile(_ccGenSelectedIdx);
+      }
+      showAlert('cc-gen-alert', '✅ ' + d.generated_files.length + ' archivo(s) actualizado(s)', 'ok');
+    }
+    ccRenderGenChatHistory();
+  } catch(e) {
+    _ccGenChatHistory.pop();
+    showAlert('cc-gen-alert', 'Error: ' + e.message, 'err');
+    input.value = msg;
+  } finally {
+    btn.disabled = false; btn.textContent = '📤 Enviar ajuste (Ctrl+Enter)';
+  }
+}
+
+function ccRenderGenChatHistory() {
+  var el = document.getElementById('cc-gen-chat-history');
+  if (!el) return;
+  if (!_ccGenChatHistory.length) {
+    el.innerHTML = '<div style="color:var(--text2);font-size:.78rem;text-align:center;padding:10px">Pide ajustes al proyecto generado...</div>';
+    return;
+  }
+  var html = '';
+  // Solo mostrar últimos 6 mensajes en compact mode
+  var recent = _ccGenChatHistory.slice(-6);
+  recent.forEach(function(h) {
+    var isUser = h.role === 'user';
+    var label  = isUser ? '👤' : '🤖';
+    var color  = isUser ? 'var(--accent)' : 'var(--green)';
+    var bg     = isUser ? 'var(--bg2)' : 'transparent';
+    var text   = h.content.length > 300 ? h.content.slice(0,300) + '...' : h.content;
+    html += '<div style="font-size:.76rem;padding:6px 8px;background:'+bg+';border-radius:4px;border-left:2px solid '+color+'">'
+      + '<span style="color:'+color+';font-weight:600">'+label+'</span> '
+      + '<span style="white-space:pre-wrap;word-break:break-word">'+esc(text)+'</span>'
+      + '</div>';
+  });
+  el.innerHTML = html;
+  el.scrollTop = el.scrollHeight;
 }
 
 function ccSendToChat() {
