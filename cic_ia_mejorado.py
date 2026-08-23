@@ -388,7 +388,7 @@ class LLMEngine:
         self.openai_key    = OPENAI_API_KEY
         self.groq_key      = os.environ.get('GROQ_API_KEY', '')
         self.ollama_url    = os.environ.get('OLLAMA_URL', '')   # ej: https://xxxx.ngrok.io
-        self.groq_model    = os.environ.get('GROQ_MODEL',   'llama-3.1-8b-instant')
+        self.groq_model    = os.environ.get('GROQ_MODEL',   'qwen/qwen3.6-27b')
         self.ollama_model  = os.environ.get('OLLAMA_MODEL', 'llama3.2')
 
     def _build_context(self, user_message: str, memories: list, manual_knowledge: list) -> str:
