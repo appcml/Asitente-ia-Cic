@@ -528,8 +528,93 @@ Incluye todos los metadatos, textos y recomendaciones necesarias para maximizar 
 
 # ── Prompts de análisis ──────────────────────────────────────────────────────
 
-def _analysis_prompt(analysis_type: str, url: str, platform: str, niche: str) -> str:
+def _analysis_prompt(analysis_type: str, url: str, platform: str, niche: str, competitor_url: str = '') -> str:
     plat = _platform_label(platform)
+
+    # Prompts de competencia
+    compete_prompts = {
+        'compete_auto': f"""Detecta automáticamente los 5 principales competidores de este canal/sitio:
+URL: {url} | Plataforma: {plat} | Nicho: {niche}
+
+### Competidores detectados
+Para cada competidor:
+**Competidor X:** [nombre/URL]
+- Fortalezas: [qué hace bien]
+- Debilidades: [dónde falla]
+- Keywords principales: [3-5 keywords que dominan]
+- Score de amenaza: X/10
+
+### Resumen de la competencia
+Nivel general de competencia en este nicho: [alto/medio/bajo]
+
+🎯 Acción inmediata: el cambio más urgente para diferenciarte de la competencia.""",
+
+        'compete_gaps': f"""Encuentra los gaps de contenido que la competencia NO cubre:
+URL: {url} | Plataforma: {plat} | Nicho: {niche}
+
+### Gaps de contenido detectados (oportunidades reales)
+Para cada gap:
+**Gap X:** [tema]
+- Por qué la competencia lo ignora
+- Potencial: alto/medio/bajo
+- Urgencia: [esta semana / este mes / largo plazo]
+
+### Top 3 gaps prioritarios
+Los 3 temas con mayor potencial de posicionamiento inmediato.
+
+🎯 Acción inmediata: el gap que deberías cubrir HOY.""",
+
+        'compete_keywords': f"""Analiza las keywords que usa la competencia:
+URL: {url} | Plataforma: {plat} | Nicho: {niche}
+
+### Keywords que la competencia domina (pero puedes robarles)
+[keyword] | quién la domina | cómo superarlos
+
+### Keywords que la competencia ignora
+[keyword] | vol:X | cómo posicionarte primero
+
+### Keywords donde ya puedes competir ahora
+[keyword] | competencia débil | cómo atacar esta semana
+
+🎯 Acción inmediata: la keyword exacta que puedes rankear antes que la competencia.""",
+
+        'compete_strategy': f"""Crea un plan estratégico para superar a la competencia:
+URL: {url} | Plataforma: {plat} | Nicho: {niche}
+
+### Análisis de posición actual
+Dónde estás vs la competencia ahora mismo.
+
+### Plan de ataque — 90 días
+**Mes 1:** [acciones concretas]
+**Mes 2:** [acciones para ganar terreno]
+**Mes 3:** [acciones para superar rivales]
+
+### Métricas para medir el progreso
+Las 5 métricas que confirmarán que estás superando a la competencia.
+
+🎯 Acción inmediata: la UNA acción esta semana que más daño hace a la competencia.""",
+
+        'compete_specific': f"""Analiza este competidor específico vs mi canal:
+Mi canal: {url} | Plataforma: {plat} | Nicho: {niche}
+Competidor: {competitor_url or 'detectar automáticamente'}
+
+### Perfil del competidor
+- Tipo de contenido, frecuencia, audiencia estimada
+- Fortalezas principales
+- Debilidades explotables
+
+### Comparación directa
+[tabla comparativa en los aspectos más importantes]
+
+### Sus keywords más exitosas y cómo superarlas
+
+### Plan para superarlo en 60 días
+
+🎯 Acción inmediata: el punto débil de este competidor que puedes atacar esta semana.""",
+    }
+
+    if analysis_type in compete_prompts:
+        return compete_prompts[analysis_type]
 
     prompts = {
         'full': f"""Haz un análisis SEO completo del canal/sitio:
@@ -773,18 +858,19 @@ def seo_optimize():
 @bp.route('/analyze', methods=['POST'])
 def seo_analyze():
     """
-    Análisis completo del canal: keywords, competencia, calendario, algoritmo.
-    type: full | keywords | calendar | algo
+    Análisis completo del canal: keywords, competencia, calendario, algoritmo, competidores.
+    type: full | keywords | calendar | algo | compete_auto | compete_gaps | compete_keywords | compete_strategy | compete_specific
     """
     try:
         user = _get_current_user()
     except PermissionError as e:
         return jsonify({'error': str(e)}), 401
 
-    data          = request.json or {}
-    channel_id    = data.get('channel_id')
-    analysis_type = data.get('type', 'full')
-    history       = data.get('history', [])
+    data           = request.json or {}
+    channel_id     = data.get('channel_id')
+    analysis_type  = data.get('type', 'full')
+    history        = data.get('history', [])
+    competitor_url = data.get('competitor_url', '')
 
     if not channel_id:
         return jsonify({'error': 'channel_id es requerido'}), 400
@@ -798,18 +884,18 @@ def seo_analyze():
     if not ch:
         return jsonify({'error': 'Canal no encontrado'}), 404
 
-    prompt = _analysis_prompt(analysis_type, ch.url, ch.platform, ch.niche)
+    prompt = _analysis_prompt(analysis_type, ch.url, ch.platform, ch.niche, competitor_url)
 
     try:
         result = _seo_llm(prompt, history=history, max_tokens=2000)
 
         with _db().connect() as conn:
             conn.execute(
-                text("""
-                    INSERT INTO seo_result (channel_id, result_type, content_in, result_out, created_at)
-                    VALUES (:cid, :rtype, '', :cout, NOW())
-                """),
-                {'cid': channel_id, 'rtype': f'analyze_{analysis_type}', 'cout': result[:5000]}
+                text("""INSERT INTO seo_result (channel_id, result_type, content_in, result_out, created_at)
+                        VALUES (:cid, :rtype, :cin, :cout, NOW())"""),
+                {'cid': channel_id, 'rtype': analysis_type,
+                 'cin': competitor_url[:500] if competitor_url else '',
+                 'cout': result[:5000]}
             )
             conn.commit()
 
@@ -1015,62 +1101,3 @@ Pasos concretos para superar a ESTE competidor en los próximos 60 días.
 
 🎯 Acción inmediata: el punto débil de este competidor que puedes atacar esta semana."""
 }
-
-# Monkey-patch para agregar los prompts de competencia a _analysis_prompt
-_orig_analysis_prompt = _analysis_prompt
-
-def _analysis_prompt(analysis_type: str, url: str, platform: str, niche: str, competitor_url: str = '') -> str:
-    plat = _platform_label(platform)
-    if analysis_type in _COMPETE_PROMPTS:
-        return _COMPETE_PROMPTS[analysis_type].format(
-            url=url, plat=plat, niche=niche,
-            competitor_url=competitor_url or 'no especificado'
-        )
-    return _orig_analysis_prompt(analysis_type, url, platform, niche)
-
-
-# Override del endpoint analyze para soportar competitor_url
-@bp.route('/analyze', methods=['POST'])
-def seo_analyze():
-    try:
-        user = _get_current_user()
-    except PermissionError as e:
-        return jsonify({'error': str(e)}), 401
-
-    data             = request.json or {}
-    channel_id       = data.get('channel_id')
-    analysis_type    = data.get('type', 'full')
-    history          = data.get('history', [])
-    competitor_url   = data.get('competitor_url', '')
-
-    if not channel_id:
-        return jsonify({'error': 'channel_id es requerido'}), 400
-
-    with _db().connect() as conn:
-        ch = conn.execute(
-            text("SELECT url, platform, niche FROM seo_channel WHERE id = :id AND user_id = :uid"),
-            {'id': channel_id, 'uid': user['id']}
-        ).fetchone()
-
-    if not ch:
-        return jsonify({'error': 'Canal no encontrado'}), 404
-
-    prompt = _analysis_prompt(analysis_type, ch.url, ch.platform, ch.niche, competitor_url)
-
-    try:
-        result = _seo_llm(prompt, history=history, max_tokens=2000)
-
-        with _db().connect() as conn:
-            conn.execute(
-                text("""INSERT INTO seo_result (channel_id, result_type, content_in, result_out, created_at)
-                        VALUES (:cid, :rtype, :cin, :cout, NOW())"""),
-                {'cid': channel_id, 'rtype': analysis_type,
-                 'cin': competitor_url[:500] if competitor_url else '',
-                 'cout': result[:5000]}
-            )
-            conn.commit()
-
-        return jsonify({'success': True, 'result': result})
-    except Exception as e:
-        logger.error(f'[seo] analyze error: {e}')
-        return jsonify({'error': str(e)}), 500
