@@ -1414,6 +1414,16 @@ except Exception as _ce:
     import traceback
     logger.warning(f'CicCode no cargado (no crítico): {_ce}')
     logger.warning(traceback.format_exc())
+# ── Registro módulo CicSEO Intelligence ─────────────────────────────────────
+try:
+    from modules.seo.routes import bp as cicseo_bp
+    app.register_blueprint(cicseo_bp)
+    logger.info('✅ CicSEO módulo registrado (/api/seo)')
+except Exception as _se:
+    import traceback
+    logger.warning(f'CicSEO no cargado (no crítico): {_se}')
+    logger.warning(traceback.format_exc())
+
 
 # ==========================================
 # ========== PANEL DESARROLLADOR ==========
