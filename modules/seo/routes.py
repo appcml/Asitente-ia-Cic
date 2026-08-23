@@ -136,31 +136,66 @@ Siempre termina con: 🎯 Acción inmediata: [la acción concreta más important
 
 def _seo_llm(prompt: str, history: list = None, max_tokens: int = 2000) -> str:
     """
-    Llama al LLMEngine del sistema principal con el system prompt de SEO.
-    Importa desde cic_ia_mejorado para no duplicar la lógica de providers.
+    Llama directamente a Groq o Anthropic con el system prompt de SEO.
+    Cascada: Groq → Anthropic → error claro.
     """
-    try:
-        import sys
-        # El LLMEngine vive en el módulo principal ya cargado
-        main_mod = sys.modules.get('cic_ia_mejorado') or sys.modules.get('__main__')
-        LLMEngine = getattr(main_mod, 'LLMEngine', None)
+    import os, requests as _requests
 
-        if not LLMEngine:
-            # Fallback: import directo
-            from cic_ia_mejorado import LLMEngine
+    messages = [{'role': 'system', 'content': SEO_SYSTEM}]
+    for h in (history or [])[-10:]:
+        role = h.get('role', 'user')
+        content = h.get('content', '')
+        if role in ('user', 'assistant') and content:
+            messages.append({'role': role, 'content': content})
+    messages.append({'role': 'user', 'content': prompt})
 
-        llm = LLMEngine()
-        result = llm.chat(
-            user_message=prompt,
-            system_prompt=SEO_SYSTEM,
-            conversation_history=history or [],
-            max_tokens=max_tokens
-        )
-        return result.get('response', 'Error: sin respuesta del motor de IA.')
+    # ── Intento 1: Groq ──────────────────────────────────────────────────────
+    groq_key = os.environ.get('GROQ_API_KEY', '')
+    if groq_key:
+        try:
+            groq_model = os.environ.get('GROQ_MODEL', 'llama-3.3-70b-versatile')
+            resp = _requests.post(
+                'https://api.groq.com/openai/v1/chat/completions',
+                headers={'Authorization': f'Bearer {groq_key}', 'Content-Type': 'application/json'},
+                json={'model': groq_model, 'messages': messages, 'max_tokens': max_tokens, 'temperature': 0.7},
+                timeout=60
+            )
+            resp.raise_for_status()
+            text = resp.json()['choices'][0]['message']['content']
+            logger.info(f'[seo] Groq OK ({groq_model})')
+            return text
+        except Exception as e:
+            logger.warning(f'[seo] Groq falló: {e} — intentando Anthropic')
 
-    except Exception as e:
-        logger.error(f'[seo] LLM error: {e}')
-        raise RuntimeError(f'Error del motor de IA: {e}')
+    # ── Intento 2: Anthropic ─────────────────────────────────────────────────
+    anthropic_key = os.environ.get('ANTHROPIC_API_KEY', '')
+    if anthropic_key:
+        try:
+            # Separar system del resto para Anthropic
+            user_msgs = [m for m in messages if m['role'] != 'system']
+            resp = _requests.post(
+                'https://api.anthropic.com/v1/messages',
+                headers={
+                    'x-api-key': anthropic_key,
+                    'anthropic-version': '2023-06-01',
+                    'content-type': 'application/json'
+                },
+                json={
+                    'model': 'claude-haiku-4-5-20251001',
+                    'max_tokens': max_tokens,
+                    'system': SEO_SYSTEM,
+                    'messages': user_msgs
+                },
+                timeout=60
+            )
+            resp.raise_for_status()
+            text = resp.json()['content'][0]['text']
+            logger.info('[seo] Anthropic OK')
+            return text
+        except Exception as e:
+            logger.warning(f'[seo] Anthropic falló: {e}')
+
+    raise RuntimeError('Sin motor de IA disponible. Configura GROQ_API_KEY o ANTHROPIC_API_KEY en Render → Environment.')
 
 
 # ── Prompts de optimización ──────────────────────────────────────────────────
