@@ -309,6 +309,7 @@ tr:hover td{background:rgba(108,99,255,.04);}
       </div>
       <div class="nav-item" onclick="showSection('config',this)"><span class="icon">⚙️</span><span>Configuración</span></div>
       <div class="nav-item" onclick="showSection('seo',this)"><span class="icon">📊</span><span>CicSEO</span></div>
+      <div class="nav-item" onclick="showSection('dataset',this)"><span class="icon">🗄️</span><span>Datasets</span><span class="nav-badge nb-dev">DEV</span></div>
       <div class="nav-item" onclick="showSection('users',this)"><span class="icon">👥</span><span>Usuarios</span></div>
     </nav>
     <div class="sidebar-foot">
@@ -1223,7 +1224,7 @@ tr:hover td{background:rgba(108,99,255,.04);}
       </section>
 
 
-      <!-- CicSEO Intelligence -->
+      <!-- CicSEO Intelligence — solo visible para dev -->
       <section id="sec-seo" class="section">
         <h2>📊 CicSEO Intelligence</h2>
         <p class="subtitle">SEO · Keywords · Competencia · Títulos — YouTube · Instagram · TikTok · WordPress · Blog</p>
@@ -1266,17 +1267,9 @@ tr:hover td{background:rgba(108,99,255,.04);}
           .seo-chat-box{background:var(--bg2,#1a1a2e);border:1px solid var(--border,#2d3561);border-radius:8px;padding:14px;min-height:240px;max-height:360px;overflow-y:auto;display:flex;flex-direction:column;gap:11px}
           .seo-bub-u{align-self:flex-end;background:var(--accent,#6c63ff);color:#fff;border-radius:12px 12px 4px 12px;padding:9px 13px;font-size:.84rem;max-width:85%}
           .seo-bub-b{align-self:flex-start;background:var(--bg2,#1a1a2e);border:1px solid var(--border,#2d3561);border-radius:12px 12px 12px 4px;padding:9px 13px;font-size:.84rem;max-width:85%;line-height:1.6}
-          .comp-card{background:var(--bg2,#1a1a2e);border:1px solid var(--border,#2d3561);border-radius:8px;padding:14px;margin-bottom:10px}
-          .comp-card h4{font-size:.88rem;font-weight:600;margin-bottom:6px}
-          .comp-badge{display:inline-block;font-size:.7rem;padding:2px 8px;border-radius:20px;margin-right:4px}
-          .comp-strong{background:rgba(16,185,129,.15);color:#10b981;border:1px solid rgba(16,185,129,.3)}
-          .comp-weak{background:rgba(239,68,68,.15);color:#ef4444;border:1px solid rgba(239,68,68,.3)}
-          .comp-gap{background:rgba(245,158,11,.15);color:#f59e0b;border:1px solid rgba(245,158,11,.3)}
           @media(max-width:768px){ .seo-layout{grid-template-columns:1fr} }
         </style>
-
         <div class="seo-layout">
-          <!-- Sidebar -->
           <div>
             <button class="btn btn-primary" style="width:100%;margin-bottom:12px" onclick="seoShowAdd()">+ Canal / Sitio</button>
             <div id="seoChList"><div style="font-size:.82rem;opacity:.6">Sin canales aún</div></div>
@@ -1286,16 +1279,13 @@ tr:hover td{background:rgba(108,99,255,.04);}
               <button onclick="seoClearKw()" style="margin-top:5px;font-size:.71rem;opacity:.5;background:none;border:none;cursor:pointer;padding:0">Limpiar</button>
             </div>
           </div>
-
-          <!-- Main -->
           <div>
             <div id="seoEmpty" style="text-align:center;padding:60px 0;opacity:.6">
               <div style="font-size:2.5rem;margin-bottom:12px">📊</div>
               <div style="font-weight:600;font-size:.95rem;margin-bottom:8px">CicSEO Intelligence</div>
-              <div style="font-size:.84rem;max-width:360px;margin:0 auto;line-height:1.6">Agrega tu canal de YouTube, Instagram, TikTok, WordPress o cualquier blog. La IA detecta el nicho y analiza la competencia automáticamente.</div>
+              <div style="font-size:.84rem;max-width:360px;margin:0 auto;line-height:1.6">Agrega tu canal de YouTube, Instagram, TikTok, WordPress o cualquier blog.</div>
               <button class="btn btn-primary" style="margin-top:16px" onclick="seoShowAdd()">Agregar canal o sitio</button>
             </div>
-
             <div id="seoPanel" style="display:none">
               <div style="border:1px solid var(--border,#2d3561);border-radius:8px;padding:11px 15px;display:flex;align-items:center;gap:10px;margin-bottom:14px">
                 <span id="seoActivePlat" class="seo-ch-plat">—</span>
@@ -1304,7 +1294,6 @@ tr:hover td{background:rgba(108,99,255,.04);}
                   <div id="seoActiveNiche" style="font-size:.74rem;opacity:.6"></div>
                 </div>
               </div>
-
               <div class="seo-tabs">
                 <button class="seo-tab active" onclick="seoTab('optimize',this)">✨ Optimizar</button>
                 <button class="seo-tab" onclick="seoTab('analyze',this)">🔍 Análisis</button>
@@ -1312,113 +1301,68 @@ tr:hover td{background:rgba(108,99,255,.04);}
                 <button class="seo-tab" onclick="seoTab('chat',this)">💬 Chat SEO</button>
                 <button class="seo-tab" onclick="seoTab('history',this)">📋 Historial</button>
               </div>
-
               <!-- TAB OPTIMIZAR -->
               <div id="seo-tab-optimize">
-                <label style="font-size:.79rem;opacity:.7;display:block;margin-bottom:6px;font-weight:500">Pega tu título, párrafo, idea o borrador de contenido</label>
-                <textarea id="seoContent" rows="5" placeholder="Ejemplo: &quot;Cómo hacer pasta carbonara en 15 minutos&quot;&#10;&#10;O pega cualquier texto: guión, idea suelta, borrador...&#10;La IA optimiza todo para tu plataforma automáticamente."
+                <label style="font-size:.79rem;opacity:.7;display:block;margin-bottom:6px;font-weight:500">Pega tu título, párrafo, idea o borrador</label>
+                <textarea id="seoContent" rows="5" placeholder="Pega cualquier texto. La IA optimiza todo para tu plataforma automáticamente."
                   style="width:100%;background:var(--input-bg,rgba(255,255,255,.05));border:1px solid var(--border,#2d3561);border-radius:8px;padding:11px 13px;color:inherit;font-size:.86rem;resize:vertical;outline:none;font-family:inherit;line-height:1.6;margin-bottom:12px"></textarea>
                 <div style="font-size:.77rem;opacity:.7;margin-bottom:8px;font-weight:500">¿Qué quieres generar?</div>
                 <div id="seoOptGrid" class="seo-opt-grid"></div>
                 <div style="display:flex;gap:10px;margin-bottom:10px">
-                  <input id="seoExtra" type="text" placeholder="Instrucción adicional opcional: idioma, tono, público objetivo..."
+                  <input id="seoExtra" type="text" placeholder="Instrucción adicional opcional..."
                     style="flex:1;background:var(--input-bg,rgba(255,255,255,.05));border:1px solid var(--border,#2d3561);border-radius:8px;padding:9px 13px;color:inherit;font-size:.83rem;outline:none;font-family:inherit"/>
                   <button class="btn btn-primary" id="seoBtnOpt" onclick="seoRunOptimize()" style="white-space:nowrap">✨ Generar</button>
                 </div>
                 <div id="seoOptAlert"></div>
                 <div id="seoOptOut" style="margin-top:12px"></div>
               </div>
-
               <!-- TAB ANÁLISIS -->
               <div id="seo-tab-analyze" style="display:none">
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
-                  <div class="panel" style="cursor:pointer" onclick="seoRunAnalysis('full')">
-                    <div style="font-size:1.2rem;margin-bottom:7px">🔍</div>
-                    <div style="font-weight:600;font-size:.87rem;margin-bottom:3px">Análisis completo</div>
-                    <div style="font-size:.77rem;opacity:.6">Score SEO, keywords, competencia y gaps</div>
-                  </div>
-                  <div class="panel" style="cursor:pointer" onclick="seoRunAnalysis('keywords')">
-                    <div style="font-size:1.2rem;margin-bottom:7px">🗝️</div>
-                    <div style="font-weight:600;font-size:.87rem;margin-bottom:3px">Investigación keywords</div>
-                    <div style="font-size:.77rem;opacity:.6">Top keywords con volumen y competencia</div>
-                  </div>
-                  <div class="panel" style="cursor:pointer" onclick="seoRunAnalysis('calendar')">
-                    <div style="font-size:1.2rem;margin-bottom:7px">📅</div>
-                    <div style="font-weight:600;font-size:.87rem;margin-bottom:3px">Calendario 30 días</div>
-                    <div style="font-size:.77rem;opacity:.6">Plan de contenido estratégico</div>
-                  </div>
-                  <div class="panel" style="cursor:pointer" onclick="seoRunAnalysis('algo')">
-                    <div style="font-size:1.2rem;margin-bottom:7px">📡</div>
-                    <div style="font-weight:600;font-size:.87rem;margin-bottom:3px">Monitor de algoritmo</div>
-                    <div style="font-size:.77rem;opacity:.6">Cambios recientes y oportunidades</div>
-                  </div>
+                  <div class="panel" style="cursor:pointer" onclick="seoRunAnalysis('full')"><div style="font-size:1.2rem;margin-bottom:7px">🔍</div><div style="font-weight:600;font-size:.87rem;margin-bottom:3px">Análisis completo</div><div style="font-size:.77rem;opacity:.6">Score SEO, keywords, competencia y gaps</div></div>
+                  <div class="panel" style="cursor:pointer" onclick="seoRunAnalysis('keywords')"><div style="font-size:1.2rem;margin-bottom:7px">🗝️</div><div style="font-weight:600;font-size:.87rem;margin-bottom:3px">Investigación keywords</div><div style="font-size:.77rem;opacity:.6">Top keywords con volumen y competencia</div></div>
+                  <div class="panel" style="cursor:pointer" onclick="seoRunAnalysis('calendar')"><div style="font-size:1.2rem;margin-bottom:7px">📅</div><div style="font-weight:600;font-size:.87rem;margin-bottom:3px">Calendario 30 días</div><div style="font-size:.77rem;opacity:.6">Plan de contenido estratégico</div></div>
+                  <div class="panel" style="cursor:pointer" onclick="seoRunAnalysis('algo')"><div style="font-size:1.2rem;margin-bottom:7px">📡</div><div style="font-weight:600;font-size:.87rem;margin-bottom:3px">Monitor de algoritmo</div><div style="font-size:.77rem;opacity:.6">Cambios recientes y oportunidades</div></div>
                 </div>
-                <div id="seoAnAlert"></div>
-                <div id="seoAnOut"></div>
+                <div id="seoAnAlert"></div><div id="seoAnOut"></div>
               </div>
-
               <!-- TAB COMPETENCIA -->
               <div id="seo-tab-compete" style="display:none">
                 <div class="panel" style="margin-bottom:14px">
                   <div style="font-size:.84rem;font-weight:500;margin-bottom:10px">Analizar competidor específico</div>
                   <div style="display:flex;gap:10px">
-                    <input id="compUrl" type="text" placeholder="URL o handle del competidor: youtube.com/@competidor"
+                    <input id="compUrl" type="text" placeholder="URL del competidor: youtube.com/@rival"
                       style="flex:1;background:var(--input-bg,rgba(255,255,255,.05));border:1px solid var(--border,#2d3561);border-radius:8px;padding:9px 13px;color:inherit;font-size:.84rem;outline:none;font-family:inherit"/>
                     <button class="btn btn-primary" onclick="seoAnalyzeCompetitor()" style="white-space:nowrap">⚔️ Analizar</button>
                   </div>
-                  <div style="font-size:.77rem;opacity:.5;margin-top:6px">Deja vacío para que la IA detecte competidores automáticamente de tu nicho</div>
+                  <div style="font-size:.77rem;opacity:.5;margin-top:6px">Deja vacío para detección automática</div>
                 </div>
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
-                  <div class="panel" style="cursor:pointer" onclick="seoRunCompete('auto')">
-                    <div style="font-size:1.2rem;margin-bottom:7px">🤖</div>
-                    <div style="font-weight:600;font-size:.87rem;margin-bottom:3px">Detectar competidores</div>
-                    <div style="font-size:.77rem;opacity:.6">La IA encuentra tus principales rivales automáticamente</div>
-                  </div>
-                  <div class="panel" style="cursor:pointer" onclick="seoRunCompete('gaps')">
-                    <div style="font-size:1.2rem;margin-bottom:7px">🎯</div>
-                    <div style="font-weight:600;font-size:.87rem;margin-bottom:3px">Gaps de contenido</div>
-                    <div style="font-size:.77rem;opacity:.6">Temas que la competencia NO cubre y tú puedes dominar</div>
-                  </div>
-                  <div class="panel" style="cursor:pointer" onclick="seoRunCompete('keywords')">
-                    <div style="font-size:1.2rem;margin-bottom:7px">🗝️</div>
-                    <div style="font-weight:600;font-size:.87rem;margin-bottom:3px">Keywords de competidores</div>
-                    <div style="font-size:.77rem;opacity:.6">Qué keywords están usando tus rivales exitosamente</div>
-                  </div>
-                  <div class="panel" style="cursor:pointer" onclick="seoRunCompete('strategy')">
-                    <div style="font-size:1.2rem;margin-bottom:7px">♟️</div>
-                    <div style="font-weight:600;font-size:.87rem;margin-bottom:3px">Estrategia para superar</div>
-                    <div style="font-size:.77rem;opacity:.6">Plan concreto para superar a la competencia</div>
-                  </div>
+                  <div class="panel" style="cursor:pointer" onclick="seoRunCompete('auto')"><div style="font-size:1.2rem;margin-bottom:7px">🤖</div><div style="font-weight:600;font-size:.87rem;margin-bottom:3px">Detectar competidores</div><div style="font-size:.77rem;opacity:.6">La IA encuentra tus principales rivales</div></div>
+                  <div class="panel" style="cursor:pointer" onclick="seoRunCompete('gaps')"><div style="font-size:1.2rem;margin-bottom:7px">🎯</div><div style="font-weight:600;font-size:.87rem;margin-bottom:3px">Gaps de contenido</div><div style="font-size:.77rem;opacity:.6">Temas que la competencia no cubre</div></div>
+                  <div class="panel" style="cursor:pointer" onclick="seoRunCompete('keywords')"><div style="font-size:1.2rem;margin-bottom:7px">🗝️</div><div style="font-weight:600;font-size:.87rem;margin-bottom:3px">Keywords de competidores</div><div style="font-size:.77rem;opacity:.6">Qué keywords usan tus rivales</div></div>
+                  <div class="panel" style="cursor:pointer" onclick="seoRunCompete('strategy')"><div style="font-size:1.2rem;margin-bottom:7px">♟️</div><div style="font-weight:600;font-size:.87rem;margin-bottom:3px">Estrategia para superar</div><div style="font-size:.77rem;opacity:.6">Plan concreto para superar a la competencia</div></div>
                 </div>
-                <div id="seoCompAlert"></div>
-                <div id="seoCompOut"></div>
+                <div id="seoCompAlert"></div><div id="seoCompOut"></div>
               </div>
-
               <!-- TAB CHAT -->
               <div id="seo-tab-chat" style="display:none">
-                <input id="seoChatInstr" type="text" placeholder="Instrucciones persistentes (ej: enfócate en audiencia hispanohablante, usa datos numéricos...)"
+                <input id="seoChatInstr" type="text" placeholder="Instrucciones persistentes..."
                   style="width:100%;background:var(--input-bg,rgba(255,255,255,.05));border:1px solid var(--border,#2d3561);border-radius:8px;padding:9px 13px;color:inherit;font-size:.81rem;outline:none;font-family:inherit;margin-bottom:11px"/>
                 <div id="seoChatBox" class="seo-chat-box">
                   <div style="text-align:center;opacity:.6;font-size:.83rem;padding:24px 0">
                     <div style="font-size:1.7rem;margin-bottom:9px">💬</div>
-                    Pregúntame sobre SEO, keywords, algoritmos, competencia o estrategia de contenido.
-                    <div style="display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin-top:12px">
-                      <button onclick="document.getElementById('seoChatInput').value=this.textContent" class="btn btn-outline btn-sm">¿Qué está trending en YouTube esta semana?</button>
-                      <button onclick="document.getElementById('seoChatInput').value=this.textContent" class="btn btn-outline btn-sm">¿Cómo superar a mis competidores en SEO?</button>
-                      <button onclick="document.getElementById('seoChatInput').value=this.textContent" class="btn btn-outline btn-sm">¿Cómo rankear un post nuevo en Google?</button>
-                    </div>
+                    Pregúntame sobre SEO, keywords, algoritmos o estrategia de contenido.
                   </div>
                 </div>
                 <div style="display:flex;gap:9px;margin-top:10px">
-                  <input id="seoChatInput" type="text" placeholder="Pregunta sobre SEO, keywords, competencia, algoritmos..."
-                    onkeydown="if(event.key==='Enter')seoChatSend()"
+                  <input id="seoChatInput" type="text" placeholder="Pregunta sobre SEO..." onkeydown="if(event.key==='Enter')seoChatSend()"
                     style="flex:1;background:var(--input-bg,rgba(255,255,255,.05));border:1px solid var(--border,#2d3561);border-radius:8px;padding:9px 14px;color:inherit;font-size:.86rem;outline:none;font-family:inherit"/>
                   <button class="btn btn-primary" onclick="seoChatSend()">Enviar</button>
                   <button class="btn btn-outline" onclick="seoChatClear()">Limpiar</button>
                 </div>
                 <div id="seoChatAlert" style="margin-top:7px"></div>
               </div>
-
               <!-- TAB HISTORIAL -->
               <div id="seo-tab-history" style="display:none">
                 <div id="seoHistOut"><div style="opacity:.6;font-size:.83rem;padding:16px 0">Cargando...</div></div>
@@ -1426,29 +1370,78 @@ tr:hover td{background:rgba(108,99,255,.04);}
             </div>
           </div>
         </div>
-
         <!-- Modal agregar canal -->
         <div id="seoAddModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.76);z-index:200;align-items:center;justify-content:center">
           <div class="panel" style="max-width:430px;width:90%;margin:0 auto">
             <h3 style="margin-bottom:5px">Agregar canal o sitio</h3>
             <p style="font-size:.79rem;opacity:.7;margin-bottom:18px;line-height:1.5">Pega la URL, handle o nombre. La plataforma se detecta automáticamente.</p>
-            <div class="form-group">
-              <label>URL, handle o nombre</label>
-              <input type="text" id="seoAddUrl" placeholder="youtube.com/@canal · @handle_ig · tudominio.com"
-                oninput="seoPrevPlat()" onkeydown="if(event.key==='Enter')seoDoAdd()"/>
-              <div id="seoPlatPrev" style="margin-top:5px;font-size:.75rem;opacity:.7"></div>
-            </div>
-            <div class="form-group">
-              <label>Nicho o tema <span style="opacity:.5;font-weight:normal">(opcional — la IA lo detecta)</span></label>
-              <input type="text" id="seoAddNiche" placeholder="Ej: tecnología, recetas, finanzas..."
-                onkeydown="if(event.key==='Enter')seoDoAdd()"/>
-            </div>
+            <div class="form-group"><label>URL, handle o nombre</label><input type="text" id="seoAddUrl" placeholder="youtube.com/@canal · @handle_ig · tudominio.com" oninput="seoPrevPlat()" onkeydown="if(event.key==='Enter')seoDoAdd()"/><div id="seoPlatPrev" style="margin-top:5px;font-size:.75rem;opacity:.7"></div></div>
+            <div class="form-group"><label>Nicho o tema <span style="opacity:.5;font-weight:normal">(opcional)</span></label><input type="text" id="seoAddNiche" placeholder="Ej: tecnología, recetas..." onkeydown="if(event.key==='Enter')seoDoAdd()"/></div>
             <div id="seoAddAlert" style="margin-bottom:9px"></div>
-            <div style="display:flex;gap:9px">
-              <button class="btn btn-primary" style="flex:1" onclick="seoDoAdd()">Agregar</button>
-              <button class="btn btn-outline" onclick="seoHideAdd()">Cancelar</button>
+            <div style="display:flex;gap:9px"><button class="btn btn-primary" style="flex:1" onclick="seoDoAdd()">Agregar</button><button class="btn btn-outline" onclick="seoHideAdd()">Cancelar</button></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Dataset Training — solo visible para dev -->
+      <section id="sec-dataset" class="section">
+        <h2>🗄️ Dataset Training</h2>
+        <p class="subtitle">Carga conversaciones y datos para enriquecer el conocimiento de la IA</p>
+        <div class="grid2">
+          <!-- Upload dataset -->
+          <div class="panel">
+            <h3 style="margin-bottom:12px;font-size:.9rem">📤 Cargar dataset</h3>
+            <div style="font-size:.82rem;opacity:.7;margin-bottom:14px;line-height:1.5">
+              Sube un archivo JSON, CSV o TXT con conversaciones o conocimiento.<br>
+              <strong>Formato JSON:</strong> <code>[{"pregunta":"...","respuesta":"..."}]</code><br>
+              <strong>Formato CSV:</strong> columnas <code>pregunta,respuesta</code><br>
+              <strong>Formato TXT:</strong> párrafos de conocimiento libre
+            </div>
+            <div class="form-group">
+              <label>Archivo de dataset</label>
+              <input type="file" id="dsFile" accept=".json,.csv,.txt" style="padding:8px"/>
+            </div>
+            <div class="form-group">
+              <label>Categoría</label>
+              <input type="text" id="dsCategory" placeholder="Ej: chat, imágenes, SEO, general..."/>
+            </div>
+            <div class="form-group">
+              <label>Prioridad</label>
+              <select id="dsPriority">
+                <option value="1">Normal</option>
+                <option value="2">Alta</option>
+                <option value="3">Crítica</option>
+              </select>
+            </div>
+            <div id="dsPreview" style="display:none;background:rgba(0,0,0,.2);border-radius:8px;padding:12px;margin-bottom:12px;font-size:.8rem;opacity:.8"></div>
+            <div id="dsAlert" style="margin-bottom:10px"></div>
+            <button class="btn btn-primary" style="width:100%" onclick="dsUpload()">🚀 Cargar dataset</button>
+          </div>
+          <!-- Stats y fuentes -->
+          <div>
+            <div class="panel" style="margin-bottom:16px">
+              <h3 style="margin-bottom:12px;font-size:.9rem">📊 Estado del conocimiento</h3>
+              <div id="dsStats"><div style="opacity:.6;font-size:.83rem">Cargando...</div></div>
+            </div>
+            <div class="panel">
+              <h3 style="margin-bottom:12px;font-size:.9rem">🌐 Fuentes externas</h3>
+              <div style="font-size:.82rem;opacity:.7;margin-bottom:12px">Datasets públicos recomendados para Cic_IA:</div>
+              <div style="display:flex;flex-direction:column;gap:8px">
+                <a href="https://huggingface.co/datasets/HuggingFaceH4/no_robots" target="_blank" class="btn btn-outline btn-sm" style="text-align:left">📦 No Robots (HuggingFace) — 10k conversaciones</a>
+                <a href="https://huggingface.co/datasets/tatsu-lab/alpaca" target="_blank" class="btn btn-outline btn-sm" style="text-align:left">📦 Alpaca Dataset — 52k instrucciones</a>
+                <a href="https://huggingface.co/datasets/OpenAssistant/oasst2" target="_blank" class="btn btn-outline btn-sm" style="text-align:left">📦 OpenAssistant OASST2 — incluye español</a>
+                <a href="https://huggingface.co/datasets/wikimedia/wikipedia" target="_blank" class="btn btn-outline btn-sm" style="text-align:left">📦 Wikipedia ES — conocimiento enciclopédico</a>
+              </div>
             </div>
           </div>
+        </div>
+        <!-- Historial de datasets cargados -->
+        <div class="panel" style="margin-top:16px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+            <h3 style="font-size:.9rem">📋 Datasets cargados</h3>
+            <button class="btn btn-outline btn-sm" onclick="dsLoadHistory()">🔄 Actualizar</button>
+          </div>
+          <div id="dsHistory"><div style="opacity:.6;font-size:.83rem">Cargando...</div></div>
         </div>
       </section>
 
@@ -1639,6 +1632,7 @@ function showSection(name,el){
   if(name==='chat'){newConv();loadRecentChats();}
   if(name==='vidgen')loadVideoMotors();
   if(name==='seo')seoLoadChannels();
+  if(name==='dataset')datasetInit();
 }
 function toggleSidebar(){document.getElementById('sidebar').classList.toggle('mobile-open');document.getElementById('overlay').classList.toggle('show');}
 function closeSidebar(){document.getElementById('sidebar').classList.remove('mobile-open');document.getElementById('overlay').classList.remove('show');}
@@ -3314,7 +3308,7 @@ function seoSelectCh(ch){
   const pe=document.getElementById('seoActivePlat');pe.textContent=seoPlatLabel(ch.platform);pe.className='seo-ch-plat '+seoPlatClass(ch.platform);
   document.getElementById('seoActiveUrl').textContent=ch.url;document.getElementById('seoActiveNiche').textContent='Nicho: '+ch.niche;
   seoRenderOptGrid(ch.platform);
-  document.getElementById('seoOptOut').innerHTML='';document.getElementById('seoAnOut').innerHTML='';document.getElementById('seoCompOut').innerHTML='';
+  ['seoOptOut','seoAnOut','seoCompOut'].forEach(id=>{const e=document.getElementById(id);if(e)e.innerHTML='';});
   _seo.selOpt=null;
 }
 function seoRenderOptGrid(plat){
@@ -3322,10 +3316,7 @@ function seoRenderOptGrid(plat){
   g.innerHTML=opts.map(o=>`<button class="seo-opt-btn${_seo.selOpt===o.id?' active':''}" onclick="seoSelOpt('${o.id}',this)"><span class="seo-opt-icon">${o.icon}</span><span class="seo-opt-lbl">${o.lbl.replace(/\n/g,'<br>')}</span></button>`).join('');
 }
 function seoSelOpt(id,el){_seo.selOpt=id;document.querySelectorAll('.seo-opt-btn').forEach(b=>b.classList.remove('active'));el.classList.add('active');}
-async function seoDeleteCh(id){
-  if(!confirm('¿Eliminar este canal?'))return;
-  try{await req('/api/seo/channels/'+id,'DELETE');_seo.channels=_seo.channels.filter(c=>c.id!==id);if(_seo.activeId===id){_seo.activeId=null;document.getElementById('seoEmpty').style.display='block';document.getElementById('seoPanel').style.display='none';}seoRenderChList();}catch(e){alert(e.message);}
-}
+async function seoDeleteCh(id){if(!confirm('¿Eliminar?'))return;try{await req('/api/seo/channels/'+id,'DELETE');_seo.channels=_seo.channels.filter(c=>c.id!==id);if(_seo.activeId===id){_seo.activeId=null;document.getElementById('seoEmpty').style.display='block';document.getElementById('seoPanel').style.display='none';}seoRenderChList();}catch(e){alert(e.message);}}
 function seoShowAdd(){document.getElementById('seoAddModal').style.display='flex';setTimeout(()=>document.getElementById('seoAddUrl').focus(),100);}
 function seoHideAdd(){document.getElementById('seoAddModal').style.display='none';document.getElementById('seoAddUrl').value='';document.getElementById('seoAddNiche').value='';document.getElementById('seoPlatPrev').textContent='';showAlert('seoAddAlert','','');}
 function seoPrevPlat(){const url=document.getElementById('seoAddUrl').value;const p=seoDetectPlat(url);const el=document.getElementById('seoPlatPrev');el.innerHTML=url?`Detectado: <span class="seo-ch-plat ${seoPlatClass(p)}" style="padding:1px 7px;border-radius:20px">${seoPlatLabel(p)}</span>`:'';}
@@ -3384,11 +3375,118 @@ async function seoChatSend(){
 function seoChatClear(){_seo.chatHist=[];document.getElementById('seoChatBox').innerHTML='<div style="text-align:center;opacity:.6;font-size:.83rem;padding:24px 0">Chat limpiado</div>';}
 async function seoLoadHistory(){
   if(!_seo.activeId)return;const el=document.getElementById('seoHistOut');el.innerHTML='<div style="opacity:.6;font-size:.83rem">Cargando...</div>';
+  try{const d=await req('/api/seo/history/'+_seo.activeId);if(!d.history.length){el.innerHTML='<div style="opacity:.6;font-size:.83rem;padding:16px 0">Sin resultados aún</div>';return;}el.innerHTML=d.history.map(r=>`<div class="panel" style="margin-bottom:9px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:7px"><span class="badge">${r.type}</span><span style="font-size:.74rem;opacity:.6">${new Date(r.created).toLocaleString()}</span></div>${r.content_in?`<div style="font-size:.79rem;opacity:.6;margin-bottom:5px">Entrada: ${r.content_in.substring(0,100)}...</div>`:''}<div style="font-size:.82rem;line-height:1.5">${r.preview}...</div></div>`).join('');}catch(e){el.innerHTML=`<div style="color:red;font-size:.83rem">Error: ${e.message}</div>`;}
+}
+
+// ============ Dataset Training ============
+function datasetInit(){dsLoadStats();dsLoadHistory();}
+async function dsLoadStats(){
+  const el=document.getElementById('dsStats');if(!el)return;
   try{
-    const d=await req('/api/seo/history/'+_seo.activeId);
-    if(!d.history.length){el.innerHTML='<div style="opacity:.6;font-size:.83rem;padding:16px 0">Sin resultados guardados aún</div>';return;}
-    el.innerHTML=d.history.map(r=>`<div class="panel" style="margin-bottom:9px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:7px"><span class="badge">${r.type}</span><span style="font-size:.74rem;opacity:.6">${new Date(r.created).toLocaleString()}</span></div>${r.content_in?`<div style="font-size:.79rem;opacity:.6;margin-bottom:5px">Entrada: ${r.content_in.substring(0,100)}...</div>`:''}<div style="font-size:.82rem;line-height:1.5">${r.preview}...</div></div>`).join('');
-  }catch(e){el.innerHTML=`<div style="color:red;font-size:.83rem">Error: ${e.message}</div>`;}
+    const d=await req('/api/dev/stats');
+    el.innerHTML=`
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div style="text-align:center;padding:12px;background:rgba(0,0,0,.2);border-radius:8px">
+          <div style="font-size:1.5rem;font-weight:700;color:var(--accent)">${d.memories||0}</div>
+          <div style="font-size:.78rem;opacity:.6">Memorias</div>
+        </div>
+        <div style="text-align:center;padding:12px;background:rgba(0,0,0,.2);border-radius:8px">
+          <div style="font-size:1.5rem;font-weight:700;color:var(--green)">${d.manual_knowledge||0}</div>
+          <div style="font-size:.78rem;opacity:.6">Conocimiento manual</div>
+        </div>
+      </div>`;
+  }catch(e){el.innerHTML='<div style="opacity:.6;font-size:.83rem">Error cargando stats</div>';}
+}
+async function dsLoadHistory(){
+  const el=document.getElementById('dsHistory');if(!el)return;
+  try{
+    const d=await req('/api/dev/knowledge?per_page=10');
+    if(!d.items||!d.items.length){el.innerHTML='<div style="opacity:.6;font-size:.83rem">Sin datasets cargados aún</div>';return;}
+    el.innerHTML=`<div class="table-wrap"><table><thead><tr><th>Título</th><th>Categoría</th><th>Prioridad</th><th>Fecha</th><th></th></tr></thead><tbody>
+      ${d.items.map(k=>`<tr>
+        <td style="font-size:.83rem">${k.title}</td>
+        <td><span class="badge">${k.category||'—'}</span></td>
+        <td><span class="badge ${k.priority===3?'badge-red':k.priority===2?'badge-yellow':'badge-blue'}">${k.priority===3?'Crítica':k.priority===2?'Alta':'Normal'}</span></td>
+        <td style="font-size:.78rem;opacity:.6">${new Date(k.created_at).toLocaleDateString()}</td>
+        <td><button class="btn btn-red btn-sm" onclick="dsDelete(${k.id})">🗑️</button></td>
+      </tr>`).join('')}
+    </tbody></table></div>`;
+  }catch(e){el.innerHTML=`<div style="opacity:.6;font-size:.83rem">Error: ${e.message}</div>`;}
+}
+async function dsDelete(id){
+  if(!confirm('¿Eliminar este dataset?'))return;
+  try{await req('/api/dev/knowledge/'+id,'DELETE');dsLoadHistory();dsLoadStats();}catch(e){alert(e.message);}
+}
+async function dsUpload(){
+  const file=document.getElementById('dsFile').files[0];
+  const category=document.getElementById('dsCategory').value.trim()||'dataset';
+  const priority=parseInt(document.getElementById('dsPriority').value)||1;
+  if(!file)return showAlert('dsAlert','Selecciona un archivo primero','error');
+
+  showAlert('dsAlert','⏳ Procesando archivo...','info');
+
+  try{
+    const text=await file.text();
+    let items=[];
+
+    if(file.name.endsWith('.json')){
+      const parsed=JSON.parse(text);
+      const arr=Array.isArray(parsed)?parsed:parsed.data||parsed.items||[];
+      items=arr.map((item,i)=>{
+        // Detectar formato
+        if(item.pregunta||item.question)
+          return{title:`Q&A #${i+1}: ${(item.pregunta||item.question||'').substring(0,60)}`,content:`Pregunta: ${item.pregunta||item.question||''}
+Respuesta: ${item.respuesta||item.answer||item.output||''}`,category,priority};
+        if(item.instruction||item.input)
+          return{title:`Instrucción #${i+1}`,content:`Instrucción: ${item.instruction||''}
+Entrada: ${item.input||''}
+Salida: ${item.output||''}`,category,priority};
+        if(item.text||item.content)
+          return{title:`Texto #${i+1}`,content:item.text||item.content,category,priority};
+        // Formato genérico
+        return{title:`Item #${i+1}`,content:JSON.stringify(item),category,priority};
+      });
+    } else if(file.name.endsWith('.csv')){
+      const lines=text.split('\n').filter(l=>l.trim());
+      const headers=lines[0].split(',').map(h=>h.trim().toLowerCase().replace(/"/g,''));
+      items=lines.slice(1).map((line,i)=>{
+        const cols=line.split(',').map(c=>c.trim().replace(/^"|"$/g,''));
+        const obj={};headers.forEach((h,j)=>obj[h]=cols[j]||'');
+        const pregunta=obj.pregunta||obj.question||obj.input||Object.values(obj)[0]||'';
+        const respuesta=obj.respuesta||obj.answer||obj.output||Object.values(obj)[1]||'';
+        return{title:`Fila #${i+1}: ${pregunta.substring(0,60)}`,content:`Pregunta: ${pregunta}\nRespuesta: ${respuesta}`,category,priority};
+      }).filter(item=>item.content.length>10);
+    } else {
+      // TXT — dividir en párrafos
+      const paragraphs=text.split(/\n\n+/).filter(p=>p.trim().length>50);
+      items=paragraphs.map((p,i)=>({title:`Párrafo #${i+1}: ${p.substring(0,60)}...`,content:p.trim(),category,priority}));
+    }
+
+    if(!items.length)return showAlert('dsAlert','No se encontraron datos válidos en el archivo','error');
+
+    // Mostrar preview
+    const preview=document.getElementById('dsPreview');
+    preview.style.display='block';
+    preview.innerHTML=`<strong>Preview (${items.length} items):</strong><br>${items.slice(0,3).map(i=>`• ${i.title}`).join('<br>')}${items.length>3?`<br>... y ${items.length-3} más`:''}`;
+
+    showAlert('dsAlert',`⏳ Cargando ${items.length} items...`,'info');
+
+    // Cargar en lotes de 10
+    let loaded=0;
+    const batchSize=10;
+    for(let i=0;i<items.length;i+=batchSize){
+      const batch=items.slice(i,i+batchSize);
+      await req('/api/dev/learn/bulk','POST',{items:batch.map(item=>({topic:item.title,content:item.content,category:item.category,priority:item.priority}))});
+      loaded+=batch.length;
+      showAlert('dsAlert',`⏳ Cargando... ${loaded}/${items.length}`,'info');
+    }
+
+    showAlert('dsAlert',`✅ Dataset cargado: ${items.length} items en categoría "${category}"`,  'success');
+    document.getElementById('dsFile').value='';
+    preview.style.display='none';
+    dsLoadStats();dsLoadHistory();
+
+  }catch(e){showAlert('dsAlert','❌ Error: '+e.message,'error');}
 }
 
 </script>
