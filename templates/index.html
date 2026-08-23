@@ -1226,8 +1226,7 @@ tr:hover td{background:rgba(108,99,255,.04);}
       <!-- CicSEO Intelligence -->
       <section id="sec-seo" class="section">
         <h2>📊 CicSEO Intelligence</h2>
-        <p class="subtitle">SEO · Keywords · Títulos · Metadatos — YouTube · Instagram · TikTok · WordPress · Blog</p>
-
+        <p class="subtitle">SEO · Keywords · Competencia · Títulos — YouTube · Instagram · TikTok · WordPress · Blog</p>
         <style>
           .seo-layout{display:grid;grid-template-columns:210px 1fr;gap:20px}
           .seo-ch-card{background:var(--bg2,#1a1a2e);border:1px solid var(--border,#2d3561);border-radius:8px;padding:11px 13px;cursor:pointer;transition:all .15s;border-left:3px solid transparent;margin-bottom:8px}
@@ -1235,50 +1234,56 @@ tr:hover td{background:rgba(108,99,255,.04);}
           .seo-ch-card.active{border-left-color:var(--accent,#6c63ff);background:rgba(108,99,255,.09)}
           .seo-ch-plat{font-size:.69rem;font-weight:700;padding:2px 8px;border-radius:20px;display:inline-block;margin-bottom:5px}
           .seo-ch-url{font-size:.81rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:170px}
-          .seo-ch-nick{font-size:.71rem;color:var(--text2,#94a3b8);margin-top:2px}
+          .seo-ch-nick{font-size:.71rem;opacity:.6;margin-top:2px}
           .plt-yt{background:#ff000018;color:#ff5555;border:1px solid #ff444430}
           .plt-ig{background:#e1306c18;color:#e1306c;border:1px solid #e1306c30}
           .plt-tt{background:#00f2ea18;color:#00c4c4;border:1px solid #00f2ea30}
           .plt-wp{background:#21759b18;color:#4aa8d8;border:1px solid #21759b40}
           .plt-web{background:#6366f118;color:#818cf8;border:1px solid #6366f130}
           .plt-x{background:#ffffff10;color:#aaa;border:1px solid #33333350}
-          .seo-tabs{display:flex;gap:0;border-bottom:1px solid var(--border,#2d3561);margin-bottom:16px}
-          .seo-tab{padding:9px 15px;background:none;border:none;border-bottom:2px solid transparent;color:var(--text2,#94a3b8);font-size:.84rem;font-weight:500;cursor:pointer;font-family:inherit;transition:color .15s}
-          .seo-tab.active{color:var(--accent2,#60a5fa);border-bottom-color:var(--accent,#6c63ff)}
-          .seo-opt-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(115px,1fr));gap:8px;margin-bottom:12px}
+          .seo-tabs{display:flex;gap:0;border-bottom:1px solid var(--border,#2d3561);margin-bottom:16px;overflow-x:auto}
+          .seo-tab{padding:9px 15px;background:none;border:none;border-bottom:2px solid transparent;opacity:.6;font-size:.84rem;font-weight:500;cursor:pointer;font-family:inherit;white-space:nowrap;transition:all .15s}
+          .seo-tab.active{opacity:1;color:var(--accent2,#60a5fa);border-bottom-color:var(--accent,#6c63ff)}
+          .seo-opt-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:8px;margin-bottom:12px}
           .seo-opt-btn{background:var(--bg2,#1a1a2e);border:1px solid var(--border,#2d3561);border-radius:8px;padding:10px 8px;cursor:pointer;text-align:center;transition:all .15s;font-family:inherit}
           .seo-opt-btn:hover,.seo-opt-btn.active{border-color:var(--accent,#6c63ff);background:rgba(108,99,255,.1)}
-          .seo-opt-icon{font-size:1.25rem;display:block;margin-bottom:4px}
-          .seo-opt-lbl{font-size:.71rem;color:var(--text2,#94a3b8);line-height:1.3}
-          .seo-block{background:var(--bg3,#0d1117);border:1px solid var(--border,#2d3561);border-radius:8px;padding:13px 15px;margin-bottom:9px;position:relative}
-          .seo-block-label{font-size:.67rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--text2,#94a3b8);margin-bottom:7px}
+          .seo-opt-icon{font-size:1.2rem;display:block;margin-bottom:4px}
+          .seo-opt-lbl{font-size:.7rem;opacity:.7;line-height:1.3}
+          .seo-block{background:var(--bg2,#1a1a2e);border:1px solid var(--border,#2d3561);border-radius:8px;padding:13px 15px;margin-bottom:9px;position:relative}
+          .seo-block-label{font-size:.67rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;opacity:.6;margin-bottom:7px}
           .seo-block-value{font-size:.86rem;line-height:1.65;white-space:pre-wrap}
           .seo-block-copy{position:absolute;top:9px;right:9px}
-          .seo-tag-pill{display:inline-block;background:var(--bg3,#0d1117);border:1px solid var(--border,#2d3561);border-radius:20px;padding:2px 9px;font-size:.75rem;color:#60a5fa;margin:2px}
+          .seo-tag-pill{display:inline-block;background:rgba(108,99,255,.15);border:1px solid rgba(108,99,255,.3);border-radius:20px;padding:2px 9px;font-size:.75rem;color:var(--accent2,#60a5fa);margin:2px}
           .seo-action{background:rgba(108,99,255,.1);border:1px solid rgba(108,99,255,.3);border-radius:8px;padding:13px 15px;margin-top:4px}
-          .seo-action strong{font-size:.7rem;color:#60a5fa;text-transform:uppercase;letter-spacing:.06em;display:block;margin-bottom:5px}
-          .seo-raw h3{font-size:.92rem;font-weight:600;color:#60a5fa;margin:13px 0 5px}
+          .seo-action strong{font-size:.7rem;color:var(--accent2,#60a5fa);text-transform:uppercase;letter-spacing:.06em;display:block;margin-bottom:5px}
+          .seo-raw h3{font-size:.92rem;font-weight:600;color:var(--accent2,#60a5fa);margin:13px 0 5px}
           .seo-raw h4{font-size:.82rem;font-weight:600;margin:9px 0 3px}
           .seo-raw strong{font-weight:600}
           .seo-raw ul{padding-left:15px;margin-bottom:7px}
           .seo-raw li{font-size:.84rem;line-height:1.7}
-          .seo-raw code{font-family:monospace;background:#0d1220;padding:1px 5px;border-radius:4px;font-size:.79rem;color:#06b6d4}
+          .seo-raw code{font-family:monospace;background:rgba(0,0,0,.3);padding:1px 5px;border-radius:4px;font-size:.79rem;color:#06b6d4}
           .seo-raw hr{border:none;border-top:1px solid var(--border,#2d3561);margin:11px 0}
           .seo-chat-box{background:var(--bg2,#1a1a2e);border:1px solid var(--border,#2d3561);border-radius:8px;padding:14px;min-height:240px;max-height:360px;overflow-y:auto;display:flex;flex-direction:column;gap:11px}
           .seo-bub-u{align-self:flex-end;background:var(--accent,#6c63ff);color:#fff;border-radius:12px 12px 4px 12px;padding:9px 13px;font-size:.84rem;max-width:85%}
-          .seo-bub-b{align-self:flex-start;background:var(--bg3,#0d1117);border-radius:12px 12px 12px 4px;padding:9px 13px;font-size:.84rem;max-width:85%;line-height:1.6}
+          .seo-bub-b{align-self:flex-start;background:var(--bg2,#1a1a2e);border:1px solid var(--border,#2d3561);border-radius:12px 12px 12px 4px;padding:9px 13px;font-size:.84rem;max-width:85%;line-height:1.6}
+          .comp-card{background:var(--bg2,#1a1a2e);border:1px solid var(--border,#2d3561);border-radius:8px;padding:14px;margin-bottom:10px}
+          .comp-card h4{font-size:.88rem;font-weight:600;margin-bottom:6px}
+          .comp-badge{display:inline-block;font-size:.7rem;padding:2px 8px;border-radius:20px;margin-right:4px}
+          .comp-strong{background:rgba(16,185,129,.15);color:#10b981;border:1px solid rgba(16,185,129,.3)}
+          .comp-weak{background:rgba(239,68,68,.15);color:#ef4444;border:1px solid rgba(239,68,68,.3)}
+          .comp-gap{background:rgba(245,158,11,.15);color:#f59e0b;border:1px solid rgba(245,158,11,.3)}
           @media(max-width:768px){ .seo-layout{grid-template-columns:1fr} }
         </style>
 
         <div class="seo-layout">
-          <!-- Sidebar canales -->
+          <!-- Sidebar -->
           <div>
             <button class="btn btn-primary" style="width:100%;margin-bottom:12px" onclick="seoShowAdd()">+ Canal / Sitio</button>
             <div id="seoChList"><div style="font-size:.82rem;opacity:.6">Sin canales aún</div></div>
             <div id="seoKwWrap" style="display:none;margin-top:14px;padding-top:12px;border-top:1px solid var(--border,#2d3561)">
               <div style="font-size:.68rem;opacity:.6;margin-bottom:6px;font-weight:600;text-transform:uppercase">Keywords guardadas</div>
               <div id="seoKwList" style="display:flex;flex-wrap:wrap;gap:3px"></div>
-              <button onclick="seoClearKw()" style="margin-top:5px;font-size:.71rem;opacity:.6;background:none;border:none;cursor:pointer;padding:0">Limpiar</button>
+              <button onclick="seoClearKw()" style="margin-top:5px;font-size:.71rem;opacity:.5;background:none;border:none;cursor:pointer;padding:0">Limpiar</button>
             </div>
           </div>
 
@@ -1287,7 +1292,7 @@ tr:hover td{background:rgba(108,99,255,.04);}
             <div id="seoEmpty" style="text-align:center;padding:60px 0;opacity:.6">
               <div style="font-size:2.5rem;margin-bottom:12px">📊</div>
               <div style="font-weight:600;font-size:.95rem;margin-bottom:8px">CicSEO Intelligence</div>
-              <div style="font-size:.84rem;max-width:360px;margin:0 auto;line-height:1.6">Agrega tu canal de YouTube, Instagram, TikTok, WordPress o cualquier blog. La IA detecta el nicho automáticamente.</div>
+              <div style="font-size:.84rem;max-width:360px;margin:0 auto;line-height:1.6">Agrega tu canal de YouTube, Instagram, TikTok, WordPress o cualquier blog. La IA detecta el nicho y analiza la competencia automáticamente.</div>
               <button class="btn btn-primary" style="margin-top:16px" onclick="seoShowAdd()">Agregar canal o sitio</button>
             </div>
 
@@ -1303,20 +1308,21 @@ tr:hover td{background:rgba(108,99,255,.04);}
               <div class="seo-tabs">
                 <button class="seo-tab active" onclick="seoTab('optimize',this)">✨ Optimizar</button>
                 <button class="seo-tab" onclick="seoTab('analyze',this)">🔍 Análisis</button>
+                <button class="seo-tab" onclick="seoTab('compete',this)">⚔️ Competencia</button>
                 <button class="seo-tab" onclick="seoTab('chat',this)">💬 Chat SEO</button>
                 <button class="seo-tab" onclick="seoTab('history',this)">📋 Historial</button>
               </div>
 
               <!-- TAB OPTIMIZAR -->
               <div id="seo-tab-optimize">
-                <label style="font-size:.79rem;opacity:.7;display:block;margin-bottom:6px;font-weight:500">Pega tu título, párrafo, idea o borrador</label>
-                <textarea id="seoContent" rows="5" placeholder="Ejemplo: &quot;Cómo hacer pasta carbonara en 15 minutos&quot;&#10;&#10;O pega cualquier texto. La IA optimiza todo para tu plataforma automáticamente."
-                  style="width:100%;background:var(--input-bg,#1a1a2e);border:1px solid var(--border,#2d3561);border-radius:8px;padding:11px 13px;color:inherit;font-size:.86rem;resize:vertical;outline:none;font-family:inherit;line-height:1.6;margin-bottom:12px"></textarea>
+                <label style="font-size:.79rem;opacity:.7;display:block;margin-bottom:6px;font-weight:500">Pega tu título, párrafo, idea o borrador de contenido</label>
+                <textarea id="seoContent" rows="5" placeholder="Ejemplo: &quot;Cómo hacer pasta carbonara en 15 minutos&quot;&#10;&#10;O pega cualquier texto: guión, idea suelta, borrador...&#10;La IA optimiza todo para tu plataforma automáticamente."
+                  style="width:100%;background:var(--input-bg,rgba(255,255,255,.05));border:1px solid var(--border,#2d3561);border-radius:8px;padding:11px 13px;color:inherit;font-size:.86rem;resize:vertical;outline:none;font-family:inherit;line-height:1.6;margin-bottom:12px"></textarea>
                 <div style="font-size:.77rem;opacity:.7;margin-bottom:8px;font-weight:500">¿Qué quieres generar?</div>
                 <div id="seoOptGrid" class="seo-opt-grid"></div>
                 <div style="display:flex;gap:10px;margin-bottom:10px">
-                  <input id="seoExtra" type="text" placeholder="Instrucción adicional opcional: idioma, tono, público..."
-                    style="flex:1;background:var(--input-bg,#1a1a2e);border:1px solid var(--border,#2d3561);border-radius:8px;padding:9px 13px;color:inherit;font-size:.83rem;outline:none;font-family:inherit"/>
+                  <input id="seoExtra" type="text" placeholder="Instrucción adicional opcional: idioma, tono, público objetivo..."
+                    style="flex:1;background:var(--input-bg,rgba(255,255,255,.05));border:1px solid var(--border,#2d3561);border-radius:8px;padding:9px 13px;color:inherit;font-size:.83rem;outline:none;font-family:inherit"/>
                   <button class="btn btn-primary" id="seoBtnOpt" onclick="seoRunOptimize()" style="white-space:nowrap">✨ Generar</button>
                 </div>
                 <div id="seoOptAlert"></div>
@@ -1351,20 +1357,62 @@ tr:hover td{background:rgba(108,99,255,.04);}
                 <div id="seoAnOut"></div>
               </div>
 
+              <!-- TAB COMPETENCIA -->
+              <div id="seo-tab-compete" style="display:none">
+                <div class="panel" style="margin-bottom:14px">
+                  <div style="font-size:.84rem;font-weight:500;margin-bottom:10px">Analizar competidor específico</div>
+                  <div style="display:flex;gap:10px">
+                    <input id="compUrl" type="text" placeholder="URL o handle del competidor: youtube.com/@competidor"
+                      style="flex:1;background:var(--input-bg,rgba(255,255,255,.05));border:1px solid var(--border,#2d3561);border-radius:8px;padding:9px 13px;color:inherit;font-size:.84rem;outline:none;font-family:inherit"/>
+                    <button class="btn btn-primary" onclick="seoAnalyzeCompetitor()" style="white-space:nowrap">⚔️ Analizar</button>
+                  </div>
+                  <div style="font-size:.77rem;opacity:.5;margin-top:6px">Deja vacío para que la IA detecte competidores automáticamente de tu nicho</div>
+                </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
+                  <div class="panel" style="cursor:pointer" onclick="seoRunCompete('auto')">
+                    <div style="font-size:1.2rem;margin-bottom:7px">🤖</div>
+                    <div style="font-weight:600;font-size:.87rem;margin-bottom:3px">Detectar competidores</div>
+                    <div style="font-size:.77rem;opacity:.6">La IA encuentra tus principales rivales automáticamente</div>
+                  </div>
+                  <div class="panel" style="cursor:pointer" onclick="seoRunCompete('gaps')">
+                    <div style="font-size:1.2rem;margin-bottom:7px">🎯</div>
+                    <div style="font-weight:600;font-size:.87rem;margin-bottom:3px">Gaps de contenido</div>
+                    <div style="font-size:.77rem;opacity:.6">Temas que la competencia NO cubre y tú puedes dominar</div>
+                  </div>
+                  <div class="panel" style="cursor:pointer" onclick="seoRunCompete('keywords')">
+                    <div style="font-size:1.2rem;margin-bottom:7px">🗝️</div>
+                    <div style="font-weight:600;font-size:.87rem;margin-bottom:3px">Keywords de competidores</div>
+                    <div style="font-size:.77rem;opacity:.6">Qué keywords están usando tus rivales exitosamente</div>
+                  </div>
+                  <div class="panel" style="cursor:pointer" onclick="seoRunCompete('strategy')">
+                    <div style="font-size:1.2rem;margin-bottom:7px">♟️</div>
+                    <div style="font-weight:600;font-size:.87rem;margin-bottom:3px">Estrategia para superar</div>
+                    <div style="font-size:.77rem;opacity:.6">Plan concreto para superar a la competencia</div>
+                  </div>
+                </div>
+                <div id="seoCompAlert"></div>
+                <div id="seoCompOut"></div>
+              </div>
+
               <!-- TAB CHAT -->
               <div id="seo-tab-chat" style="display:none">
-                <input id="seoChatInstr" type="text" placeholder="Instrucciones persistentes (ej: enfócate en audiencia hispanohablante...)"
-                  style="width:100%;background:var(--input-bg,#1a1a2e);border:1px solid var(--border,#2d3561);border-radius:8px;padding:9px 13px;color:inherit;font-size:.81rem;outline:none;font-family:inherit;margin-bottom:11px"/>
+                <input id="seoChatInstr" type="text" placeholder="Instrucciones persistentes (ej: enfócate en audiencia hispanohablante, usa datos numéricos...)"
+                  style="width:100%;background:var(--input-bg,rgba(255,255,255,.05));border:1px solid var(--border,#2d3561);border-radius:8px;padding:9px 13px;color:inherit;font-size:.81rem;outline:none;font-family:inherit;margin-bottom:11px"/>
                 <div id="seoChatBox" class="seo-chat-box">
                   <div style="text-align:center;opacity:.6;font-size:.83rem;padding:24px 0">
                     <div style="font-size:1.7rem;margin-bottom:9px">💬</div>
-                    Pregúntame sobre SEO, keywords, algoritmos o estrategia de contenido.
+                    Pregúntame sobre SEO, keywords, algoritmos, competencia o estrategia de contenido.
+                    <div style="display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin-top:12px">
+                      <button onclick="document.getElementById('seoChatInput').value=this.textContent" class="btn btn-outline btn-sm">¿Qué está trending en YouTube esta semana?</button>
+                      <button onclick="document.getElementById('seoChatInput').value=this.textContent" class="btn btn-outline btn-sm">¿Cómo superar a mis competidores en SEO?</button>
+                      <button onclick="document.getElementById('seoChatInput').value=this.textContent" class="btn btn-outline btn-sm">¿Cómo rankear un post nuevo en Google?</button>
+                    </div>
                   </div>
                 </div>
                 <div style="display:flex;gap:9px;margin-top:10px">
-                  <input id="seoChatInput" type="text" placeholder="Pregunta sobre SEO, keywords, algoritmos..."
+                  <input id="seoChatInput" type="text" placeholder="Pregunta sobre SEO, keywords, competencia, algoritmos..."
                     onkeydown="if(event.key==='Enter')seoChatSend()"
-                    style="flex:1;background:var(--input-bg,#1a1a2e);border:1px solid var(--border,#2d3561);border-radius:8px;padding:9px 14px;color:inherit;font-size:.86rem;outline:none;font-family:inherit"/>
+                    style="flex:1;background:var(--input-bg,rgba(255,255,255,.05));border:1px solid var(--border,#2d3561);border-radius:8px;padding:9px 14px;color:inherit;font-size:.86rem;outline:none;font-family:inherit"/>
                   <button class="btn btn-primary" onclick="seoChatSend()">Enviar</button>
                   <button class="btn btn-outline" onclick="seoChatClear()">Limpiar</button>
                 </div>
@@ -3212,12 +3260,10 @@ function seoPlatClass(p){return{youtube:'plt-yt',instagram:'plt-ig',tiktok:'plt-
 function seoDetectPlat(url){
   if(!url)return'web';const u=url.toLowerCase();
   if(u.includes('youtube.com')||u.includes('youtu.be'))return'youtube';
-  if(u.includes('instagram.com'))return'instagram';
-  if(u.includes('tiktok.com'))return'tiktok';
+  if(u.includes('instagram.com'))return'instagram';if(u.includes('tiktok.com'))return'tiktok';
   if(u.includes('wordpress.com')||u.includes('wp-content'))return'wordpress';
   if(u.includes('twitter.com')||u.includes('x.com'))return'x';
-  if(u.startsWith('@')&&u.length<40)return'instagram';
-  return'web';
+  if(u.startsWith('@')&&u.length<40)return'instagram';return'web';
 }
 function seoFmt(text){
   if(!text)return'';
@@ -3237,10 +3283,9 @@ function seoRenderOut(text,cid){
   const blocks=seoParseBlocks(text);
   if(blocks.sections.length>0){
     let html='';
-    blocks.sections.forEach((s,i)=>{
+    blocks.sections.forEach(s=>{
       const isTag=s.label.includes('TAG')||s.label.includes('HASHTAG');
-      const valHtml=isTag?s.value.split(/[,\n]/).map(t=>t.trim()).filter(Boolean).map(t=>`<span class="seo-tag-pill">${t}</span>`).join('')
-        :`<div class="seo-block-value">${s.value}</div>`;
+      const valHtml=isTag?s.value.split(/[,\n]/).map(t=>t.trim()).filter(Boolean).map(t=>`<span class="seo-tag-pill">${t}</span>`).join(''):`<div class="seo-block-value">${s.value}</div>`;
       html+=`<div class="seo-block"><div class="seo-block-label">${s.label}</div>${valHtml}<div class="seo-block-copy"><button class="btn btn-outline btn-sm" onclick="seoCpBtn(${JSON.stringify(s.value)},this)">📋 Copiar</button></div></div>`;
     });
     if(blocks.action)html+=`<div class="seo-action"><strong>🎯 ACCIÓN INMEDIATA</strong>${blocks.action}</div>`;
@@ -3255,7 +3300,7 @@ function seoSaveKw(text){const m=text.match(/\[([^\]|]+)\s*\|/g)||[];const kws=m
 function seoRenderKw(){const w=document.getElementById('seoKwWrap'),l=document.getElementById('seoKwList');if(!w||!l)return;if(_seo.savedKw.length===0){w.style.display='none';return;}w.style.display='block';l.innerHTML=_seo.savedKw.map(k=>`<span class="seo-tag-pill">${k}</span>`).join('');}
 function seoClearKw(){_seo.savedKw=[];seoRenderKw();}
 async function seoLoadChannels(){
-  try{const d=await api('/api/seo/channels');_seo.channels=d.channels||[];seoRenderChList();if(_seo.channels.length>0&&!_seo.activeId)seoSelectCh(_seo.channels[0]);}catch(e){}
+  try{const d=await req('/api/seo/channels');_seo.channels=d.channels||[];seoRenderChList();if(_seo.channels.length>0&&!_seo.activeId)seoSelectCh(_seo.channels[0]);}catch(e){}
 }
 function seoRenderChList(){
   const el=document.getElementById('seoChList');if(!el)return;
@@ -3268,24 +3313,29 @@ function seoSelectCh(ch){
   document.getElementById('seoEmpty').style.display='none';document.getElementById('seoPanel').style.display='block';
   const pe=document.getElementById('seoActivePlat');pe.textContent=seoPlatLabel(ch.platform);pe.className='seo-ch-plat '+seoPlatClass(ch.platform);
   document.getElementById('seoActiveUrl').textContent=ch.url;document.getElementById('seoActiveNiche').textContent='Nicho: '+ch.niche;
-  seoRenderOptGrid(ch.platform);document.getElementById('seoOptOut').innerHTML='';document.getElementById('seoAnOut').innerHTML='';_seo.selOpt=null;
+  seoRenderOptGrid(ch.platform);
+  document.getElementById('seoOptOut').innerHTML='';document.getElementById('seoAnOut').innerHTML='';document.getElementById('seoCompOut').innerHTML='';
+  _seo.selOpt=null;
 }
 function seoRenderOptGrid(plat){
   const opts=SEO_OPTS[plat]||SEO_OPTS['web'];const g=document.getElementById('seoOptGrid');if(!g)return;
   g.innerHTML=opts.map(o=>`<button class="seo-opt-btn${_seo.selOpt===o.id?' active':''}" onclick="seoSelOpt('${o.id}',this)"><span class="seo-opt-icon">${o.icon}</span><span class="seo-opt-lbl">${o.lbl.replace(/\n/g,'<br>')}</span></button>`).join('');
 }
 function seoSelOpt(id,el){_seo.selOpt=id;document.querySelectorAll('.seo-opt-btn').forEach(b=>b.classList.remove('active'));el.classList.add('active');}
-async function seoDeleteCh(id){if(!confirm('¿Eliminar este canal?'))return;try{await api('/api/seo/channels/'+id,'DELETE');_seo.channels=_seo.channels.filter(c=>c.id!==id);if(_seo.activeId===id){_seo.activeId=null;document.getElementById('seoEmpty').style.display='block';document.getElementById('seoPanel').style.display='none';}seoRenderChList();}catch(e){alert(e.message);}}
+async function seoDeleteCh(id){
+  if(!confirm('¿Eliminar este canal?'))return;
+  try{await req('/api/seo/channels/'+id,'DELETE');_seo.channels=_seo.channels.filter(c=>c.id!==id);if(_seo.activeId===id){_seo.activeId=null;document.getElementById('seoEmpty').style.display='block';document.getElementById('seoPanel').style.display='none';}seoRenderChList();}catch(e){alert(e.message);}
+}
 function seoShowAdd(){document.getElementById('seoAddModal').style.display='flex';setTimeout(()=>document.getElementById('seoAddUrl').focus(),100);}
 function seoHideAdd(){document.getElementById('seoAddModal').style.display='none';document.getElementById('seoAddUrl').value='';document.getElementById('seoAddNiche').value='';document.getElementById('seoPlatPrev').textContent='';showAlert('seoAddAlert','','');}
 function seoPrevPlat(){const url=document.getElementById('seoAddUrl').value;const p=seoDetectPlat(url);const el=document.getElementById('seoPlatPrev');el.innerHTML=url?`Detectado: <span class="seo-ch-plat ${seoPlatClass(p)}" style="padding:1px 7px;border-radius:20px">${seoPlatLabel(p)}</span>`:'';}
 async function seoDoAdd(){
   const url=document.getElementById('seoAddUrl').value.trim();const niche=document.getElementById('seoAddNiche').value.trim();
   if(!url)return showAlert('seoAddAlert','La URL es requerida','error');
-  try{showAlert('seoAddAlert','Agregando...','info');const d=await api('/api/seo/channels','POST',{url,niche});_seo.channels.unshift(d.channel);seoRenderChList();seoSelectCh(d.channel);seoHideAdd();}catch(e){showAlert('seoAddAlert','❌ '+e.message,'error');}
+  try{showAlert('seoAddAlert','Agregando...','info');const d=await req('/api/seo/channels','POST',{url,niche});_seo.channels.unshift(d.channel);seoRenderChList();seoSelectCh(d.channel);seoHideAdd();}catch(e){showAlert('seoAddAlert','❌ '+e.message,'error');}
 }
 function seoTab(name,btn){
-  ['optimize','analyze','chat','history'].forEach(t=>{document.getElementById('seo-tab-'+t).style.display=t===name?'block':'none';});
+  ['optimize','analyze','compete','chat','history'].forEach(t=>{const el=document.getElementById('seo-tab-'+t);if(el)el.style.display=t===name?'block':'none';});
   document.querySelectorAll('.seo-tab').forEach(b=>b.classList.remove('active'));if(btn)btn.classList.add('active');
   if(name==='history')seoLoadHistory();
 }
@@ -3296,31 +3346,49 @@ async function seoRunOptimize(){
   if(!_seo.activeId)return showAlert('seoOptAlert','Selecciona un canal primero','error');
   if(_seo.loading)return;_seo.loading=true;
   showAlert('seoOptAlert','⏳ Generando...','info');document.getElementById('seoOptOut').innerHTML='';document.getElementById('seoBtnOpt').disabled=true;
-  try{const d=await api('/api/seo/optimize','POST',{channel_id:_seo.activeId,opt_type:_seo.selOpt,content,extra:extra||undefined});showAlert('seoOptAlert','','');seoRenderOut(d.result,'seoOptOut');}catch(e){showAlert('seoOptAlert','❌ '+e.message,'error');}
+  try{const d=await req('/api/seo/optimize','POST',{channel_id:_seo.activeId,opt_type:_seo.selOpt,content,extra:extra||undefined});showAlert('seoOptAlert','','');seoRenderOut(d.result,'seoOptOut');}catch(e){showAlert('seoOptAlert','❌ '+e.message,'error');}
   _seo.loading=false;document.getElementById('seoBtnOpt').disabled=false;
 }
 async function seoRunAnalysis(type){
   if(!_seo.activeId)return showAlert('seoAnAlert','Selecciona un canal primero','error');
   if(_seo.loading)return;_seo.loading=true;
   showAlert('seoAnAlert','⏳ Analizando...','info');document.getElementById('seoAnOut').innerHTML='';
-  try{const d=await api('/api/seo/analyze','POST',{channel_id:_seo.activeId,type,history:[]});showAlert('seoAnAlert','','');seoRenderOut(d.result,'seoAnOut');}catch(e){showAlert('seoAnAlert','❌ '+e.message,'error');}
+  try{const d=await req('/api/seo/analyze','POST',{channel_id:_seo.activeId,type,history:[]});showAlert('seoAnAlert','','');seoRenderOut(d.result,'seoAnOut');}catch(e){showAlert('seoAnAlert','❌ '+e.message,'error');}
+  _seo.loading=false;
+}
+async function seoRunCompete(type){
+  if(!_seo.activeId)return showAlert('seoCompAlert','Selecciona un canal primero','error');
+  if(_seo.loading)return;_seo.loading=true;
+  showAlert('seoCompAlert','⏳ Analizando competencia...','info');document.getElementById('seoCompOut').innerHTML='';
+  try{const d=await req('/api/seo/analyze','POST',{channel_id:_seo.activeId,type:'compete_'+type,history:[]});showAlert('seoCompAlert','','');seoRenderOut(d.result,'seoCompOut');}catch(e){showAlert('seoCompAlert','❌ '+e.message,'error');}
+  _seo.loading=false;
+}
+async function seoAnalyzeCompetitor(){
+  const compUrl=document.getElementById('compUrl').value.trim();
+  if(!_seo.activeId)return showAlert('seoCompAlert','Selecciona tu canal primero','error');
+  if(_seo.loading)return;_seo.loading=true;
+  showAlert('seoCompAlert','⏳ Analizando competidor...','info');document.getElementById('seoCompOut').innerHTML='';
+  try{const d=await req('/api/seo/analyze','POST',{channel_id:_seo.activeId,type:'compete_specific',competitor_url:compUrl,history:[]});showAlert('seoCompAlert','','');seoRenderOut(d.result,'seoCompOut');}catch(e){showAlert('seoCompAlert','❌ '+e.message,'error');}
   _seo.loading=false;
 }
 async function seoChatSend(){
   const msg=document.getElementById('seoChatInput').value.trim();if(!msg||_seo.loading)return;
   document.getElementById('seoChatInput').value='';
   const box=document.getElementById('seoChatBox');
-  box.innerHTML+=`<div class="seo-bub-u">${msg}</div>`;
-  box.innerHTML+=`<div class="seo-bub-b" id="seoChatLast" style="opacity:.6">⏳ Analizando...</div>`;
+  box.innerHTML+=`<div class="seo-bub-u">${msg}</div><div class="seo-bub-b" id="seoChatLast" style="opacity:.6">⏳ Analizando...</div>`;
   box.scrollTop=box.scrollHeight;_seo.chatHist.push({role:'user',content:msg});_seo.loading=true;
-  try{const d=await api('/api/seo/chat','POST',{message:msg,channel_id:_seo.activeId||undefined,history:_seo.chatHist.slice(-10)});_seo.chatHist.push({role:'assistant',content:d.result});document.getElementById('seoChatLast').innerHTML=`<div class="seo-raw">${seoFmt(d.result)}</div>`;document.getElementById('seoChatLast').className='seo-bub-b';}
-  catch(e){document.getElementById('seoChatLast').innerHTML='❌ '+e.message;}
+  try{const d=await req('/api/seo/chat','POST',{message:msg,channel_id:_seo.activeId||undefined,history:_seo.chatHist.slice(-10)});_seo.chatHist.push({role:'assistant',content:d.result});const last=document.getElementById('seoChatLast');last.innerHTML=`<div class="seo-raw">${seoFmt(d.result)}</div>`;last.className='seo-bub-b';}
+  catch(e){const last=document.getElementById('seoChatLast');if(last)last.innerHTML='❌ '+e.message;}
   _seo.loading=false;box.scrollTop=box.scrollHeight;
 }
 function seoChatClear(){_seo.chatHist=[];document.getElementById('seoChatBox').innerHTML='<div style="text-align:center;opacity:.6;font-size:.83rem;padding:24px 0">Chat limpiado</div>';}
 async function seoLoadHistory(){
   if(!_seo.activeId)return;const el=document.getElementById('seoHistOut');el.innerHTML='<div style="opacity:.6;font-size:.83rem">Cargando...</div>';
-  try{const d=await api('/api/seo/history/'+_seo.activeId);if(!d.history.length){el.innerHTML='<div style="opacity:.6;font-size:.83rem;padding:16px 0">Sin resultados guardados aún</div>';return;}el.innerHTML=d.history.map(r=>`<div class="panel" style="margin-bottom:9px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:7px"><span class="badge">${r.type}</span><span style="font-size:.74rem;opacity:.6">${new Date(r.created).toLocaleString()}</span></div>${r.content_in?`<div style="font-size:.79rem;opacity:.6;margin-bottom:5px">Entrada: ${r.content_in.substring(0,100)}...</div>`:''}<div style="font-size:.82rem;line-height:1.5">${r.preview}...</div></div>`).join('');}catch(e){el.innerHTML=`<div style="color:red;font-size:.83rem">Error: ${e.message}</div>`;}
+  try{
+    const d=await req('/api/seo/history/'+_seo.activeId);
+    if(!d.history.length){el.innerHTML='<div style="opacity:.6;font-size:.83rem;padding:16px 0">Sin resultados guardados aún</div>';return;}
+    el.innerHTML=d.history.map(r=>`<div class="panel" style="margin-bottom:9px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:7px"><span class="badge">${r.type}</span><span style="font-size:.74rem;opacity:.6">${new Date(r.created).toLocaleString()}</span></div>${r.content_in?`<div style="font-size:.79rem;opacity:.6;margin-bottom:5px">Entrada: ${r.content_in.substring(0,100)}...</div>`:''}<div style="font-size:.82rem;line-height:1.5">${r.preview}...</div></div>`).join('');
+  }catch(e){el.innerHTML=`<div style="color:red;font-size:.83rem">Error: ${e.message}</div>`;}
 }
 
 </script>
