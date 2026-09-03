@@ -3988,7 +3988,7 @@ async function podGenerate() {
       _podCurrentId=null; // nuevo episodio sin guardar
       document.getElementById('pod-meta').textContent=
         `${d.total_parts} segmentos · ~${d.est_duration}s · ${d.engine}${d.music_mixed?' · 🎵 '+_podMusicCat:''} · ${d.gen_time}s`;
-      podRenderPlayers(d.audio_parts,d.segments,title);
+      podRenderPlayers(d.audio_parts,d.segments,title,d.audio_formats,d.music_parts);
       res.style.display='';
       // Guardar audio_parts para poder guardar proyecto después
       res._audioParts = d.audio_parts;
@@ -3998,12 +3998,13 @@ async function podGenerate() {
 }
 
 // ── Renderizar players con editor ─────────────────────────────────
-function podRenderPlayers(audioParts, segments, title) {
+function podRenderPlayers(audioParts, segments, title, formats, musicParts) {
   const players=document.getElementById('pod-players');
   players.innerHTML='';
   audioParts.forEach((b64,i)=>{
     const seg=segments[i]||{};
-    const src='data:audio/mp3;base64,'+b64;
+    const fmt=(formats&&formats[i])||'mp3';
+    const src='data:audio/'+fmt+';base64,'+b64;
     const label=seg.speaker==='guest'?'👤 GUEST':'🎙️ HOST';
     const div=document.createElement('div');
     div.id='pod-seg-'+i;
