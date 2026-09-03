@@ -941,9 +941,10 @@ tr:hover td{background:rgba(108,99,255,.04);}
 
         <!-- TABS -->
         <div style="display:flex;gap:4px;margin-bottom:16px;flex-wrap:wrap">
-          <button id="tts-tab-tts"     class="btn btn-primary btn-sm"  onclick="ttsTab('tts')">🔊 Texto → Voz</button>
-          <button id="tts-tab-stt"     class="btn btn-outline btn-sm"  onclick="ttsTab('stt')">🎤 Voz → Texto</button>
-          <button id="tts-tab-podcast" class="btn btn-outline btn-sm"  onclick="ttsTab('podcast')">🎙️ Podcast</button>
+          <button id="tts-tab-tts"      class="btn btn-primary btn-sm"  onclick="ttsTab('tts')">🔊 Texto → Voz</button>
+          <button id="tts-tab-stt"      class="btn btn-outline btn-sm"  onclick="ttsTab('stt')">🎤 Voz → Texto</button>
+          <button id="tts-tab-podcast"  class="btn btn-outline btn-sm"  onclick="ttsTab('podcast')">🎙️ Podcast</button>
+          <button id="tts-tab-projects" class="btn btn-outline btn-sm"  onclick="ttsTab('projects')">📁 Proyectos</button>
         </div>
 
         <!-- ══ TAB TTS ══ -->
@@ -1158,9 +1159,35 @@ tr:hover td{background:rgba(108,99,255,.04);}
                 placeholder="Escribe aquí el guión completo de tu podcast..."></textarea>
             </div>
 
-            <button class="btn btn-primary" onclick="podGenerate()" id="pod-btn">
-              🎙️ Generar episodio
-            </button>
+            <!-- Música de fondo -->
+            <div style="background:var(--bg3);border-radius:8px;padding:12px;display:flex;flex-direction:column;gap:10px">
+              <div style="display:flex;align-items:center;gap:8px">
+                <span style="font-size:.85rem;font-weight:600">🎵 Música de fondo</span>
+                <span style="font-size:.75rem;color:var(--text2)">(se mezcla con la voz en el MP3 final)</span>
+              </div>
+              <div id="pod-music-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:6px">
+                <!-- Se llena con JS -->
+                <div style="font-size:.78rem;color:var(--text2)">Cargando categorías...</div>
+              </div>
+              <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+                <div style="flex:1;min-width:160px">
+                  <label style="font-size:.75rem;color:var(--text2)">Volumen música</label>
+                  <input type="range" id="pod-music-vol" min="-30" max="-4" value="-14" step="1"
+                    style="width:100%;margin-top:4px" oninput="document.getElementById('pod-music-vol-lbl').textContent=this.value+'dB'">
+                </div>
+                <span id="pod-music-vol-lbl" style="font-size:.78rem;color:var(--accent);min-width:40px">-14dB</span>
+              </div>
+            </div>
+
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <button class="btn btn-primary" onclick="podGenerate()" id="pod-btn" style="flex:1">
+                🎙️ Generar episodio
+              </button>
+              <button class="btn btn-outline" onclick="podSaveProject()" id="pod-save-btn" style="white-space:nowrap" title="Guardar proyecto">
+                💾 Guardar
+              </button>
+            </div>
+            <div id="pod-save-msg" style="font-size:.78rem;color:var(--text2);display:none"></div>
 
             <div id="pod-result" style="display:none">
               <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
@@ -1168,6 +1195,20 @@ tr:hover td{background:rgba(108,99,255,.04);}
                 <span id="pod-meta" style="font-size:.78rem;color:var(--text2)"></span>
               </div>
               <div id="pod-players" style="display:flex;flex-direction:column;gap:8px"></div>
+            </div>
+          </div>
+        </div>
+
+
+        <!-- ══ TAB PROYECTOS ══ -->
+        <div id="tts-panel-projects" style="display:none">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+            <h3 style="font-size:.95rem">📁 Mis proyectos de podcast</h3>
+            <button class="btn btn-outline btn-sm" onclick="podLoadProjects()">🔄 Actualizar</button>
+          </div>
+          <div id="pod-projects-list">
+            <div style="color:var(--text2);font-size:.83rem;text-align:center;padding:32px">
+              ⏳ Cargando proyectos...
             </div>
           </div>
         </div>
@@ -3720,71 +3761,48 @@ Salida: ${item.output||''}`,category,priority};
 
 
 /* ══════════════════════════════════════════════════════════════════
-   AUDIO STUDIO — JavaScript v2
+   AUDIO STUDIO — JavaScript v3 (música + proyectos)
    ══════════════════════════════════════════════════════════════════ */
 
-// ── Catálogo de voces Edge TTS (agrupadas por idioma) ─────────────
+// ── Catálogo de voces Edge TTS ────────────────────────────────────
 const EDGE_VOICES = {
   'es': [
-    {v:'es-CL-CatalinaNeural', l:'🇨🇱 Catalina (Chile, femenina)'},
-    {v:'es-CL-LorenzoNeural',  l:'🇨🇱 Lorenzo (Chile, masculino)'},
-    {v:'es-ES-ElviraNeural',   l:'🇪🇸 Elvira (España, femenina)'},
-    {v:'es-ES-AlvaroNeural',   l:'🇪🇸 Álvaro (España, masculino)'},
-    {v:'es-ES-AbrilNeural',    l:'🇪🇸 Abril (España, femenina)'},
-    {v:'es-ES-ArnauNeural',    l:'🇪🇸 Arnau (España, masculino)'},
-    {v:'es-MX-DaliaNeural',    l:'🇲🇽 Dalia (México, femenina)'},
-    {v:'es-MX-JorgeNeural',    l:'🇲🇽 Jorge (México, masculino)'},
-    {v:'es-MX-BeatrizNeural',  l:'🇲🇽 Beatriz (México, femenina)'},
-    {v:'es-AR-ElenaNeural',    l:'🇦🇷 Elena (Argentina, femenina)'},
-    {v:'es-AR-TomasNeural',    l:'🇦🇷 Tomás (Argentina, masculino)'},
-    {v:'es-CO-SalomeNeural',   l:'🇨🇴 Salomé (Colombia, femenina)'},
-    {v:'es-CO-GonzaloNeural',  l:'🇨🇴 Gonzalo (Colombia, masculino)'},
-    {v:'es-PE-CamilaNeural',   l:'🇵🇪 Camila (Perú, femenina)'},
-    {v:'es-PE-AlexNeural',     l:'🇵🇪 Alex (Perú, masculino)'},
-    {v:'es-VE-PaolaNeural',    l:'🇻🇪 Paola (Venezuela, femenina)'},
-    {v:'es-VE-SebastianNeural',l:'🇻🇪 Sebastián (Venezuela, masculino)'},
+    {v:'es-CL-CatalinaNeural',l:'🇨🇱 Catalina (Chile, femenina)'},
+    {v:'es-CL-LorenzoNeural', l:'🇨🇱 Lorenzo (Chile, masculino)'},
+    {v:'es-ES-ElviraNeural',  l:'🇪🇸 Elvira (España, femenina)'},
+    {v:'es-ES-AlvaroNeural',  l:'🇪🇸 Álvaro (España, masculino)'},
+    {v:'es-ES-AbrilNeural',   l:'🇪🇸 Abril (España, femenina)'},
+    {v:'es-MX-DaliaNeural',   l:'🇲🇽 Dalia (México, femenina)'},
+    {v:'es-MX-JorgeNeural',   l:'🇲🇽 Jorge (México, masculino)'},
+    {v:'es-AR-ElenaNeural',   l:'🇦🇷 Elena (Argentina, femenina)'},
+    {v:'es-AR-TomasNeural',   l:'🇦🇷 Tomás (Argentina, masculino)'},
+    {v:'es-CO-SalomeNeural',  l:'🇨🇴 Salomé (Colombia, femenina)'},
+    {v:'es-PE-CamilaNeural',  l:'🇵🇪 Camila (Perú, femenina)'},
+    {v:'es-VE-PaolaNeural',   l:'🇻🇪 Paola (Venezuela, femenina)'},
   ],
   'en': [
-    {v:'en-US-JennyNeural',    l:'🇺🇸 Jenny (EEUU, femenina)'},
-    {v:'en-US-GuyNeural',      l:'🇺🇸 Guy (EEUU, masculino)'},
-    {v:'en-US-AriaNeural',     l:'🇺🇸 Aria (EEUU, femenina)'},
-    {v:'en-US-DavisNeural',    l:'🇺🇸 Davis (EEUU, masculino)'},
-    {v:'en-US-NancyNeural',    l:'🇺🇸 Nancy (EEUU, femenina)'},
-    {v:'en-GB-SoniaNeural',    l:'🇬🇧 Sonia (UK, femenina)'},
-    {v:'en-GB-RyanNeural',     l:'🇬🇧 Ryan (UK, masculino)'},
-    {v:'en-AU-NatashaNeural',  l:'🇦🇺 Natasha (Australia, femenina)'},
-    {v:'en-AU-WilliamNeural',  l:'🇦🇺 William (Australia, masculino)'},
+    {v:'en-US-JennyNeural',   l:'🇺🇸 Jenny (EEUU, femenina)'},
+    {v:'en-US-GuyNeural',     l:'🇺🇸 Guy (EEUU, masculino)'},
+    {v:'en-US-AriaNeural',    l:'🇺🇸 Aria (EEUU, femenina)'},
+    {v:'en-GB-SoniaNeural',   l:'🇬🇧 Sonia (UK, femenina)'},
+    {v:'en-GB-RyanNeural',    l:'🇬🇧 Ryan (UK, masculino)'},
+    {v:'en-AU-NatashaNeural', l:'🇦🇺 Natasha (Australia, femenina)'},
   ],
   'pt': [
     {v:'pt-BR-FranciscaNeural',l:'🇧🇷 Francisca (Brasil, femenina)'},
     {v:'pt-BR-AntonioNeural',  l:'🇧🇷 António (Brasil, masculino)'},
     {v:'pt-PT-RaquelNeural',   l:'🇵🇹 Raquel (Portugal, femenina)'},
-    {v:'pt-PT-DuarteNeural',   l:'🇵🇹 Duarte (Portugal, masculino)'},
   ],
-  'fr': [
-    {v:'fr-FR-DeniseNeural',   l:'🇫🇷 Denise (Francia, femenina)'},
-    {v:'fr-FR-HenriNeural',    l:'🇫🇷 Henri (Francia, masculino)'},
-  ],
-  'de': [
-    {v:'de-DE-KatjaNeural',    l:'🇩🇪 Katja (Alemania, femenina)'},
-    {v:'de-DE-ConradNeural',   l:'🇩🇪 Conrad (Alemania, masculino)'},
-  ],
-  'it': [
-    {v:'it-IT-ElsaNeural',     l:'🇮🇹 Elsa (Italia, femenina)'},
-    {v:'it-IT-DiegoNeural',    l:'🇮🇹 Diego (Italia, masculino)'},
-  ],
-  'ja': [
-    {v:'ja-JP-NanamiNeural',   l:'🇯🇵 Nanami (Japón, femenina)'},
-    {v:'ja-JP-KeitaNeural',    l:'🇯🇵 Keita (Japón, masculino)'},
-  ],
-  'zh': [
-    {v:'zh-CN-XiaoxiaoNeural', l:'🇨🇳 Xiaoxiao (China, femenina)'},
-    {v:'zh-CN-YunxiNeural',    l:'🇨🇳 Yunxi (China, masculino)'},
-    {v:'zh-TW-HsiaoChenNeural',l:'🇹🇼 HsiaoChen (Taiwán, femenina)'},
-  ],
+  'fr': [{v:'fr-FR-DeniseNeural',l:'🇫🇷 Denise'},{v:'fr-FR-HenriNeural',l:'🇫🇷 Henri'}],
+  'de': [{v:'de-DE-KatjaNeural',l:'🇩🇪 Katja'},{v:'de-DE-ConradNeural',l:'🇩🇪 Conrad'}],
+  'it': [{v:'it-IT-ElsaNeural', l:'🇮🇹 Elsa'},{v:'it-IT-DiegoNeural',  l:'🇮🇹 Diego'}],
+  'ja': [{v:'ja-JP-NanamiNeural',l:'🇯🇵 Nanami'},{v:'ja-JP-KeitaNeural',l:'🇯🇵 Keita'}],
+  'zh': [{v:'zh-CN-XiaoxiaoNeural',l:'🇨🇳 Xiaoxiao'},{v:'zh-CN-YunxiNeural',l:'🇨🇳 Yunxi'}],
 };
 
-// ── Llenar select de voces Edge según idioma ──────────────────────
+// ── Música: categoría seleccionada ────────────────────────────────
+let _podMusicCat = 'neutral';
+
 function fillEdgeVoices(selectId, lang, selectedVal) {
   const sel = document.getElementById(selectId);
   if (!sel) return;
@@ -3794,43 +3812,74 @@ function fillEdgeVoices(selectId, lang, selectedVal) {
   ).join('');
 }
 
-// ── Tabs ──────────────────────────────────────────────────────────
-function ttsTab(tab) {
-  ['tts','stt','podcast'].forEach(t => {
-    document.getElementById('tts-panel-'+t).style.display = t===tab ? '' : 'none';
-    const btn = document.getElementById('tts-tab-'+t);
-    if (btn) btn.className = t===tab ? 'btn btn-primary btn-sm' : 'btn btn-outline btn-sm';
+// ── Cargar categorías de música desde backend ─────────────────────
+async function podLoadMusicCategories() {
+  const grid = document.getElementById('pod-music-grid');
+  if (!grid) return;
+  try {
+    const r = await fetch('/api/audio/music/categories');
+    const d = await r.json();
+    if (!d.success) { grid.innerHTML='<div style="color:#e55">Error cargando categorías</div>'; return; }
+    grid.innerHTML = d.categories.map(c => `
+      <button class="pod-music-btn" data-cat="${c.id}"
+        onclick="podSelectMusic('${c.id}',this)"
+        style="background:var(--bg2);border:1px solid ${c.id==='neutral'?'var(--accent)':'#2d3561'};border-radius:8px;padding:8px 6px;cursor:pointer;text-align:center;transition:all .15s;font-family:inherit;${c.id==='neutral'?'box-shadow:0 0 0 2px var(--accent)':''}">
+        <div style="font-size:1.3rem">${c.emoji}</div>
+        <div style="font-size:.68rem;color:var(--text2);margin-top:3px;line-height:1.3">${c.desc}</div>
+      </button>`).join('');
+    _podMusicCat = 'neutral';
+  } catch(e) {
+    grid.innerHTML = '<div style="font-size:.78rem;color:var(--text2)">No disponible</div>';
+  }
+}
+
+function podSelectMusic(cat, btn) {
+  _podMusicCat = cat;
+  document.querySelectorAll('.pod-music-btn').forEach(b => {
+    const active = b.dataset.cat === cat;
+    b.style.border      = active ? '1px solid var(--accent)' : '1px solid #2d3561';
+    b.style.boxShadow   = active ? '0 0 0 2px var(--accent)' : 'none';
+    b.style.background  = active ? 'rgba(108,99,255,.15)' : 'var(--bg2)';
   });
 }
 
-// ── Engine change TTS → mostrar/ocultar controles ─────────────────
+// ── Tabs ──────────────────────────────────────────────────────────
+function ttsTab(tab) {
+  ['tts','stt','podcast','projects'].forEach(t => {
+    const panel = document.getElementById('tts-panel-'+t);
+    const btn   = document.getElementById('tts-tab-'+t);
+    if (panel) panel.style.display = t===tab ? '' : 'none';
+    if (btn)   btn.className = t===tab ? 'btn btn-primary btn-sm' : 'btn btn-outline btn-sm';
+  });
+  if (tab==='projects') podLoadProjects();
+}
+
+// ── Engine change TTS ─────────────────────────────────────────────
 function ttsEngineChange() {
   const engine = document.getElementById('tts-engine').value;
-  const lang   = document.getElementById('tts-lang').value || 'es';
-  document.getElementById('tts-lang-wrap').style.display    = engine==='gtts'        ? '' : 'none';
-  document.getElementById('tts-voice-wrap').style.display   = engine==='edge_tts'    ? '' : 'none';
-  document.getElementById('tts-el-wrap').style.display      = engine==='elevenlabs'  ? '' : 'none';
-  document.getElementById('tts-rate-wrap').style.display    = engine==='edge_tts'    ? 'flex' : 'none';
-  document.getElementById('tts-el-params').style.display    = engine==='elevenlabs'  ? 'flex' : 'none';
+  const lang   = document.getElementById('tts-lang')?.value || 'es';
+  document.getElementById('tts-lang-wrap').style.display   = engine==='gtts'       ? '' : 'none';
+  document.getElementById('tts-voice-wrap').style.display  = engine==='edge_tts'   ? '' : 'none';
+  document.getElementById('tts-el-wrap').style.display     = engine==='elevenlabs' ? '' : 'none';
+  document.getElementById('tts-rate-wrap').style.display   = engine==='edge_tts'   ? 'flex' : 'none';
+  document.getElementById('tts-el-params').style.display   = engine==='elevenlabs' ? 'flex' : 'none';
   if (engine==='edge_tts') fillEdgeVoices('tts-voice', lang, '');
 }
 
-// Si cambia el idioma en gTTS y luego se pasa a Edge, actualizar voces
 document.addEventListener('DOMContentLoaded', () => {
   const ttsLang = document.getElementById('tts-lang');
   if (ttsLang) ttsLang.addEventListener('change', () => {
-    if (document.getElementById('tts-engine').value === 'edge_tts')
+    if (document.getElementById('tts-engine').value==='edge_tts')
       fillEdgeVoices('tts-voice', ttsLang.value, '');
   });
-  // Inicializar voces Edge TTS con español por defecto
   fillEdgeVoices('tts-voice',       'es', 'es-CL-CatalinaNeural');
   fillEdgeVoices('pod-host-voice',  'es', 'es-CL-CatalinaNeural');
   fillEdgeVoices('pod-guest-voice', 'es', 'es-CL-LorenzoNeural');
-  // Podcast: ocultar voces edge al inicio (motor = gtts por defecto)
   podEngineChange();
+  podLoadMusicCategories();
 });
 
-// ── TTS: Generar audio ────────────────────────────────────────────
+// ── TTS simple ────────────────────────────────────────────────────
 async function ttsGenerate() {
   const text   = document.getElementById('tts-text').value.trim();
   const engine = document.getElementById('tts-engine').value;
@@ -3838,117 +3887,76 @@ async function ttsGenerate() {
   const result = document.getElementById('tts-result');
   if (!text) { alert('Escribe algún texto primero'); return; }
   btn.disabled = true; btn.textContent = '⏳ Generando...';
-  result.innerHTML = '<div style="color:var(--text2);font-size:.85rem;padding:32px;text-align:center">⏳ Generando audio...</div>';
+  result.innerHTML = '<div style="color:var(--text2);padding:32px;text-align:center">⏳ Generando audio...</div>';
   const body = { text, engine };
-  if (engine==='gtts') {
-    body.lang = document.getElementById('tts-lang').value;
-  } else if (engine==='edge_tts') {
-    body.voice  = document.getElementById('tts-voice').value;
-    body.rate   = document.getElementById('tts-rate').value;
-  } else if (engine==='elevenlabs') {
-    body.voice_id   = document.getElementById('tts-el-voice').value;
-    body.stability  = parseFloat(document.getElementById('tts-el-stability').value);
-    body.similarity = parseFloat(document.getElementById('tts-el-similarity').value);
-  }
+  if (engine==='gtts')       { body.lang = document.getElementById('tts-lang').value; }
+  else if (engine==='edge_tts') { body.voice = document.getElementById('tts-voice').value; body.rate = document.getElementById('tts-rate').value; }
+  else if (engine==='elevenlabs') { body.voice_id = document.getElementById('tts-el-voice').value; body.stability = parseFloat(document.getElementById('tts-el-stability').value); body.similarity = parseFloat(document.getElementById('tts-el-similarity').value); }
   try {
-    const r = await fetch('/api/audio/tts', {
-      method:'POST',
-      headers:{'Content-Type':'application/json','Authorization':'Bearer '+getToken()},
-      body: JSON.stringify(body)
-    });
+    const r = await fetch('/api/audio/tts', { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+getToken()}, body: JSON.stringify(body) });
     const d = await r.json();
     if (d.success) {
       const src = 'data:audio/mp3;base64,' + d.audio_b64;
-      result.innerHTML = `
-        <audio controls style="width:100%;margin-bottom:12px" src="${src}"></audio>
+      result.innerHTML = `<audio controls style="width:100%;margin-bottom:12px" src="${src}"></audio>
         <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
           <a class="btn btn-outline btn-sm" href="${src}" download="audio_cic.mp3">⬇️ Descargar MP3</a>
-          <span style="font-size:.78rem;color:var(--text2);align-self:center">
-            ${d.words} palabras · ~${d.est_duration}s · ${d.engine} · ${d.gen_time}s
-          </span>
+          <span style="font-size:.78rem;color:var(--text2);align-self:center">${d.words} palabras · ~${d.est_duration}s · ${d.engine} · ${d.gen_time}s</span>
         </div>`;
-    } else {
-      result.innerHTML = `<div style="color:#e55;padding:16px">❌ ${d.error}</div>`;
-    }
-  } catch(e) {
-    result.innerHTML = `<div style="color:#e55;padding:16px">❌ Error: ${e.message}</div>`;
-  } finally {
-    btn.disabled = false; btn.textContent = '🔊 Generar audio';
-  }
+    } else { result.innerHTML = `<div style="color:#e55;padding:16px">❌ ${d.error}</div>`; }
+  } catch(e) { result.innerHTML = `<div style="color:#e55;padding:16px">❌ ${e.message}</div>`; }
+  finally { btn.disabled = false; btn.textContent = '🔊 Generar audio'; }
 }
 
 // ── STT ───────────────────────────────────────────────────────────
 let _sttFile = null;
-function sttHandleDrop(e) {
-  e.preventDefault();
-  const f = e.dataTransfer.files[0];
-  if (f) { _sttFile = f; document.getElementById('stt-file-info').textContent='📎 '+f.name; document.getElementById('stt-file-info').style.display=''; }
-}
-function sttFileSelected(input) {
-  _sttFile = input.files[0];
-  if (_sttFile) { document.getElementById('stt-file-info').textContent='📎 '+_sttFile.name; document.getElementById('stt-file-info').style.display=''; }
-}
+function sttHandleDrop(e) { e.preventDefault(); const f=e.dataTransfer.files[0]; if(f){_sttFile=f;document.getElementById('stt-file-info').textContent='📎 '+f.name;document.getElementById('stt-file-info').style.display='';} }
+function sttFileSelected(input) { _sttFile=input.files[0]; if(_sttFile){document.getElementById('stt-file-info').textContent='📎 '+_sttFile.name;document.getElementById('stt-file-info').style.display='';} }
 async function sttTranscribe() {
   if (!_sttFile) { alert('Selecciona un archivo de audio primero'); return; }
-  const btn = document.getElementById('stt-btn'), result = document.getElementById('stt-result');
-  btn.disabled = true; btn.textContent = '⏳ Transcribiendo...';
-  result.innerHTML = '<div style="color:var(--text2);font-size:.85rem;padding:32px;text-align:center">⏳ Transcribiendo con Whisper...</div>';
-  const reader = new FileReader();
-  reader.onload = async function(ev) {
-    const b64 = ev.target.result.split(',')[1];
-    const lang = document.getElementById('stt-lang').value;
-    const body = { audio_b64: b64, filename: _sttFile.name };
-    if (lang) body.language = lang;
-    try {
-      const r = await fetch('/api/audio/stt', {
-        method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+getToken()},
-        body: JSON.stringify(body)
-      });
-      const d = await r.json();
-      if (d.success) {
-        result.innerHTML = `
-          <div style="background:var(--bg3);border-radius:8px;padding:14px;font-size:.87rem;line-height:1.6;white-space:pre-wrap;text-align:left">${d.text}</div>
-          <div style="font-size:.75rem;color:var(--text2);margin-top:8px">Idioma: ${d.language} · ${Math.round(d.duration||0)}s · ${d.gen_time}s</div>`;
-        const cb = document.getElementById('stt-copy-btn');
-        cb.style.display = ''; cb._text = d.text;
-      } else {
-        result.innerHTML = `<div style="color:#e55;padding:16px">❌ ${d.error}</div>`;
-      }
-    } catch(e) { result.innerHTML = `<div style="color:#e55;padding:16px">❌ ${e.message}</div>`; }
-    finally { btn.disabled = false; btn.textContent = '🎤 Transcribir'; }
+  const btn=document.getElementById('stt-btn'), result=document.getElementById('stt-result');
+  btn.disabled=true; btn.textContent='⏳ Transcribiendo...';
+  result.innerHTML='<div style="color:var(--text2);padding:32px;text-align:center">⏳ Transcribiendo con Whisper...</div>';
+  const reader=new FileReader();
+  reader.onload=async function(ev){
+    const b64=ev.target.result.split(',')[1], lang=document.getElementById('stt-lang').value;
+    const body={audio_b64:b64,filename:_sttFile.name};if(lang)body.language=lang;
+    try{
+      const r=await fetch('/api/audio/stt',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+getToken()},body:JSON.stringify(body)});
+      const d=await r.json();
+      if(d.success){
+        result.innerHTML=`<div style="background:var(--bg3);border-radius:8px;padding:14px;font-size:.87rem;line-height:1.6;white-space:pre-wrap;text-align:left">${d.text}</div><div style="font-size:.75rem;color:var(--text2);margin-top:8px">Idioma: ${d.language} · ${Math.round(d.duration||0)}s · ${d.gen_time}s</div>`;
+        const cb=document.getElementById('stt-copy-btn');cb.style.display='';cb._text=d.text;
+      }else{result.innerHTML=`<div style="color:#e55;padding:16px">❌ ${d.error}</div>`;}
+    }catch(e){result.innerHTML=`<div style="color:#e55;padding:16px">❌ ${e.message}</div>`;}
+    finally{btn.disabled=false;btn.textContent='🎤 Transcribir';}
   };
   reader.readAsDataURL(_sttFile);
 }
-function sttCopy() {
-  const btn = document.getElementById('stt-copy-btn');
-  navigator.clipboard.writeText(btn._text||'').then(()=>{btn.textContent='✅ Copiado';setTimeout(()=>btn.textContent='📋 Copiar',2000);});
-}
+function sttCopy(){const btn=document.getElementById('stt-copy-btn');navigator.clipboard.writeText(btn._text||'').then(()=>{btn.textContent='✅ Copiado';setTimeout(()=>btn.textContent='📋 Copiar',2000);});}
 
 // ── Podcast: controles ────────────────────────────────────────────
 function podFormatChange() {
-  const fmt = document.getElementById('pod-format').value;
-  const gw  = document.getElementById('pod-guest-voice-wrap');
-  if (gw) gw.style.display = fmt==='dialogue' ? '' : 'none';
+  const fmt=document.getElementById('pod-format').value;
+  const gw=document.getElementById('pod-guest-voice-wrap');
+  if(gw)gw.style.display=fmt==='dialogue'?'':'none';
 }
 function podEngineChange() {
-  const eng = document.getElementById('pod-engine').value;
-  const vw  = document.getElementById('pod-voice-wrap');
-  const lw  = document.getElementById('pod-gtts-lang-wrap');
-  if (vw) vw.style.display  = eng==='edge_tts' ? 'flex' : 'none';
-  if (lw) lw.style.display  = eng==='gtts'     ? ''     : 'none';
-  if (eng==='edge_tts') {
-    fillEdgeVoices('pod-host-voice',  'es', 'es-CL-CatalinaNeural');
-    fillEdgeVoices('pod-guest-voice', 'es', 'es-CL-LorenzoNeural');
-  }
+  const eng=document.getElementById('pod-engine').value;
+  const vw=document.getElementById('pod-voice-wrap');
+  const lw=document.getElementById('pod-gtts-lang-wrap');
+  if(vw)vw.style.display=eng==='edge_tts'?'flex':'none';
+  if(lw)lw.style.display=eng==='gtts'?'':'none';
+  if(eng==='edge_tts'){fillEdgeVoices('pod-host-voice','es','es-CL-CatalinaNeural');fillEdgeVoices('pod-guest-voice','es','es-CL-LorenzoNeural');}
 }
 
-// ── Podcast: generar episodio ─────────────────────────────────────
-// Almacena datos para permitir re-generar segmentos individuales
-let _podSegments = [];
-let _podEngine   = 'gtts';
-let _podTitle    = '';
+// ── Estado del podcast actual ─────────────────────────────────────
+let _podSegments    = [];
+let _podEngine      = 'gtts';
+let _podTitle       = '';
 let _podVoiceConfig = {};
+let _podCurrentId   = null;  // ID del proyecto si ya fue guardado
 
+// ── Generar episodio ──────────────────────────────────────────────
 async function podGenerate() {
   const script = document.getElementById('pod-script').value.trim();
   const title  = document.getElementById('pod-title').value.trim() || 'Mi Podcast';
@@ -3957,53 +3965,50 @@ async function podGenerate() {
   const btn    = document.getElementById('pod-btn');
   const res    = document.getElementById('pod-result');
   if (!script) { alert('Escribe el guión primero'); return; }
-  btn.disabled = true; btn.textContent = '⏳ Generando episodio...';
-  res.style.display = 'none';
-  _podEngine = engine; _podTitle = title;
-  const body = { script, title, engine, format_type: fmt };
-  if (engine==='edge_tts') {
-    const hv = document.getElementById('pod-host-voice').value;
-    const gv = document.getElementById('pod-guest-voice').value;
-    const rate = document.getElementById('pod-rate').value;
-    body.host_voice  = { voice: hv, rate };
-    body.guest_voice = { voice: gv, rate };
-    _podVoiceConfig  = { host: hv, guest: gv, rate };
-  } else {
-    const lang = document.getElementById('pod-gtts-lang').value || 'es';
-    body.lang = lang;
-    _podVoiceConfig = { lang };
+  btn.disabled=true; btn.textContent='⏳ Generando episodio...';
+  res.style.display='none';
+  _podEngine=engine; _podTitle=title;
+  const musicVol = parseInt(document.getElementById('pod-music-vol')?.value || '-14');
+  const body={script,title,engine,format_type:fmt,music_cat:_podMusicCat,music_volume_db:musicVol};
+  if(engine==='edge_tts'){
+    const hv=document.getElementById('pod-host-voice').value;
+    const gv=document.getElementById('pod-guest-voice').value;
+    const rate=document.getElementById('pod-rate')?.value||'+0%';
+    body.host_voice={voice:hv,rate}; body.guest_voice={voice:gv,rate};
+    _podVoiceConfig={host:hv,guest:gv,rate};
+  }else{
+    const lang=document.getElementById('pod-gtts-lang')?.value||'es';
+    body.lang=lang; _podVoiceConfig={lang};
   }
-  try {
-    const r = await fetch('/api/audio/podcast', {
-      method:'POST',
-      headers:{'Content-Type':'application/json','Authorization':'Bearer '+getToken()},
-      body: JSON.stringify(body)
-    });
-    const d = await r.json();
-    if (d.success) {
-      _podSegments = d.segments || [];
-      document.getElementById('pod-meta').textContent =
-        `${d.total_parts} segmentos · ~${d.est_duration}s · ${d.engine} · ${d.gen_time}s`;
-      podRenderPlayers(d.audio_parts, d.segments, title);
-      res.style.display = '';
-    } else { alert('❌ ' + d.error); }
-  } catch(e) { alert('❌ Error: ' + e.message); }
-  finally { btn.disabled = false; btn.textContent = '🎙️ Generar episodio'; }
+  try{
+    const r=await fetch('/api/audio/podcast',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+getToken()},body:JSON.stringify(body)});
+    const d=await r.json();
+    if(d.success){
+      _podSegments=d.segments||[];
+      _podCurrentId=null; // nuevo episodio sin guardar
+      document.getElementById('pod-meta').textContent=
+        `${d.total_parts} segmentos · ~${d.est_duration}s · ${d.engine}${d.music_mixed?' · 🎵 '+_podMusicCat:''} · ${d.gen_time}s`;
+      podRenderPlayers(d.audio_parts,d.segments,title);
+      res.style.display='';
+      // Guardar audio_parts para poder guardar proyecto después
+      res._audioParts = d.audio_parts;
+    }else{alert('❌ '+d.error);}
+  }catch(e){alert('❌ Error: '+e.message);}
+  finally{btn.disabled=false;btn.textContent='🎙️ Generar episodio';}
 }
 
-// ── Renderizar players con editor de texto ────────────────────────
+// ── Renderizar players con editor ─────────────────────────────────
 function podRenderPlayers(audioParts, segments, title) {
-  const players = document.getElementById('pod-players');
-  players.innerHTML = '';
-  audioParts.forEach((b64, i) => {
-    const seg   = segments[i] || {};
-    const src   = 'data:audio/mp3;base64,' + b64;
-    const label = seg.speaker==='guest' ? '👤 GUEST' : '🎙️ HOST';
-    const pid   = 'pod-seg-' + i;
-    const div   = document.createElement('div');
-    div.id      = pid;
-    div.style.cssText = 'background:var(--bg3);border-radius:8px;padding:12px;border:1px solid #2d3561';
-    div.innerHTML = `
+  const players=document.getElementById('pod-players');
+  players.innerHTML='';
+  audioParts.forEach((b64,i)=>{
+    const seg=segments[i]||{};
+    const src='data:audio/mp3;base64,'+b64;
+    const label=seg.speaker==='guest'?'👤 GUEST':'🎙️ HOST';
+    const div=document.createElement('div');
+    div.id='pod-seg-'+i;
+    div.style.cssText='background:var(--bg3);border-radius:8px;padding:12px;border:1px solid #2d3561';
+    div.innerHTML=`
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
         <span style="font-size:.78rem;color:var(--accent);font-weight:600">${label} · Segmento ${i+1}</span>
         <div style="display:flex;gap:5px">
@@ -4012,13 +4017,12 @@ function podRenderPlayers(audioParts, segments, title) {
         </div>
       </div>
       <audio id="pod-audio-${i}" controls style="width:100%;height:32px;margin-bottom:6px" src="${src}"></audio>
-      <!-- Editor de texto (oculto por defecto) -->
       <div id="pod-editor-${i}" style="display:none;margin-top:8px;border-top:1px solid #2d3561;padding-top:8px">
-        <label style="font-size:.75rem;color:var(--text2);display:block;margin-bottom:4px">Editar texto del segmento:</label>
+        <label style="font-size:.75rem;color:var(--text2);display:block;margin-bottom:4px">Editar texto:</label>
         <textarea id="pod-text-${i}" rows="3" style="width:100%;background:var(--bg2);border:1px solid #2d3561;border-radius:6px;padding:8px;color:var(--text);font-size:.83rem;resize:vertical;box-sizing:border-box">${(seg.text||'').replace(/</g,'&lt;')}</textarea>
         <div style="display:flex;gap:6px;margin-top:6px;align-items:center">
-          <button class="btn btn-primary btn-sm" onclick="podRegenSeg(${i})" id="pod-regen-btn-${i}">🔄 Re-generar este segmento</button>
-          <button class="btn btn-outline btn-sm" onclick="podToggleEdit(${i})">✕ Cerrar</button>
+          <button class="btn btn-primary btn-sm" onclick="podRegenSeg(${i})" id="pod-regen-btn-${i}">🔄 Re-generar segmento</button>
+          <button class="btn btn-outline btn-sm" onclick="podToggleEdit(${i})">✕</button>
           <span id="pod-regen-status-${i}" style="font-size:.75rem;color:var(--text2)"></span>
         </div>
       </div>`;
@@ -4026,59 +4030,167 @@ function podRenderPlayers(audioParts, segments, title) {
   });
 }
 
-// ── Editor de segmento: toggle ────────────────────────────────────
-function podToggleEdit(i) {
-  const ed = document.getElementById('pod-editor-'+i);
-  if (!ed) return;
-  ed.style.display = ed.style.display === 'none' ? '' : 'none';
+function podToggleEdit(i){const ed=document.getElementById('pod-editor-'+i);if(ed)ed.style.display=ed.style.display==='none'?'':'none';}
+
+async function podRegenSeg(i){
+  const ta=document.getElementById('pod-text-'+i);
+  const btn=document.getElementById('pod-regen-btn-'+i);
+  const status=document.getElementById('pod-regen-status-'+i);
+  const audio=document.getElementById('pod-audio-'+i);
+  const newText=ta?ta.value.trim():'';
+  if(!newText){alert('El texto no puede estar vacío');return;}
+  btn.disabled=true;btn.textContent='⏳...';status.textContent='Generando...';
+  const body={text:newText,engine:_podEngine};
+  if(_podEngine==='edge_tts'){const seg=_podSegments[i]||{};body.voice=seg.speaker==='guest'?_podVoiceConfig.guest:_podVoiceConfig.host;body.rate=_podVoiceConfig.rate||'+0%';}
+  else{body.lang=_podVoiceConfig.lang||'es';}
+  try{
+    // Generar voz
+    const r=await fetch('/api/audio/tts',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+getToken()},body:JSON.stringify(body)});
+    const d=await r.json();
+    if(!d.success){status.textContent='❌ '+d.error;status.style.color='#e55';return;}
+    let finalB64=d.audio_b64;
+    // Mezclar con música si hay categoría activa
+    if(_podMusicCat&&_podMusicCat!=='neutral'){
+      try{
+        const vol=parseInt(document.getElementById('pod-music-vol')?.value||'-14');
+        const mr=await fetch('/api/audio/mix',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+getToken()},body:JSON.stringify({audio_b64:d.audio_b64,category:_podMusicCat,music_volume_db:vol})});
+        const md=await mr.json();
+        if(md.success)finalB64=md.audio_b64;
+      }catch{}
+    }
+    const newSrc='data:audio/mp3;base64,'+finalB64;
+    audio.src=newSrc;audio.load();
+    const dl=audio.parentElement.querySelector('a[download]');if(dl)dl.href=newSrc;
+    if(_podSegments[i])_podSegments[i].text=newText;
+    status.textContent='✅ Listo';status.style.color='var(--green)';
+    setTimeout(()=>{status.textContent='';status.style.color='';},3000);
+  }catch(e){status.textContent='❌ '+e.message;status.style.color='#e55';}
+  finally{btn.disabled=false;btn.textContent='🔄 Re-generar segmento';}
 }
 
-// ── Re-generar un segmento individual ────────────────────────────
-async function podRegenSeg(i) {
-  const ta     = document.getElementById('pod-text-'+i);
-  const btn    = document.getElementById('pod-regen-btn-'+i);
-  const status = document.getElementById('pod-regen-status-'+i);
-  const audio  = document.getElementById('pod-audio-'+i);
-  const newText = ta ? ta.value.trim() : '';
-  if (!newText) { alert('El texto no puede estar vacío'); return; }
-  btn.disabled = true; btn.textContent = '⏳...'; status.textContent = 'Generando...';
-  const body = { text: newText, engine: _podEngine };
-  if (_podEngine === 'edge_tts') {
-    const seg = _podSegments[i] || {};
-    body.voice = seg.speaker === 'guest' ? _podVoiceConfig.guest : _podVoiceConfig.host;
-    body.rate  = _podVoiceConfig.rate || '+0%';
-  } else {
-    body.lang = _podVoiceConfig.lang || 'es';
-  }
-  try {
-    const r = await fetch('/api/audio/tts', {
-      method:'POST',
-      headers:{'Content-Type':'application/json','Authorization':'Bearer '+getToken()},
-      body: JSON.stringify(body)
-    });
-    const d = await r.json();
-    if (d.success) {
-      const newSrc = 'data:audio/mp3;base64,' + d.audio_b64;
-      audio.src = newSrc;
-      audio.load();
-      // Actualizar enlace de descarga
-      const dl = audio.parentElement.querySelector('a[download]');
-      if (dl) dl.href = newSrc;
-      // Actualizar segmento guardado
-      if (_podSegments[i]) _podSegments[i].text = newText;
-      status.textContent = '✅ Listo';
-      status.style.color = 'var(--green)';
-      setTimeout(() => { status.textContent = ''; status.style.color = ''; }, 3000);
-    } else {
-      status.textContent = '❌ ' + d.error;
-      status.style.color = '#e55';
+// ── Guardar proyecto ──────────────────────────────────────────────
+async function podSaveProject() {
+  const title=document.getElementById('pod-title').value.trim()||'Mi Podcast';
+  const script=document.getElementById('pod-script').value.trim();
+  const engine=document.getElementById('pod-engine').value;
+  const fmt=document.getElementById('pod-format').value;
+  const msg=document.getElementById('pod-save-msg');
+  const btn=document.getElementById('pod-save-btn');
+  if(!script){alert('Escribe el guión antes de guardar');return;}
+  btn.disabled=true;
+  msg.style.display='';msg.style.color='var(--text2)';msg.textContent='⏳ Guardando...';
+  // Recoger audio_parts del DOM actual
+  const audioParts=[];
+  document.querySelectorAll('[id^="pod-audio-"]').forEach(a=>{
+    const src=a.src||'';
+    if(src.startsWith('data:audio'))audioParts.push(src.split(',')[1]);
+  });
+  const body={title,script,engine,format_type:fmt,voice_config:_podVoiceConfig,music_cat:_podMusicCat,segments:_podSegments,audio_parts:audioParts};
+  try{
+    let r,d;
+    if(_podCurrentId){
+      r=await fetch('/api/audio/projects/'+_podCurrentId,{method:'PUT',headers:{'Content-Type':'application/json','Authorization':'Bearer '+getToken()},body:JSON.stringify(body)});
+    }else{
+      r=await fetch('/api/audio/projects',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+getToken()},body:JSON.stringify(body)});
     }
-  } catch(e) {
-    status.textContent = '❌ ' + e.message;
-    status.style.color = '#e55';
-  } finally {
-    btn.disabled = false; btn.textContent = '🔄 Re-generar este segmento';
-  }
+    d=await r.json();
+    if(d.success){
+      if(d.id)_podCurrentId=d.id;
+      msg.textContent='✅ Guardado';msg.style.color='var(--green)';
+      setTimeout(()=>{msg.style.display='none';},3000);
+    }else{msg.textContent='❌ '+d.error;msg.style.color='#e55';}
+  }catch(e){msg.textContent='❌ '+e.message;msg.style.color='#e55';}
+  finally{btn.disabled=false;}
+}
+
+// ── Listar proyectos ──────────────────────────────────────────────
+async function podLoadProjects() {
+  const el=document.getElementById('pod-projects-list');
+  if(!el)return;
+  el.innerHTML='<div style="color:var(--text2);font-size:.83rem;text-align:center;padding:20px">⏳ Cargando...</div>';
+  try{
+    const r=await fetch('/api/audio/projects',{headers:{'Authorization':'Bearer '+getToken()}});
+    const d=await r.json();
+    if(!d.success){el.innerHTML=`<div style="color:#e55;padding:16px">❌ ${d.error}</div>`;return;}
+    if(!d.projects.length){
+      el.innerHTML='<div style="color:var(--text2);font-size:.83rem;text-align:center;padding:32px">Sin proyectos guardados aún.<br><br><button class="btn btn-outline btn-sm" onclick="ttsTab('podcast')">🎙️ Crear podcast</button></div>';
+      return;
+    }
+    const musicEmojis={epic:'⚔️',sad:'😢',happy:'😊',relaxing:'🧘',dramatic:'🎭',romantic:'❤️',mystery:'🔮',energetic:'⚡',ambient:'🌿',neutral:'🔇'};
+    el.innerHTML=d.projects.map(p=>`
+      <div style="background:var(--bg2);border:1px solid #2d3561;border-radius:10px;padding:14px;margin-bottom:10px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+        <div style="flex:1;min-width:180px">
+          <div style="font-weight:600;font-size:.9rem;margin-bottom:4px">🎙️ ${p.title}</div>
+          <div style="font-size:.75rem;color:var(--text2);display:flex;gap:8px;flex-wrap:wrap">
+            <span class="badge badge-purple">${p.engine}</span>
+            <span class="badge badge-blue">${p.format_type}</span>
+            <span title="Música">${musicEmojis[p.music_cat]||'🔇'} ${p.music_cat}</span>
+            <span>${p.segments_count} segmentos</span>
+            ${p.has_audio?'<span class="badge badge-green">🔊 audio guardado</span>':''}
+          </div>
+          <div style="font-size:.7rem;color:var(--text2);margin-top:4px">${new Date(p.updated_at).toLocaleString()}</div>
+        </div>
+        <div style="display:flex;gap:6px;flex-shrink:0;flex-wrap:wrap">
+          <button class="btn btn-outline btn-sm" onclick="podLoadProject(${p.id})">📂 Abrir</button>
+          <button class="btn btn-red btn-sm" onclick="podDeleteProject(${p.id},this)">🗑️</button>
+        </div>
+      </div>`).join('');
+  }catch(e){el.innerHTML=`<div style="color:#e55;padding:16px">Error: ${e.message}</div>`;}
+}
+
+// ── Cargar proyecto en el editor ──────────────────────────────────
+async function podLoadProject(id) {
+  try{
+    const r=await fetch('/api/audio/projects/'+id,{headers:{'Authorization':'Bearer '+getToken()}});
+    const d=await r.json();
+    if(!d.success){alert('❌ '+d.error);return;}
+    const p=d.project;
+    // Llenar campos
+    document.getElementById('pod-title').value=p.title||'';
+    document.getElementById('pod-script').value=p.script||'';
+    const engSel=document.getElementById('pod-engine');
+    if(engSel)engSel.value=p.engine||'gtts';
+    const fmtSel=document.getElementById('pod-format');
+    if(fmtSel)fmtSel.value=p.format_type||'monologue';
+    _podEngine=p.engine||'gtts';
+    _podVoiceConfig=p.voice_config||{};
+    _podCurrentId=p.id;
+    _podSegments=p.segments||[];
+    // Seleccionar música
+    if(p.music_cat){
+      _podMusicCat=p.music_cat;
+      document.querySelectorAll('.pod-music-btn').forEach(b=>{
+        const active=b.dataset.cat===p.music_cat;
+        b.style.border=active?'1px solid var(--accent)':'1px solid #2d3561';
+        b.style.boxShadow=active?'0 0 0 2px var(--accent)':'none';
+        b.style.background=active?'rgba(108,99,255,.15)':'var(--bg2)';
+      });
+    }
+    podEngineChange();podFormatChange();
+    // Si tiene audio guardado, mostrarlo
+    if(p.audio_parts&&p.audio_parts.length){
+      const res=document.getElementById('pod-result');
+      document.getElementById('pod-meta').textContent=`${p.segments_count} segmentos · ${p.engine} · 🎵 ${p.music_cat} · cargado desde proyecto`;
+      podRenderPlayers(p.audio_parts,p.segments,p.title);
+      res.style.display='';
+    }
+    ttsTab('podcast');
+    // Pequeño indicador
+    const msg=document.getElementById('pod-save-msg');
+    if(msg){msg.textContent='📂 Proyecto "'+p.title+'" cargado';msg.style.color='var(--accent)';msg.style.display='';setTimeout(()=>msg.style.display='none',4000);}
+  }catch(e){alert('Error cargando proyecto: '+e.message);}
+}
+
+// ── Eliminar proyecto ─────────────────────────────────────────────
+async function podDeleteProject(id, btn) {
+  if(!confirm('¿Eliminar este proyecto?'))return;
+  btn.disabled=true;btn.textContent='⏳';
+  try{
+    const r=await fetch('/api/audio/projects/'+id,{method:'DELETE',headers:{'Authorization':'Bearer '+getToken()}});
+    const d=await r.json();
+    if(d.success){podLoadProjects();}
+    else{alert('❌ '+d.error);btn.disabled=false;btn.textContent='🗑️';}
+  }catch(e){alert('Error: '+e.message);btn.disabled=false;btn.textContent='🗑️';}
 }
 
 function getToken() {
