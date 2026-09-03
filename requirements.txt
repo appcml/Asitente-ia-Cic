@@ -33,3 +33,7 @@ scikit-learn>=1.4.0
 
 # Dataset Import
 pyarrow>=14.0.0
+
+# Audio Studio
+gtts>=2.5.0
+edge-tts>=6.1.9
