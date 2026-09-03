@@ -107,15 +107,15 @@ def _wave_sample(wave_type: str, t: float, freq: float, amp: float) -> float:
     return 0.0
 
 
-def generate_music_wav(category: str, duration_sec: float, sample_rate: int = 22050) -> bytes:
+def generate_music_wav(category: str, duration_sec: float, sample_rate: int = 11025) -> bytes:
     """
-    Genera música procedural como bytes WAV para la categoría dada.
-    duration_sec: duración total en segundos (se agrega fade)
+    Genera música procedural como bytes WAV — versión RAM-eficiente.
+    Usa sample_rate reducido (11025) y escribe en chunks para no acumular
+    listas grandes en memoria. Apto para Render free (512MB).
     """
     profile = MUSIC_PROFILES.get(category, MUSIC_PROFILES["neutral"])
 
     if not profile["notes"] or profile["amplitude"] == 0:
-        # Silencio: WAV vacío de la duración correcta
         return _build_wav_silence(duration_sec, sample_rate)
 
     notes  = profile["notes"]
@@ -123,30 +123,51 @@ def generate_music_wav(category: str, duration_sec: float, sample_rate: int = 22
     amp    = profile["amplitude"]
     wave   = profile["wave"]
     total_samples = int(duration_sec * sample_rate)
-    samples = []
+    fi_samples    = int(FADE_IN_MS  / 1000 * sample_rate)
+    fo_samples    = int(FADE_OUT_MS / 1000 * sample_rate)
 
-    for i in range(total_samples):
-        t = i / sample_rate
-        # Ciclo entre notas según tempo
-        note_idx = int(t / tempo) % len(notes)
-        freq     = notes[note_idx]
-        # Fade in / out
-        fade = 1.0
-        fi_samples = int(FADE_IN_MS / 1000 * sample_rate)
-        fo_samples = int(FADE_OUT_MS / 1000 * sample_rate)
-        if i < fi_samples:
-            fade = i / fi_samples
-        elif i > total_samples - fo_samples:
-            fade = (total_samples - i) / fo_samples
-        # Suavizar transición entre notas (10ms de crossfade)
-        note_phase = (t % tempo) / tempo
-        if note_phase < 0.05:
-            fade *= note_phase / 0.05
-        s = _wave_sample(wave, t, freq, amp * fade)
-        # Clamp
-        samples.append(max(-1.0, min(1.0, s)))
+    buf = io.BytesIO()
+    data_bytes = total_samples * 2  # 16-bit mono
 
-    return _samples_to_wav(samples, sample_rate)
+    # WAV header
+    buf.write(b"RIFF")
+    buf.write(struct.pack("<I", 36 + data_bytes))
+    buf.write(b"WAVE")
+    buf.write(b"fmt ")
+    buf.write(struct.pack("<I", 16))
+    buf.write(struct.pack("<H", 1))            # PCM
+    buf.write(struct.pack("<H", 1))            # mono
+    buf.write(struct.pack("<I", sample_rate))
+    buf.write(struct.pack("<I", sample_rate * 2))
+    buf.write(struct.pack("<H", 2))
+    buf.write(struct.pack("<H", 16))
+    buf.write(b"data")
+    buf.write(struct.pack("<I", data_bytes))
+
+    # Generar en chunks de 1 segundo para no acumular RAM
+    CHUNK = sample_rate  # 1 segundo por chunk
+    chunk_data = bytearray(CHUNK * 2)
+
+    for chunk_start in range(0, total_samples, CHUNK):
+        chunk_end = min(chunk_start + CHUNK, total_samples)
+        chunk_len = chunk_end - chunk_start
+        for j in range(chunk_len):
+            i = chunk_start + j
+            t = i / sample_rate
+            note_idx = int(t / tempo) % len(notes)
+            freq     = notes[note_idx]
+            fade = 1.0
+            if i < fi_samples:
+                fade = i / fi_samples
+            elif i > total_samples - fo_samples:
+                fade = (total_samples - i) / fo_samples
+            s = _wave_sample(wave, t, freq, amp * fade)
+            val = max(-32768, min(32767, int(s * 32767)))
+            struct.pack_into("<h", chunk_data, j * 2, val)
+        buf.write(chunk_data[:chunk_len * 2])
+
+    buf.seek(0)
+    return buf.read()
 
 
 def _build_wav_silence(duration_sec: float, sample_rate: int) -> bytes:
@@ -229,8 +250,8 @@ def mix_audio_with_music(
         duration_ms = len(voice_seg)
         duration_sec = duration_ms / 1000.0
 
-        # 2. Generar música de la misma duración + 2s de cola
-        music_wav = generate_music_wav(category, duration_sec + 2.0)
+        # 2. Generar música de la misma duración
+        music_wav = generate_music_wav(category, duration_sec)
         music_seg = AudioSegment.from_wav(io.BytesIO(music_wav))
 
         # 3. Ajustar duración música = duración voz exacta
@@ -239,18 +260,21 @@ def mix_audio_with_music(
         else:
             music_seg = music_seg + AudioSegment.silent(duration=duration_ms - len(music_seg))
 
-        # 4. Bajar volumen de la música
+        # 4. Bajar volumen de la música y convertir a mono 22050 para ahorrar RAM
+        music_seg = music_seg.set_frame_rate(22050).set_channels(1)
+        voice_seg = voice_seg.set_frame_rate(22050).set_channels(1)
         music_seg = music_seg + music_volume_db  # dB adjustment
 
         # 5. Mezclar overlay (voz encima de música)
         mixed = music_seg.overlay(voice_seg)
 
-        # 6. Normalizar y exportar a MP3
-        mixed = normalize(mixed)
+        # 6. Exportar a MP3 bitrate bajo para ahorrar RAM en proceso
         out_buf = io.BytesIO()
-        mixed.export(out_buf, format="mp3", bitrate="128k")
+        mixed.export(out_buf, format="mp3", bitrate="96k")
         out_buf.seek(0)
         result_bytes = out_buf.read()
+        # Liberar memoria explícitamente
+        del music_seg, voice_seg, mixed
 
         return {
             "success":   True,
