@@ -163,21 +163,34 @@ def register(app):
         # ── Mezclar con música si se pidió ────────────────────────
         if music_cat and music_cat != "neutral":
             from modules.audio_studio.music_mixer import mix_audio_with_music
-            mixed_parts = []
+            mixed_parts   = []
+            audio_formats = []
+            music_parts   = []
+            any_mixed     = False
             for b64 in result.get("audio_parts", []):
                 try:
                     voice_bytes = base64.b64decode(b64)
                     mix_result  = mix_audio_with_music(voice_bytes, category=music_cat, music_volume_db=music_vol)
                     mixed_parts.append(mix_result.get("audio_b64", b64))
+                    audio_formats.append(mix_result.get("format", "mp3"))
+                    music_parts.append(mix_result.get("music_b64"))  # puede ser None
+                    if mix_result.get("mixed") or mix_result.get("separate_tracks"):
+                        any_mixed = True
                 except Exception as mix_err:
                     logger.warning(f"Mezcla falló para segmento: {mix_err}")
                     mixed_parts.append(b64)
-            result["audio_parts"]  = mixed_parts
-            result["music_cat"]    = music_cat
-            result["music_mixed"]  = True
+                    audio_formats.append("mp3")
+                    music_parts.append(None)
+            result["audio_parts"]   = mixed_parts
+            result["audio_formats"] = audio_formats
+            result["music_parts"]   = music_parts
+            result["music_cat"]     = music_cat
+            result["music_mixed"]   = any_mixed
         else:
-            result["music_cat"]    = "neutral"
-            result["music_mixed"]  = False
+            result["music_cat"]     = "neutral"
+            result["music_mixed"]   = False
+            result["audio_formats"] = ["mp3"] * len(result.get("audio_parts", []))
+            result["music_parts"]   = []
 
         return jsonify(result)
 
