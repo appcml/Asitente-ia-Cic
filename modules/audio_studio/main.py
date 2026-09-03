@@ -275,7 +275,7 @@ def transcribe_whisper(audio_bytes: bytes, filename: str = "audio.mp3",
 # PODCAST GENERATOR
 # ──────────────────────────────────────────────────────────────────
 
-def split_into_segments(text: str, max_chars: int = 800) -> list[str]:
+def split_into_segments(text: str, max_chars: int = 600) -> list[str]:
     """
     Divide texto largo en segmentos naturales (por párrafos/oraciones)
     para generar audio por bloques y luego concatenar.
@@ -380,6 +380,11 @@ def generate_podcast(script: str, engine: str = "gtts", host_voice: dict = None,
             # Monólogo: dividir por segmentos
             for seg in split_into_segments(script):
                 segments.append({"speaker": "host", "text": seg})
+
+        # Limitar segmentos para evitar OOM en Render plan gratuito
+        if len(segments) > 8:
+            logger.warning(f"Podcast truncado de {len(segments)} a 8 segmentos para evitar OOM")
+            segments = segments[:8]
 
         # Generar audio para cada segmento
         total = len(segments)
