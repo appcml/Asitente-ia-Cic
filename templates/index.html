@@ -3878,7 +3878,7 @@ async function podGenerate() {
 }
 
 function getToken() {
-  try { return JSON.parse(localStorage.getItem('cic_session')||'{}').token || ''; } catch { return ''; }
+  return localStorage.getItem('cic_token') || TOKEN || '';
 }
 
 </script>
