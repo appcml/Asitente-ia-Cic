@@ -111,13 +111,15 @@ def tts_gtts(text: str, lang: str = "es", slow: bool = False) -> bytes:
 def tts_edge(text: str, voice: str = "es-CL-CatalinaNeural", rate: str = "+0%", volume: str = "+0%") -> bytes:
     """
     Genera audio MP3 con edge-tts (Microsoft, gratis, HD).
-    Requiere: pip install edge-tts
+    Usa un thread dedicado para evitar conflictos de event loop con gunicorn.
     """
     try:
-        import asyncio
         import edge_tts
     except ImportError:
         raise RuntimeError("edge-tts no instalado. Agrega 'edge-tts' a requirements.txt")
+
+    import asyncio
+    import concurrent.futures
 
     async def _gen():
         communicate = edge_tts.Communicate(text, voice, rate=rate, volume=volume)
@@ -128,17 +130,24 @@ def tts_edge(text: str, voice: str = "es-CL-CatalinaNeural", rate: str = "+0%", 
         buf.seek(0)
         return buf.read()
 
-    try:
-        loop = asyncio.get_event_loop()
-        if loop.is_closed():
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-        return loop.run_until_complete(_gen())
-    except RuntimeError:
-        # En Flask con hilos, crear loop nuevo
+    def _run_in_thread():
+        # Crear un event loop completamente nuevo en un thread separado
+        # Esto evita conflictos con el loop de gunicorn/Flask
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
-        return loop.run_until_complete(_gen())
+        try:
+            return loop.run_until_complete(_gen())
+        finally:
+            loop.close()
+
+    # Ejecutar siempre en un thread propio — compatible con gunicorn sync workers
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+        future = executor.submit(_run_in_thread)
+        result = future.result(timeout=60)
+
+    if not result:
+        raise RuntimeError("edge-tts no generó audio — verifica la voz o la conexión")
+    return result
 
 
 def tts_elevenlabs(text: str, voice_id: str = "21m00Tcm4TlvDq8ikWAM",
