@@ -4113,7 +4113,7 @@ async function podLoadProjects() {
     const d=await r.json();
     if(!d.success){el.innerHTML=`<div style="color:#e55;padding:16px">❌ ${d.error}</div>`;return;}
     if(!d.projects.length){
-      el.innerHTML='<div style="color:var(--text2);font-size:.83rem;text-align:center;padding:32px">Sin proyectos guardados aún.<br><br><button class="btn btn-outline btn-sm" onclick="ttsTab('podcast')">🎙️ Crear podcast</button></div>';
+      el.innerHTML=`<div style="color:var(--text2);font-size:.83rem;text-align:center;padding:32px">Sin proyectos guardados aún.<br><br><button class="btn btn-outline btn-sm" onclick="ttsTab('podcast')">🎙️ Crear podcast</button></div>`;
       return;
     }
     const musicEmojis={epic:'⚔️',sad:'😢',happy:'😊',relaxing:'🧘',dramatic:'🎭',romantic:'❤️',mystery:'🔮',energetic:'⚡',ambient:'🌿',neutral:'🔇'};
