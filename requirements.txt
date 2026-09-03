@@ -36,3 +36,7 @@ pyarrow>=14.0.0
 
 # Audio mixing
 pydub>=0.25.1
+
+# Audio Studio — TTS / STT
+gtts>=2.5.0
+edge-tts>=6.1.9
