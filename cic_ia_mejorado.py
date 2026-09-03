@@ -1414,6 +1414,16 @@ except Exception as _ce:
     import traceback
     logger.warning(f'CicCode no cargado (no crítico): {_ce}')
     logger.warning(traceback.format_exc())
+# ── Registro módulo Audio Studio ─────────────────────────────────────────────
+try:
+    from modules.audio_studio.routes import register as register_audio_routes
+    register_audio_routes(app)
+    logger.info('✅ Audio Studio registrado (/api/audio)')
+except Exception as _as:
+    import traceback
+    logger.warning(f'Audio Studio no cargado (no crítico): {_as}')
+    logger.warning(traceback.format_exc())
+
 # ── Registro módulo CicSEO Intelligence ─────────────────────────────────────
 try:
     from modules.seo.routes import bp as cicseo_bp
