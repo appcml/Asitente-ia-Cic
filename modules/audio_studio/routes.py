@@ -1,26 +1,26 @@
 """
-modules/audio_studio/routes.py
-================================
+modules/audio_studio/routes.py  v2
+=====================================
 Endpoints Flask del Audio Studio.
 
-Rutas registradas:
-  GET  /api/audio/info              → info del módulo (público)
-  POST /api/audio/tts               → texto → audio (requiere login)
-  POST /api/audio/stt               → audio → texto (requiere login)
-  POST /api/audio/podcast           → guión → podcast (requiere login)
-  GET  /api/audio/voices            → lista de voces disponibles (público)
-
-Uso en cic_ia_mejorado.py (agregar al bloque de registros):
-  try:
-      from modules.audio_studio.routes import register
-      register(app)
-      logger.info('✅ Audio Studio registrado')
-  except Exception as _ae:
-      logger.warning(f'Audio Studio no cargado: {_ae}')
+Rutas:
+  GET  /api/audio/info
+  GET  /api/audio/voices
+  POST /api/audio/tts
+  POST /api/audio/stt
+  POST /api/audio/podcast
+  GET  /api/audio/music/categories
+  POST /api/audio/mix
+  GET  /api/audio/projects
+  POST /api/audio/projects
+  GET  /api/audio/projects/<id>
+  PUT  /api/audio/projects/<id>
+  DELETE /api/audio/projects/<id>
 """
 
 import base64
 import logging
+from datetime import datetime
 from flask import Blueprint, request, jsonify
 
 logger = logging.getLogger("cic_ia.audio_studio.routes")
@@ -28,28 +28,46 @@ logger = logging.getLogger("cic_ia.audio_studio.routes")
 bp = Blueprint("audio_studio", __name__, url_prefix="/api/audio")
 
 
+# ──────────────────────────────────────────────────────────────────
+# Helper: obtener usuario desde token
+# ──────────────────────────────────────────────────────────────────
+def _get_user_from_token(token: str):
+    if not token:
+        return None
+    try:
+        from cic_ia_mejorado import UserSession, User
+        sess = UserSession.query.filter_by(token=token).first()
+        if not sess:
+            return None
+        return User.query.get(sess.user_id)
+    except Exception as e:
+        logger.warning(f"_get_user_from_token error: {e}")
+        return None
+
+
 def register(app):
-    """Registra el Blueprint de Audio Studio en la app Flask."""
-    # Importamos main aquí para evitar imports circulares en arranque
+    """Registra el Blueprint en la app Flask y crea tablas nuevas."""
+
+    # Crear tabla podcast_project si no existe
+    try:
+        from modules.audio_studio.models import PodcastProject
+        from cic_ia_mejorado import db
+        with app.app_context():
+            db.create_all()
+        logger.info("✅ Tabla podcast_project verificada/creada")
+    except Exception as e:
+        logger.warning(f"No se pudo crear tabla podcast_project: {e}")
+
     from modules.audio_studio import main as audio_main
 
-    # ─────────────────────────────────────────────────────────────
-    # GET /api/audio/info  — pública, sin auth
-    # ─────────────────────────────────────────────────────────────
+    # ─── GET /api/audio/info ──────────────────────────────────────
     @bp.route("/info", methods=["GET"])
     def audio_info():
-        """
-        Retorna capacidades del módulo: engines disponibles, voces,
-        idiomas, límites, etc.
-        """
         return jsonify(audio_main.module_info())
 
-    # ─────────────────────────────────────────────────────────────
-    # GET /api/audio/voices  — pública, sin auth
-    # ─────────────────────────────────────────────────────────────
+    # ─── GET /api/audio/voices ───────────────────────────────────
     @bp.route("/voices", methods=["GET"])
     def audio_voices():
-        """Lista todas las voces disponibles por motor."""
         info = audio_main.module_info()
         return jsonify({
             "success": True,
@@ -59,55 +77,14 @@ def register(app):
             "elevenlabs_active": info["features"]["tts"]["elevenlabs_active"],
         })
 
-    # ─────────────────────────────────────────────────────────────
-    # POST /api/audio/tts  — requiere login
-    # ─────────────────────────────────────────────────────────────
+    # ─── POST /api/audio/tts ─────────────────────────────────────
     @bp.route("/tts", methods=["POST"])
     def audio_tts():
-        """
-        Convierte texto a audio.
-
-        Body JSON:
-        {
-            "text":    "Hola mundo, esto es una prueba",   // requerido
-            "engine":  "gtts" | "edge_tts" | "elevenlabs", // default: "gtts"
-
-            // Para gTTS:
-            "lang":    "es",          // código ISO 639-1
-            "slow":    false,
-
-            // Para edge_tts:
-            "voice":   "es-CL-CatalinaNeural",
-            "rate":    "+0%",         // velocidad: "-20%" más lento, "+20%" más rápido
-            "volume":  "+0%",
-
-            // Para ElevenLabs:
-            "voice_id":    "21m00Tcm4TlvDq8ikWAM",
-            "model":       "eleven_multilingual_v2",
-            "stability":   0.5,
-            "similarity":  0.75
-        }
-
-        Response:
-        {
-            "success":       true,
-            "audio_b64":     "<base64 MP3>",
-            "format":        "mp3",
-            "engine":        "gtts",
-            "chars":         28,
-            "words":         5,
-            "est_duration":  2.0,
-            "gen_time":      1.3
-        }
-        """
         data   = request.json or {}
         text   = data.get("text", "").strip()
         engine = data.get("engine", "gtts")
-
         if not text:
             return jsonify({"success": False, "error": "El campo 'text' es requerido"}), 400
-
-        # Parámetros específicos por motor
         kwargs = {}
         if engine == "gtts":
             kwargs["lang"] = data.get("lang", "es")
@@ -122,117 +99,35 @@ def register(app):
             kwargs["stability"]  = float(data.get("stability", 0.5))
             kwargs["similarity"] = float(data.get("similarity", 0.75))
         else:
-            return jsonify({"success": False, "error": f"Motor '{engine}' no reconocido. Usa: gtts, edge_tts, elevenlabs"}), 400
-
+            return jsonify({"success": False, "error": f"Motor '{engine}' no reconocido"}), 400
         result = audio_main.generate_tts(text, engine=engine, **kwargs)
+        return jsonify(result), (200 if result["success"] else 500)
 
-        if result["success"]:
-            return jsonify(result)
-        else:
-            return jsonify(result), 500
-
-    # ─────────────────────────────────────────────────────────────
-    # POST /api/audio/stt  — requiere login
-    # ─────────────────────────────────────────────────────────────
+    # ─── POST /api/audio/stt ─────────────────────────────────────
     @bp.route("/stt", methods=["POST"])
     def audio_stt():
-        """
-        Transcribe audio a texto usando OpenAI Whisper.
-
-        Acepta dos formatos:
-          1. multipart/form-data con campo 'audio' (archivo)
-          2. JSON con campo 'audio_b64' (base64) y 'filename'
-
-        Body JSON (opción 2):
-        {
-            "audio_b64":  "<base64>",
-            "filename":   "grabacion.mp3",    // para inferir MIME type
-            "language":   "es"                // opcional, auto-detect si se omite
-        }
-
-        Response:
-        {
-            "success":  true,
-            "text":     "Transcripción del audio aquí",
-            "language": "es",
-            "duration": 12.4,
-            "segments": [...],
-            "gen_time": 3.1
-        }
-        """
-        # Opción 1: archivo multipart
         if "audio" in request.files:
-            f        = request.files["audio"]
-            filename = f.filename or "audio.mp3"
+            f = request.files["audio"]
+            filename    = f.filename or "audio.mp3"
             audio_bytes = f.read()
             language    = request.form.get("language")
         else:
-            # Opción 2: JSON base64
             data = request.json or {}
             b64  = data.get("audio_b64", "")
             if not b64:
-                return jsonify({"success": False, "error": "Se requiere 'audio' (multipart) o 'audio_b64' (JSON)"}), 400
+                return jsonify({"success": False, "error": "Se requiere 'audio' o 'audio_b64'"}), 400
             try:
                 audio_bytes = base64.b64decode(b64)
             except Exception:
-                return jsonify({"success": False, "error": "audio_b64 no es base64 válido"}), 400
+                return jsonify({"success": False, "error": "audio_b64 inválido"}), 400
             filename = data.get("filename", "audio.mp3")
             language = data.get("language")
-
         result = audio_main.transcribe_whisper(audio_bytes, filename=filename, language=language)
+        return jsonify(result), (200 if result["success"] else 500)
 
-        if result["success"]:
-            return jsonify(result)
-        else:
-            return jsonify(result), 500
-
-    # ─────────────────────────────────────────────────────────────
-    # POST /api/audio/podcast  — requiere login
-    # ─────────────────────────────────────────────────────────────
+    # ─── POST /api/audio/podcast ─────────────────────────────────
     @bp.route("/podcast", methods=["POST"])
     def audio_podcast():
-        """
-        Genera un episodio de podcast completo desde un guión.
-
-        Body JSON:
-        {
-            "script":       "Texto completo del episodio...",   // requerido
-            "title":        "Mi primer podcast",
-            "engine":       "gtts" | "edge_tts" | "elevenlabs",
-            "format_type":  "monologue" | "dialogue",
-
-            // Si format_type == "dialogue", el script debe tener líneas:
-            // HOST: Bienvenidos al programa...
-            // GUEST: Gracias por invitarme...
-
-            // Voces por rol (opcional, parámetros del motor elegido):
-            "host_voice":  {"lang": "es"},                       // para gTTS
-            "guest_voice": {"lang": "es"},
-
-            // Para edge_tts con diálogo:
-            "host_voice":  {"voice": "es-CL-CatalinaNeural"},
-            "guest_voice": {"voice": "es-CL-LorenzoNeural"},
-
-            // Parámetros globales del motor (si no están en host/guest_voice):
-            "lang":   "es",
-            "voice":  "es-CL-CatalinaNeural"
-        }
-
-        Response:
-        {
-            "success":      true,
-            "title":        "Mi primer podcast",
-            "audio_parts":  ["<base64>", "<base64>", ...],  // un MP3 por segmento
-            "segments":     [{"speaker": "host", "text": "..."}, ...],
-            "total_parts":  4,
-            "failed_parts": 0,
-            "engine":       "gtts",
-            "format_type":  "monologue",
-            "words":        320,
-            "est_duration": 128.0,
-            "gen_time":     5.2
-        }
-        """
         data        = request.json or {}
         script      = data.get("script", "").strip()
         title       = data.get("title", "Podcast")
@@ -240,11 +135,10 @@ def register(app):
         format_type = data.get("format_type", "monologue")
         host_voice  = data.get("host_voice", {})
         guest_voice = data.get("guest_voice", {})
-
+        music_cat   = data.get("music_cat", "neutral")
+        music_vol   = float(data.get("music_volume_db", -14))
         if not script:
-            return jsonify({"success": False, "error": "El campo 'script' es requerido"}), 400
-
-        # Parámetros globales del motor
+            return jsonify({"success": False, "error": "'script' es requerido"}), 400
         kwargs = {}
         if engine == "gtts":
             kwargs["lang"] = data.get("lang", "es")
@@ -259,20 +153,143 @@ def register(app):
             kwargs["similarity"] = float(data.get("similarity", 0.75))
 
         result = audio_main.generate_podcast(
-            script=script,
-            engine=engine,
-            host_voice=host_voice,
-            guest_voice=guest_voice,
-            format_type=format_type,
-            title=title,
-            **kwargs,
+            script=script, engine=engine,
+            host_voice=host_voice, guest_voice=guest_voice,
+            format_type=format_type, title=title, **kwargs,
         )
-
-        if result["success"]:
-            return jsonify(result)
-        else:
+        if not result["success"]:
             return jsonify(result), 500
 
-    # Registrar el blueprint
+        # ── Mezclar con música si se pidió ────────────────────────
+        if music_cat and music_cat != "neutral":
+            from modules.audio_studio.music_mixer import mix_audio_with_music
+            mixed_parts = []
+            for b64 in result.get("audio_parts", []):
+                try:
+                    voice_bytes = base64.b64decode(b64)
+                    mix_result  = mix_audio_with_music(voice_bytes, category=music_cat, music_volume_db=music_vol)
+                    mixed_parts.append(mix_result.get("audio_b64", b64))
+                except Exception as mix_err:
+                    logger.warning(f"Mezcla falló para segmento: {mix_err}")
+                    mixed_parts.append(b64)
+            result["audio_parts"]  = mixed_parts
+            result["music_cat"]    = music_cat
+            result["music_mixed"]  = True
+        else:
+            result["music_cat"]    = "neutral"
+            result["music_mixed"]  = False
+
+        return jsonify(result)
+
+    # ─── GET /api/audio/music/categories ─────────────────────────
+    @bp.route("/music/categories", methods=["GET"])
+    def audio_music_categories():
+        from modules.audio_studio.music_mixer import get_categories
+        return jsonify({"success": True, "categories": get_categories()})
+
+    # ─── POST /api/audio/mix ─────────────────────────────────────
+    @bp.route("/mix", methods=["POST"])
+    def audio_mix():
+        from modules.audio_studio.music_mixer import mix_audio_with_music
+        data     = request.json or {}
+        b64      = data.get("audio_b64", "")
+        category = data.get("category", "epic")
+        vol_db   = float(data.get("music_volume_db", -14))
+        if not b64:
+            return jsonify({"success": False, "error": "audio_b64 requerido"}), 400
+        try:
+            voice_bytes = base64.b64decode(b64)
+        except Exception:
+            return jsonify({"success": False, "error": "audio_b64 inválido"}), 400
+        result = mix_audio_with_music(voice_bytes, category=category, music_volume_db=vol_db)
+        return jsonify(result)
+
+    # ─── PROYECTOS ────────────────────────────────────────────────
+
+    def _auth(req):
+        token = req.headers.get("Authorization", "").replace("Bearer ", "")
+        return _get_user_from_token(token)
+
+    @bp.route("/projects", methods=["GET"])
+    def audio_list_projects():
+        user = _auth(request)
+        if not user:
+            return jsonify({"success": False, "error": "No autorizado"}), 401
+        from modules.audio_studio.models import PodcastProject
+        projects = PodcastProject.query\
+            .filter_by(user_id=user.id, deleted=False)\
+            .order_by(PodcastProject.updated_at.desc()).all()
+        return jsonify({"success": True, "projects": [p.to_dict() for p in projects]})
+
+    @bp.route("/projects", methods=["POST"])
+    def audio_save_project():
+        user = _auth(request)
+        if not user:
+            return jsonify({"success": False, "error": "No autorizado"}), 401
+        from modules.audio_studio.models import PodcastProject
+        from cic_ia_mejorado import db
+        data = request.json or {}
+        if not data.get("title"):
+            return jsonify({"success": False, "error": "title requerido"}), 400
+        p = PodcastProject(
+            user_id      = user.id,
+            title        = data.get("title", "Sin título"),
+            script       = data.get("script", ""),
+            engine       = data.get("engine", "gtts"),
+            format_type  = data.get("format_type", "monologue"),
+            voice_config = data.get("voice_config", {}),
+            music_cat    = data.get("music_cat", "neutral"),
+            segments     = data.get("segments", []),
+            audio_parts  = data.get("audio_parts", []),
+        )
+        db.session.add(p)
+        db.session.commit()
+        return jsonify({"success": True, "id": p.id, "message": "Proyecto guardado"})
+
+    @bp.route("/projects/<int:pid>", methods=["GET"])
+    def audio_get_project(pid):
+        user = _auth(request)
+        if not user:
+            return jsonify({"success": False, "error": "No autorizado"}), 401
+        from modules.audio_studio.models import PodcastProject
+        p = PodcastProject.query.filter_by(id=pid, user_id=user.id, deleted=False).first()
+        if not p:
+            return jsonify({"success": False, "error": "Proyecto no encontrado"}), 404
+        return jsonify({"success": True, "project": p.to_dict(full=True)})
+
+    @bp.route("/projects/<int:pid>", methods=["PUT"])
+    def audio_update_project(pid):
+        user = _auth(request)
+        if not user:
+            return jsonify({"success": False, "error": "No autorizado"}), 401
+        from modules.audio_studio.models import PodcastProject
+        from cic_ia_mejorado import db
+        p = PodcastProject.query.filter_by(id=pid, user_id=user.id, deleted=False).first()
+        if not p:
+            return jsonify({"success": False, "error": "Proyecto no encontrado"}), 404
+        data = request.json or {}
+        for field in ["title","script","engine","format_type","voice_config","music_cat","segments","audio_parts"]:
+            if field in data:
+                setattr(p, field, data[field])
+        p.updated_at = datetime.utcnow()
+        db.session.commit()
+        return jsonify({"success": True, "message": "Actualizado"})
+
+    @bp.route("/projects/<int:pid>", methods=["DELETE"])
+    def audio_delete_project(pid):
+        user = _auth(request)
+        if not user:
+            return jsonify({"success": False, "error": "No autorizado"}), 401
+        from modules.audio_studio.models import PodcastProject
+        from cic_ia_mejorado import db
+        p = PodcastProject.query.filter_by(id=pid, user_id=user.id, deleted=False).first()
+        if not p:
+            return jsonify({"success": False, "error": "Proyecto no encontrado"}), 404
+        p.deleted = True
+        p.updated_at = datetime.utcnow()
+        db.session.commit()
+        return jsonify({"success": True, "message": "Eliminado"})
+
+    # Registrar blueprint
     app.register_blueprint(bp)
-    logger.info("✅ Audio Studio rutas registradas en /api/audio/*")
+    logger.info("✅ Audio Studio v2 rutas registradas en /api/audio/*")
