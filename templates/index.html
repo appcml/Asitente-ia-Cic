@@ -963,39 +963,64 @@ tr:hover td{background:rgba(108,99,255,.04);}
                     <option value="elevenlabs">ElevenLabs (premium)</option>
                   </select>
                 </div>
+                <!-- gTTS: idioma -->
                 <div id="tts-lang-wrap" style="flex:1;min-width:120px">
                   <label style="font-size:.8rem;color:var(--text2)">Idioma</label>
                   <select id="tts-lang" class="input-field" style="margin-top:4px">
-                    <option value="es">Español</option>
-                    <option value="en">Inglés</option>
-                    <option value="pt">Portugués</option>
-                    <option value="fr">Francés</option>
-                    <option value="de">Alemán</option>
+                    <option value="es">🇨🇱 Español</option>
+                    <option value="en">🇺🇸 Inglés</option>
+                    <option value="pt">🇧🇷 Portugués</option>
+                    <option value="fr">🇫🇷 Francés</option>
+                    <option value="de">🇩🇪 Alemán</option>
+                    <option value="it">🇮🇹 Italiano</option>
+                    <option value="ja">🇯🇵 Japonés</option>
+                    <option value="zh">🇨🇳 Chino</option>
+                    <option value="ko">🇰🇷 Coreano</option>
+                    <option value="ru">🇷🇺 Ruso</option>
+                    <option value="ar">🇸🇦 Árabe</option>
                   </select>
                 </div>
-                <div id="tts-voice-wrap" style="flex:1;min-width:200px;display:none">
+                <!-- Edge TTS: voz -->
+                <div id="tts-voice-wrap" style="flex:1;min-width:220px;display:none">
                   <label style="font-size:.8rem;color:var(--text2)">Voz</label>
-                  <select id="tts-voice" class="input-field" style="margin-top:4px">
-                    <option value="es-CL-CatalinaNeural">Catalina (Chile, femenina)</option>
-                    <option value="es-CL-LorenzoNeural">Lorenzo (Chile, masculino)</option>
-                    <option value="es-ES-ElviraNeural">Elvira (España, femenina)</option>
-                    <option value="es-ES-AlvaroNeural">Álvaro (España, masculino)</option>
-                    <option value="es-MX-DaliaNeural">Dalia (México, femenina)</option>
-                    <option value="en-US-JennyNeural">Jenny (EN, femenina)</option>
-                    <option value="en-US-GuyNeural">Guy (EN, masculino)</option>
-                    <option value="pt-BR-FranciscaNeural">Francisca (PT-BR, femenina)</option>
+                  <select id="tts-voice" class="input-field" style="margin-top:4px"></select>
+                </div>
+                <!-- ElevenLabs: voz -->
+                <div id="tts-el-wrap" style="flex:1;min-width:220px;display:none">
+                  <label style="font-size:.8rem;color:var(--text2)">Voz ElevenLabs</label>
+                  <select id="tts-el-voice" class="input-field" style="margin-top:4px">
+                    <option value="21m00Tcm4TlvDq8ikWAM">Rachel (EN, femenina)</option>
+                    <option value="AZnzlk1XvdvUeBnXmlld">Domi (EN, femenina)</option>
+                    <option value="EXAVITQu4vr4xnSDxMaL">Bella (EN, femenina)</option>
+                    <option value="ErXwobaYiN019PkySvjV">Antoni (EN, masculina)</option>
+                    <option value="TxGEqnHWrfWFTfGW9XjX">Josh (EN, masculina)</option>
+                    <option value="VR6AewLTigWG4xSOukaG">Arnold (EN, masculina)</option>
+                    <option value="pNInz6obpgDQGcFmaJgB">Adam (EN, masculina)</option>
                   </select>
                 </div>
               </div>
 
-              <div id="tts-rate-wrap" style="display:none;gap:10px" class="">
+              <!-- Velocidad (Edge TTS) -->
+              <div id="tts-rate-wrap" style="display:none;gap:10px">
                 <label style="font-size:.8rem;color:var(--text2)">Velocidad</label>
                 <select id="tts-rate" class="input-field" style="margin-top:4px">
-                  <option value="-20%">Más lento</option>
+                  <option value="-30%">Muy lento</option>
+                  <option value="-15%">Lento</option>
                   <option value="+0%" selected>Normal</option>
-                  <option value="+20%">Más rápido</option>
-                  <option value="+40%">Rápido</option>
+                  <option value="+15%">Rápido</option>
+                  <option value="+30%">Muy rápido</option>
                 </select>
+              </div>
+              <!-- Estabilidad ElevenLabs -->
+              <div id="tts-el-params" style="display:none;gap:10px;flex-wrap:wrap">
+                <div style="flex:1;min-width:120px">
+                  <label style="font-size:.8rem;color:var(--text2)">Estabilidad (0-1)</label>
+                  <input type="number" id="tts-el-stability" class="input-field" value="0.5" min="0" max="1" step="0.05" style="margin-top:4px">
+                </div>
+                <div style="flex:1;min-width:120px">
+                  <label style="font-size:.8rem;color:var(--text2)">Similitud (0-1)</label>
+                  <input type="number" id="tts-el-similarity" class="input-field" value="0.75" min="0" max="1" step="0.05" style="margin-top:4px">
+                </div>
               </div>
 
               <button class="btn btn-primary" onclick="ttsGenerate()" id="tts-btn">
@@ -1017,9 +1042,9 @@ tr:hover td{background:rgba(108,99,255,.04);}
           <div class="grid2" style="align-items:start">
             <div class="panel" style="display:flex;flex-direction:column;gap:12px">
               <label style="font-weight:600;font-size:.85rem">Audio a transcribir</label>
-              <div id="stt-drop" style="border:2px dashed var(--border);border-radius:10px;padding:32px;text-align:center;cursor:pointer;transition:border-color .2s"
+              <div id="stt-drop" style="border:2px dashed #2d3561;border-radius:10px;padding:32px;text-align:center;cursor:pointer;transition:border-color .2s"
                 onclick="document.getElementById('stt-file-input').click()"
-                ondrop="sttHandleDrop(event)" ondragover="event.preventDefault();this.style.borderColor='var(--accent)'" ondragleave="this.style.borderColor='var(--border)'">
+                ondrop="sttHandleDrop(event)" ondragover="event.preventDefault();this.style.borderColor='var(--accent)'" ondragleave="this.style.borderColor='#2d3561'">
                 <div style="font-size:2rem;margin-bottom:8px">🎤</div>
                 <p style="font-size:.85rem;color:var(--text2)">Arrastra un audio o haz clic</p>
                 <p style="font-size:.75rem;color:var(--text2);margin-top:4px">MP3, WAV, M4A, WEBM, OGG (máx 25MB)</p>
@@ -1034,6 +1059,10 @@ tr:hover td{background:rgba(108,99,255,.04);}
                     <option value="es">Español</option>
                     <option value="en">Inglés</option>
                     <option value="pt">Portugués</option>
+                    <option value="fr">Francés</option>
+                    <option value="de">Alemán</option>
+                    <option value="ja">Japonés</option>
+                    <option value="zh">Chino</option>
                   </select>
                 </div>
                 <button class="btn btn-primary" onclick="sttTranscribe()" id="stt-btn" style="white-space:nowrap">
@@ -1079,23 +1108,37 @@ tr:hover td{background:rgba(108,99,255,.04);}
                     </select>
                   </div>
                 </div>
-                <div id="pod-voice-wrap" style="display:flex;gap:8px">
-                  <div style="flex:1">
-                    <label style="font-size:.8rem;color:var(--text2)">Voz HOST</label>
-                    <select id="pod-host-voice" class="input-field" style="margin-top:4px">
-                      <option value="es-CL-CatalinaNeural">Catalina (CL, femenina)</option>
-                      <option value="es-CL-LorenzoNeural">Lorenzo (CL, masculino)</option>
-                      <option value="es-ES-ElviraNeural">Elvira (ES)</option>
-                      <option value="en-US-JennyNeural">Jenny (EN)</option>
-                    </select>
+                <!-- gTTS: idioma podcast -->
+                <div id="pod-gtts-lang-wrap" style="display:none">
+                  <label style="font-size:.8rem;color:var(--text2)">Idioma</label>
+                  <select id="pod-gtts-lang" class="input-field" style="margin-top:4px">
+                    <option value="es">🇨🇱 Español</option>
+                    <option value="en">🇺🇸 Inglés</option>
+                    <option value="pt">🇧🇷 Portugués</option>
+                    <option value="fr">🇫🇷 Francés</option>
+                    <option value="de">🇩🇪 Alemán</option>
+                    <option value="it">🇮🇹 Italiano</option>
+                  </select>
+                </div>
+                <!-- Edge TTS: voces podcast -->
+                <div id="pod-voice-wrap" style="display:none;flex-direction:column;gap:8px">
+                  <div style="display:flex;gap:8px">
+                    <div style="flex:1">
+                      <label style="font-size:.8rem;color:var(--text2)">Voz HOST</label>
+                      <select id="pod-host-voice" class="input-field" style="margin-top:4px"></select>
+                    </div>
+                    <div id="pod-guest-voice-wrap" style="flex:1;display:none">
+                      <label style="font-size:.8rem;color:var(--text2)">Voz GUEST</label>
+                      <select id="pod-guest-voice" class="input-field" style="margin-top:4px"></select>
+                    </div>
                   </div>
-                  <div id="pod-guest-voice-wrap" style="flex:1;display:none">
-                    <label style="font-size:.8rem;color:var(--text2)">Voz GUEST</label>
-                    <select id="pod-guest-voice" class="input-field" style="margin-top:4px">
-                      <option value="es-CL-LorenzoNeural">Lorenzo (CL, masculino)</option>
-                      <option value="es-CL-CatalinaNeural">Catalina (CL, femenina)</option>
-                      <option value="es-ES-AlvaroNeural">Álvaro (ES)</option>
-                      <option value="en-US-GuyNeural">Guy (EN)</option>
+                  <!-- Velocidad podcast -->
+                  <div>
+                    <label style="font-size:.8rem;color:var(--text2)">Velocidad</label>
+                    <select id="pod-rate" class="input-field" style="margin-top:4px">
+                      <option value="-15%">Lento</option>
+                      <option value="+0%" selected>Normal</option>
+                      <option value="+15%">Rápido</option>
                     </select>
                   </div>
                 </div>
@@ -1104,8 +1147,8 @@ tr:hover td{background:rgba(108,99,255,.04);}
               <div id="pod-hint" style="background:var(--bg3);border-radius:8px;padding:12px;font-size:.8rem;color:var(--text2);line-height:1.6">
                 <strong>Formato Monólogo:</strong> escribe el guión completo. Se dividirá automáticamente en segmentos.<br><br>
                 <strong>Formato Diálogo:</strong> usa prefijos al inicio de cada línea:<br>
-                <code style="background:var(--bg1);padding:2px 6px;border-radius:4px">HOST: Bienvenidos al programa...</code><br>
-                <code style="background:var(--bg1);padding:2px 6px;border-radius:4px">GUEST: Gracias por invitarme...</code>
+                <code style="background:var(--bg2);padding:2px 6px;border-radius:4px">HOST: Bienvenidos al programa...</code><br>
+                <code style="background:var(--bg2);padding:2px 6px;border-radius:4px">GUEST: Gracias por invitarme...</code>
               </div>
             </div>
 
@@ -3677,25 +3720,115 @@ Salida: ${item.output||''}`,category,priority};
 
 
 /* ══════════════════════════════════════════════════════════════════
-   AUDIO STUDIO — JavaScript
+   AUDIO STUDIO — JavaScript v2
    ══════════════════════════════════════════════════════════════════ */
+
+// ── Catálogo de voces Edge TTS (agrupadas por idioma) ─────────────
+const EDGE_VOICES = {
+  'es': [
+    {v:'es-CL-CatalinaNeural', l:'🇨🇱 Catalina (Chile, femenina)'},
+    {v:'es-CL-LorenzoNeural',  l:'🇨🇱 Lorenzo (Chile, masculino)'},
+    {v:'es-ES-ElviraNeural',   l:'🇪🇸 Elvira (España, femenina)'},
+    {v:'es-ES-AlvaroNeural',   l:'🇪🇸 Álvaro (España, masculino)'},
+    {v:'es-ES-AbrilNeural',    l:'🇪🇸 Abril (España, femenina)'},
+    {v:'es-ES-ArnauNeural',    l:'🇪🇸 Arnau (España, masculino)'},
+    {v:'es-MX-DaliaNeural',    l:'🇲🇽 Dalia (México, femenina)'},
+    {v:'es-MX-JorgeNeural',    l:'🇲🇽 Jorge (México, masculino)'},
+    {v:'es-MX-BeatrizNeural',  l:'🇲🇽 Beatriz (México, femenina)'},
+    {v:'es-AR-ElenaNeural',    l:'🇦🇷 Elena (Argentina, femenina)'},
+    {v:'es-AR-TomasNeural',    l:'🇦🇷 Tomás (Argentina, masculino)'},
+    {v:'es-CO-SalomeNeural',   l:'🇨🇴 Salomé (Colombia, femenina)'},
+    {v:'es-CO-GonzaloNeural',  l:'🇨🇴 Gonzalo (Colombia, masculino)'},
+    {v:'es-PE-CamilaNeural',   l:'🇵🇪 Camila (Perú, femenina)'},
+    {v:'es-PE-AlexNeural',     l:'🇵🇪 Alex (Perú, masculino)'},
+    {v:'es-VE-PaolaNeural',    l:'🇻🇪 Paola (Venezuela, femenina)'},
+    {v:'es-VE-SebastianNeural',l:'🇻🇪 Sebastián (Venezuela, masculino)'},
+  ],
+  'en': [
+    {v:'en-US-JennyNeural',    l:'🇺🇸 Jenny (EEUU, femenina)'},
+    {v:'en-US-GuyNeural',      l:'🇺🇸 Guy (EEUU, masculino)'},
+    {v:'en-US-AriaNeural',     l:'🇺🇸 Aria (EEUU, femenina)'},
+    {v:'en-US-DavisNeural',    l:'🇺🇸 Davis (EEUU, masculino)'},
+    {v:'en-US-NancyNeural',    l:'🇺🇸 Nancy (EEUU, femenina)'},
+    {v:'en-GB-SoniaNeural',    l:'🇬🇧 Sonia (UK, femenina)'},
+    {v:'en-GB-RyanNeural',     l:'🇬🇧 Ryan (UK, masculino)'},
+    {v:'en-AU-NatashaNeural',  l:'🇦🇺 Natasha (Australia, femenina)'},
+    {v:'en-AU-WilliamNeural',  l:'🇦🇺 William (Australia, masculino)'},
+  ],
+  'pt': [
+    {v:'pt-BR-FranciscaNeural',l:'🇧🇷 Francisca (Brasil, femenina)'},
+    {v:'pt-BR-AntonioNeural',  l:'🇧🇷 António (Brasil, masculino)'},
+    {v:'pt-PT-RaquelNeural',   l:'🇵🇹 Raquel (Portugal, femenina)'},
+    {v:'pt-PT-DuarteNeural',   l:'🇵🇹 Duarte (Portugal, masculino)'},
+  ],
+  'fr': [
+    {v:'fr-FR-DeniseNeural',   l:'🇫🇷 Denise (Francia, femenina)'},
+    {v:'fr-FR-HenriNeural',    l:'🇫🇷 Henri (Francia, masculino)'},
+  ],
+  'de': [
+    {v:'de-DE-KatjaNeural',    l:'🇩🇪 Katja (Alemania, femenina)'},
+    {v:'de-DE-ConradNeural',   l:'🇩🇪 Conrad (Alemania, masculino)'},
+  ],
+  'it': [
+    {v:'it-IT-ElsaNeural',     l:'🇮🇹 Elsa (Italia, femenina)'},
+    {v:'it-IT-DiegoNeural',    l:'🇮🇹 Diego (Italia, masculino)'},
+  ],
+  'ja': [
+    {v:'ja-JP-NanamiNeural',   l:'🇯🇵 Nanami (Japón, femenina)'},
+    {v:'ja-JP-KeitaNeural',    l:'🇯🇵 Keita (Japón, masculino)'},
+  ],
+  'zh': [
+    {v:'zh-CN-XiaoxiaoNeural', l:'🇨🇳 Xiaoxiao (China, femenina)'},
+    {v:'zh-CN-YunxiNeural',    l:'🇨🇳 Yunxi (China, masculino)'},
+    {v:'zh-TW-HsiaoChenNeural',l:'🇹🇼 HsiaoChen (Taiwán, femenina)'},
+  ],
+};
+
+// ── Llenar select de voces Edge según idioma ──────────────────────
+function fillEdgeVoices(selectId, lang, selectedVal) {
+  const sel = document.getElementById(selectId);
+  if (!sel) return;
+  const voices = EDGE_VOICES[lang] || EDGE_VOICES['es'];
+  sel.innerHTML = voices.map(v =>
+    `<option value="${v.v}" ${v.v===selectedVal?'selected':''}>${v.l}</option>`
+  ).join('');
+}
 
 // ── Tabs ──────────────────────────────────────────────────────────
 function ttsTab(tab) {
   ['tts','stt','podcast'].forEach(t => {
     document.getElementById('tts-panel-'+t).style.display = t===tab ? '' : 'none';
     const btn = document.getElementById('tts-tab-'+t);
-    if (btn) { btn.className = t===tab ? 'btn btn-primary btn-sm' : 'btn btn-outline btn-sm'; }
+    if (btn) btn.className = t===tab ? 'btn btn-primary btn-sm' : 'btn btn-outline btn-sm';
   });
 }
 
-// ── Engine change → mostrar/ocultar controles ─────────────────────
+// ── Engine change TTS → mostrar/ocultar controles ─────────────────
 function ttsEngineChange() {
   const engine = document.getElementById('tts-engine').value;
-  document.getElementById('tts-lang-wrap').style.display  = engine==='gtts'     ? '' : 'none';
-  document.getElementById('tts-voice-wrap').style.display = engine==='edge_tts' ? '' : 'none';
-  document.getElementById('tts-rate-wrap').style.display  = engine==='edge_tts' ? 'flex' : 'none';
+  const lang   = document.getElementById('tts-lang').value || 'es';
+  document.getElementById('tts-lang-wrap').style.display    = engine==='gtts'        ? '' : 'none';
+  document.getElementById('tts-voice-wrap').style.display   = engine==='edge_tts'    ? '' : 'none';
+  document.getElementById('tts-el-wrap').style.display      = engine==='elevenlabs'  ? '' : 'none';
+  document.getElementById('tts-rate-wrap').style.display    = engine==='edge_tts'    ? 'flex' : 'none';
+  document.getElementById('tts-el-params').style.display    = engine==='elevenlabs'  ? 'flex' : 'none';
+  if (engine==='edge_tts') fillEdgeVoices('tts-voice', lang, '');
 }
+
+// Si cambia el idioma en gTTS y luego se pasa a Edge, actualizar voces
+document.addEventListener('DOMContentLoaded', () => {
+  const ttsLang = document.getElementById('tts-lang');
+  if (ttsLang) ttsLang.addEventListener('change', () => {
+    if (document.getElementById('tts-engine').value === 'edge_tts')
+      fillEdgeVoices('tts-voice', ttsLang.value, '');
+  });
+  // Inicializar voces Edge TTS con español por defecto
+  fillEdgeVoices('tts-voice',       'es', 'es-CL-CatalinaNeural');
+  fillEdgeVoices('pod-host-voice',  'es', 'es-CL-CatalinaNeural');
+  fillEdgeVoices('pod-guest-voice', 'es', 'es-CL-LorenzoNeural');
+  // Podcast: ocultar voces edge al inicio (motor = gtts por defecto)
+  podEngineChange();
+});
 
 // ── TTS: Generar audio ────────────────────────────────────────────
 async function ttsGenerate() {
@@ -3703,21 +3836,20 @@ async function ttsGenerate() {
   const engine = document.getElementById('tts-engine').value;
   const btn    = document.getElementById('tts-btn');
   const result = document.getElementById('tts-result');
-
-  if (!text) { showToast && showToast('Escribe algún texto primero','warning'); return; }
-
-  btn.disabled = true;
-  btn.textContent = '⏳ Generando...';
-  result.innerHTML = '<div style="color:var(--text2);font-size:.85rem;padding:32px;text-align:center">Generando audio...</div>';
-
+  if (!text) { alert('Escribe algún texto primero'); return; }
+  btn.disabled = true; btn.textContent = '⏳ Generando...';
+  result.innerHTML = '<div style="color:var(--text2);font-size:.85rem;padding:32px;text-align:center">⏳ Generando audio...</div>';
   const body = { text, engine };
   if (engine==='gtts') {
     body.lang = document.getElementById('tts-lang').value;
   } else if (engine==='edge_tts') {
     body.voice  = document.getElementById('tts-voice').value;
     body.rate   = document.getElementById('tts-rate').value;
+  } else if (engine==='elevenlabs') {
+    body.voice_id   = document.getElementById('tts-el-voice').value;
+    body.stability  = parseFloat(document.getElementById('tts-el-stability').value);
+    body.similarity = parseFloat(document.getElementById('tts-el-similarity').value);
   }
-
   try {
     const r = await fetch('/api/audio/tts', {
       method:'POST',
@@ -3725,7 +3857,6 @@ async function ttsGenerate() {
       body: JSON.stringify(body)
     });
     const d = await r.json();
-
     if (d.success) {
       const src = 'data:audio/mp3;base64,' + d.audio_b64;
       result.innerHTML = `
@@ -3737,19 +3868,17 @@ async function ttsGenerate() {
           </span>
         </div>`;
     } else {
-      result.innerHTML = `<div style="color:var(--error,#e55);padding:16px">❌ ${d.error}</div>`;
+      result.innerHTML = `<div style="color:#e55;padding:16px">❌ ${d.error}</div>`;
     }
   } catch(e) {
-    result.innerHTML = `<div style="color:var(--error,#e55);padding:16px">❌ Error de red: ${e.message}</div>`;
+    result.innerHTML = `<div style="color:#e55;padding:16px">❌ Error: ${e.message}</div>`;
   } finally {
-    btn.disabled = false;
-    btn.textContent = '🔊 Generar audio';
+    btn.disabled = false; btn.textContent = '🔊 Generar audio';
   }
 }
 
-// ── STT: archivo ─────────────────────────────────────────────────
+// ── STT ───────────────────────────────────────────────────────────
 let _sttFile = null;
-
 function sttHandleDrop(e) {
   e.preventDefault();
   const f = e.dataTransfer.files[0];
@@ -3759,62 +3888,66 @@ function sttFileSelected(input) {
   _sttFile = input.files[0];
   if (_sttFile) { document.getElementById('stt-file-info').textContent='📎 '+_sttFile.name; document.getElementById('stt-file-info').style.display=''; }
 }
-
 async function sttTranscribe() {
-  if (!_sttFile) { showToast && showToast('Selecciona un archivo de audio primero','warning'); return; }
-  const btn    = document.getElementById('stt-btn');
-  const result = document.getElementById('stt-result');
+  if (!_sttFile) { alert('Selecciona un archivo de audio primero'); return; }
+  const btn = document.getElementById('stt-btn'), result = document.getElementById('stt-result');
   btn.disabled = true; btn.textContent = '⏳ Transcribiendo...';
-  result.innerHTML = '<div style="color:var(--text2);font-size:.85rem;padding:32px;text-align:center">Transcribiendo con Whisper...</div>';
-
+  result.innerHTML = '<div style="color:var(--text2);font-size:.85rem;padding:32px;text-align:center">⏳ Transcribiendo con Whisper...</div>';
   const reader = new FileReader();
   reader.onload = async function(ev) {
     const b64 = ev.target.result.split(',')[1];
     const lang = document.getElementById('stt-lang').value;
     const body = { audio_b64: b64, filename: _sttFile.name };
     if (lang) body.language = lang;
-
     try {
       const r = await fetch('/api/audio/stt', {
-        method:'POST',
-        headers:{'Content-Type':'application/json','Authorization':'Bearer '+getToken()},
+        method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+getToken()},
         body: JSON.stringify(body)
       });
       const d = await r.json();
       if (d.success) {
         result.innerHTML = `
           <div style="background:var(--bg3);border-radius:8px;padding:14px;font-size:.87rem;line-height:1.6;white-space:pre-wrap;text-align:left">${d.text}</div>
-          <div style="font-size:.75rem;color:var(--text2);margin-top:8px">
-            Idioma: ${d.language} · Duración: ${Math.round(d.duration||0)}s · ${d.gen_time}s
-          </div>`;
-        document.getElementById('stt-copy-btn').style.display = '';
-        document.getElementById('stt-copy-btn')._text = d.text;
+          <div style="font-size:.75rem;color:var(--text2);margin-top:8px">Idioma: ${d.language} · ${Math.round(d.duration||0)}s · ${d.gen_time}s</div>`;
+        const cb = document.getElementById('stt-copy-btn');
+        cb.style.display = ''; cb._text = d.text;
       } else {
-        result.innerHTML = `<div style="color:var(--error,#e55);padding:16px">❌ ${d.error}</div>`;
+        result.innerHTML = `<div style="color:#e55;padding:16px">❌ ${d.error}</div>`;
       }
-    } catch(e) {
-      result.innerHTML = `<div style="color:var(--error,#e55);padding:16px">❌ Error: ${e.message}</div>`;
-    } finally {
-      btn.disabled = false; btn.textContent = '🎤 Transcribir';
-    }
+    } catch(e) { result.innerHTML = `<div style="color:#e55;padding:16px">❌ ${e.message}</div>`; }
+    finally { btn.disabled = false; btn.textContent = '🎤 Transcribir'; }
   };
   reader.readAsDataURL(_sttFile);
 }
-
 function sttCopy() {
   const btn = document.getElementById('stt-copy-btn');
-  navigator.clipboard.writeText(btn._text || '').then(() => { btn.textContent = '✅ Copiado'; setTimeout(()=>btn.textContent='📋 Copiar',2000); });
+  navigator.clipboard.writeText(btn._text||'').then(()=>{btn.textContent='✅ Copiado';setTimeout(()=>btn.textContent='📋 Copiar',2000);});
 }
 
-// ── Podcast ───────────────────────────────────────────────────────
+// ── Podcast: controles ────────────────────────────────────────────
 function podFormatChange() {
   const fmt = document.getElementById('pod-format').value;
-  document.getElementById('pod-guest-voice-wrap').style.display = fmt==='dialogue' ? '' : 'none';
+  const gw  = document.getElementById('pod-guest-voice-wrap');
+  if (gw) gw.style.display = fmt==='dialogue' ? '' : 'none';
 }
 function podEngineChange() {
   const eng = document.getElementById('pod-engine').value;
-  document.getElementById('pod-voice-wrap').style.display = eng==='edge_tts' ? 'flex' : 'none';
+  const vw  = document.getElementById('pod-voice-wrap');
+  const lw  = document.getElementById('pod-gtts-lang-wrap');
+  if (vw) vw.style.display  = eng==='edge_tts' ? 'flex' : 'none';
+  if (lw) lw.style.display  = eng==='gtts'     ? ''     : 'none';
+  if (eng==='edge_tts') {
+    fillEdgeVoices('pod-host-voice',  'es', 'es-CL-CatalinaNeural');
+    fillEdgeVoices('pod-guest-voice', 'es', 'es-CL-LorenzoNeural');
+  }
 }
+
+// ── Podcast: generar episodio ─────────────────────────────────────
+// Almacena datos para permitir re-generar segmentos individuales
+let _podSegments = [];
+let _podEngine   = 'gtts';
+let _podTitle    = '';
+let _podVoiceConfig = {};
 
 async function podGenerate() {
   const script = document.getElementById('pod-script').value.trim();
@@ -3823,20 +3956,23 @@ async function podGenerate() {
   const fmt    = document.getElementById('pod-format').value;
   const btn    = document.getElementById('pod-btn');
   const res    = document.getElementById('pod-result');
-
-  if (!script) { showToast && showToast('Escribe el guión primero','warning'); return; }
-
+  if (!script) { alert('Escribe el guión primero'); return; }
   btn.disabled = true; btn.textContent = '⏳ Generando episodio...';
   res.style.display = 'none';
-
+  _podEngine = engine; _podTitle = title;
   const body = { script, title, engine, format_type: fmt };
   if (engine==='edge_tts') {
-    body.host_voice  = { voice: document.getElementById('pod-host-voice').value };
-    body.guest_voice = { voice: document.getElementById('pod-guest-voice').value };
+    const hv = document.getElementById('pod-host-voice').value;
+    const gv = document.getElementById('pod-guest-voice').value;
+    const rate = document.getElementById('pod-rate').value;
+    body.host_voice  = { voice: hv, rate };
+    body.guest_voice = { voice: gv, rate };
+    _podVoiceConfig  = { host: hv, guest: gv, rate };
   } else {
-    body.lang = 'es';
+    const lang = document.getElementById('pod-gtts-lang').value || 'es';
+    body.lang = lang;
+    _podVoiceConfig = { lang };
   }
-
   try {
     const r = await fetch('/api/audio/podcast', {
       method:'POST',
@@ -3844,36 +3980,104 @@ async function podGenerate() {
       body: JSON.stringify(body)
     });
     const d = await r.json();
-
     if (d.success) {
+      _podSegments = d.segments || [];
       document.getElementById('pod-meta').textContent =
         `${d.total_parts} segmentos · ~${d.est_duration}s · ${d.engine} · ${d.gen_time}s`;
-
-      const players = document.getElementById('pod-players');
-      players.innerHTML = '';
-      d.audio_parts.forEach((b64, i) => {
-        const seg = d.segments[i] || {};
-        const src = 'data:audio/mp3;base64,' + b64;
-        const label = seg.speaker==='guest' ? '👤 GUEST' : '🎙️ HOST';
-        const textPreview = (seg.text||'').substring(0,80) + ((seg.text||'').length>80?'…':'');
-        players.innerHTML += `
-          <div style="background:var(--bg3);border-radius:8px;padding:10px">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-              <span style="font-size:.78rem;color:var(--accent);font-weight:600">${label} · Segmento ${i+1}</span>
-              <a class="btn btn-outline btn-sm" href="${src}" download="${title.replace(/\s+/g,'_')}_seg${i+1}.mp3" style="font-size:.7rem;padding:2px 8px">⬇️</a>
-            </div>
-            <p style="font-size:.78rem;color:var(--text2);margin-bottom:6px">${textPreview}</p>
-            <audio controls style="width:100%;height:32px" src="${src}"></audio>
-          </div>`;
-      });
+      podRenderPlayers(d.audio_parts, d.segments, title);
       res.style.display = '';
+    } else { alert('❌ ' + d.error); }
+  } catch(e) { alert('❌ Error: ' + e.message); }
+  finally { btn.disabled = false; btn.textContent = '🎙️ Generar episodio'; }
+}
+
+// ── Renderizar players con editor de texto ────────────────────────
+function podRenderPlayers(audioParts, segments, title) {
+  const players = document.getElementById('pod-players');
+  players.innerHTML = '';
+  audioParts.forEach((b64, i) => {
+    const seg   = segments[i] || {};
+    const src   = 'data:audio/mp3;base64,' + b64;
+    const label = seg.speaker==='guest' ? '👤 GUEST' : '🎙️ HOST';
+    const pid   = 'pod-seg-' + i;
+    const div   = document.createElement('div');
+    div.id      = pid;
+    div.style.cssText = 'background:var(--bg3);border-radius:8px;padding:12px;border:1px solid #2d3561';
+    div.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <span style="font-size:.78rem;color:var(--accent);font-weight:600">${label} · Segmento ${i+1}</span>
+        <div style="display:flex;gap:5px">
+          <a class="btn btn-outline btn-sm" href="${src}" download="${title.replace(/\s+/g,'_')}_seg${i+1}.mp3" style="font-size:.7rem;padding:2px 8px">⬇️</a>
+          <button class="btn btn-outline btn-sm" style="font-size:.7rem;padding:2px 8px" onclick="podToggleEdit(${i})">✏️ Editar</button>
+        </div>
+      </div>
+      <audio id="pod-audio-${i}" controls style="width:100%;height:32px;margin-bottom:6px" src="${src}"></audio>
+      <!-- Editor de texto (oculto por defecto) -->
+      <div id="pod-editor-${i}" style="display:none;margin-top:8px;border-top:1px solid #2d3561;padding-top:8px">
+        <label style="font-size:.75rem;color:var(--text2);display:block;margin-bottom:4px">Editar texto del segmento:</label>
+        <textarea id="pod-text-${i}" rows="3" style="width:100%;background:var(--bg2);border:1px solid #2d3561;border-radius:6px;padding:8px;color:var(--text);font-size:.83rem;resize:vertical;box-sizing:border-box">${(seg.text||'').replace(/</g,'&lt;')}</textarea>
+        <div style="display:flex;gap:6px;margin-top:6px;align-items:center">
+          <button class="btn btn-primary btn-sm" onclick="podRegenSeg(${i})" id="pod-regen-btn-${i}">🔄 Re-generar este segmento</button>
+          <button class="btn btn-outline btn-sm" onclick="podToggleEdit(${i})">✕ Cerrar</button>
+          <span id="pod-regen-status-${i}" style="font-size:.75rem;color:var(--text2)"></span>
+        </div>
+      </div>`;
+    players.appendChild(div);
+  });
+}
+
+// ── Editor de segmento: toggle ────────────────────────────────────
+function podToggleEdit(i) {
+  const ed = document.getElementById('pod-editor-'+i);
+  if (!ed) return;
+  ed.style.display = ed.style.display === 'none' ? '' : 'none';
+}
+
+// ── Re-generar un segmento individual ────────────────────────────
+async function podRegenSeg(i) {
+  const ta     = document.getElementById('pod-text-'+i);
+  const btn    = document.getElementById('pod-regen-btn-'+i);
+  const status = document.getElementById('pod-regen-status-'+i);
+  const audio  = document.getElementById('pod-audio-'+i);
+  const newText = ta ? ta.value.trim() : '';
+  if (!newText) { alert('El texto no puede estar vacío'); return; }
+  btn.disabled = true; btn.textContent = '⏳...'; status.textContent = 'Generando...';
+  const body = { text: newText, engine: _podEngine };
+  if (_podEngine === 'edge_tts') {
+    const seg = _podSegments[i] || {};
+    body.voice = seg.speaker === 'guest' ? _podVoiceConfig.guest : _podVoiceConfig.host;
+    body.rate  = _podVoiceConfig.rate || '+0%';
+  } else {
+    body.lang = _podVoiceConfig.lang || 'es';
+  }
+  try {
+    const r = await fetch('/api/audio/tts', {
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+getToken()},
+      body: JSON.stringify(body)
+    });
+    const d = await r.json();
+    if (d.success) {
+      const newSrc = 'data:audio/mp3;base64,' + d.audio_b64;
+      audio.src = newSrc;
+      audio.load();
+      // Actualizar enlace de descarga
+      const dl = audio.parentElement.querySelector('a[download]');
+      if (dl) dl.href = newSrc;
+      // Actualizar segmento guardado
+      if (_podSegments[i]) _podSegments[i].text = newText;
+      status.textContent = '✅ Listo';
+      status.style.color = 'var(--green)';
+      setTimeout(() => { status.textContent = ''; status.style.color = ''; }, 3000);
     } else {
-      alert('❌ ' + d.error);
+      status.textContent = '❌ ' + d.error;
+      status.style.color = '#e55';
     }
   } catch(e) {
-    alert('❌ Error de red: ' + e.message);
+    status.textContent = '❌ ' + e.message;
+    status.style.color = '#e55';
   } finally {
-    btn.disabled = false; btn.textContent = '🎙️ Generar episodio';
+    btn.disabled = false; btn.textContent = '🔄 Re-generar este segmento';
   }
 }
 
