@@ -1815,46 +1815,251 @@ function uAutoGrow(el){
   el.style.height='auto';el.style.height=Math.min(el.scrollHeight,180)+'px';
   document.getElementById('uCharCount').textContent=el.value.length+' / 100,000';
 }
+/*
+ * PARCHE DE STREAMING PARA index.html
+ * =====================================
+ * INSTRUCCIÓN: en templates/index.html, busca la función "async function uSend()"
+ * y reemplázala COMPLETA por esta versión.
+ *
+ * Busca desde:
+ *   async function uSend(){
+ * Hasta el cierre de función (la llave } que cierra el bloque try/catch/finally
+ * y el cierre de uSend). Aproximadamente líneas 1817 a 1868.
+ *
+ * ¿Cómo encontrarla? Ctrl+F en el HTML buscando: async function uSend()
+ * Reemplaza TODO el bloque de esa función por el código de abajo.
+ */
+
 async function uSend(){
-  const ta=document.getElementById('uMsg');
-  const msg=ta.value.trim();
-  if(!msg&&!uImgB64)return;
-  const mode=document.getElementById('uMode').value;
-  ta.value='';ta.style.height='44px';
-  document.getElementById('uCharCount').textContent='0 / 100,000';
-  const wrap=document.getElementById('uMessages');
-  // Remove welcome
-  const welcome=wrap.querySelector('[data-welcome]');if(welcome)welcome.remove();
-  // User bubble
-  const udiv=document.createElement('div');udiv.style.cssText='display:flex;flex-direction:column;align-items:flex-end;gap:6px';
-  if(uImgB64){const im=document.createElement('img');im.src='data:image/jpeg;base64,'+uImgB64;im.style.cssText='max-width:180px;border-radius:8px;border:1px solid #2d3561';udiv.appendChild(im);}
-  if(msg){const b=document.createElement('div');b.className='ubuser';b.textContent=msg;udiv.appendChild(b);}
-  wrap.appendChild(udiv);wrap.scrollTop=wrap.scrollHeight;
-  // Typing
-  const typing=document.createElement('div');typing.className='ubbot';
-  typing.innerHTML='<span style="color:var(--text2)">⏳ Pensando...</span>';
-  typing.style.alignSelf='flex-start';wrap.appendChild(typing);wrap.scrollTop=wrap.scrollHeight;
-  try{
-    let result;
-    if(uImgB64){
-      result=await req('/api/chat/analyze-image','POST',{image_b64:uImgB64,message:msg||'Describe esta imagen en español',mime_type:'image/jpeg'});
-    }else{
-      result=await req('/api/chat','POST',{message:msg,mode,history:uChatHistory});
-    }
-    typing.remove();
-    uChatHistory.push({role:'user',content:msg});
-    const resp=result.response||result.error||'Sin respuesta';
-    uChatHistory.push({role:'assistant',content:resp});
-    const bdiv=document.createElement('div');bdiv.className='ubbot';bdiv.style.alignSelf='flex-start';
-    bdiv.innerHTML=renderMsg(resp);
-    wrap.appendChild(bdiv);
-    bdiv.querySelectorAll('pre code').forEach(b=>{if(typeof hljs!=='undefined')hljs.highlightElement(b);});
-  }catch(e){
-    typing.remove();
-    const ediv=document.createElement('div');ediv.className='ubbot';ediv.style.cssText='align-self:flex-start;border-color:var(--red)';
-    ediv.textContent='⚠️ '+e.message;wrap.appendChild(ediv);
+  const ta  = document.getElementById('uMsg');
+  const msg = ta.value.trim();
+  if(!msg && !uImgB64) return;
+
+  const mode = document.getElementById('uMode').value;
+  ta.value = ''; ta.style.height = '44px';
+  document.getElementById('uCharCount').textContent = '0 / 100,000';
+
+  const wrap = document.getElementById('uMessages');
+  const welcome = wrap.querySelector('[data-welcome]');
+  if(welcome) welcome.remove();
+
+  // Burbuja del usuario
+  const udiv = document.createElement('div');
+  udiv.style.cssText = 'display:flex;flex-direction:column;align-items:flex-end;gap:6px';
+  if(uImgB64){
+    const im = document.createElement('img');
+    im.src = 'data:image/jpeg;base64,' + uImgB64;
+    im.style.cssText = 'max-width:180px;border-radius:8px;border:1px solid #2d3561';
+    udiv.appendChild(im);
   }
-  uClearImg();wrap.scrollTop=wrap.scrollHeight;
+  if(msg){
+    const b = document.createElement('div');
+    b.className = 'ubuser';
+    b.textContent = msg;
+    udiv.appendChild(b);
+  }
+  wrap.appendChild(udiv);
+  wrap.scrollTop = wrap.scrollHeight;
+
+  // Burbuja del bot — empieza con indicador de escritura
+  const bdiv = document.createElement('div');
+  bdiv.className = 'ubbot';
+  bdiv.style.alignSelf = 'flex-start';
+  bdiv.innerHTML = '<span style="color:var(--text2)">⏳ Pensando...</span>';
+  wrap.appendChild(bdiv);
+  wrap.scrollTop = wrap.scrollHeight;
+
+  try {
+    // === IMAGEN: usa ruta clásica (no streaming) ===
+    if(uImgB64){
+      const result = await req('/api/chat/analyze-image', 'POST', {
+        image_b64: uImgB64,
+        message:   msg || 'Describe esta imagen en español',
+        mime_type: 'image/jpeg'
+      });
+      uChatHistory.push({role:'user', content: msg || '[imagen]'});
+      const resp = result.response || result.error || 'Sin respuesta';
+      uChatHistory.push({role:'assistant', content: resp});
+      bdiv.innerHTML = renderMsg(resp);
+      bdiv.querySelectorAll('pre code').forEach(b => {
+        if(typeof hljs !== 'undefined') hljs.highlightElement(b);
+      });
+      uClearImg();
+      wrap.scrollTop = wrap.scrollHeight;
+      return;
+    }
+
+    // === TEXTO: usa streaming SSE ===
+    let accum = '';
+    let firstToken = true;
+
+    const response = await fetch(API + '/api/chat/stream', {
+      method:  'POST',
+      headers: {
+        'Content-Type':  'application/json',
+        'Authorization': 'Bearer ' + getToken()
+      },
+      body: JSON.stringify({ message: msg, mode: mode })
+    });
+
+    if(!response.ok){
+      throw new Error('Error ' + response.status + ' del servidor');
+    }
+
+    const reader  = response.body.getReader();
+    const decoder = new TextDecoder();
+    let   buffer  = '';
+
+    while(true){
+      const { done, value } = await reader.read();
+      if(done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop(); // guardar línea incompleta
+
+      for(const line of lines){
+        if(!line.startsWith('data: ')) continue;
+        const raw = line.slice(6).trim();
+        if(!raw) continue;
+
+        let data;
+        try { data = JSON.parse(raw); } catch { continue; }
+
+        if(data.type === 'meta'){
+          // Metadata inicial — opcional mostrar en UI
+          continue;
+        }
+
+        if(data.type === 'error'){
+          bdiv.innerHTML = '<span style="color:var(--red)">⚠️ ' + esc(data.content) + '</span>';
+          wrap.scrollTop = wrap.scrollHeight;
+          break;
+        }
+
+        if(data.type === 'token'){
+          if(firstToken){
+            bdiv.innerHTML = ''; // quitar "Pensando..."
+            firstToken = false;
+          }
+          accum += data.content;
+          // Mostrar texto en tiempo real como texto plano mientras llega
+          bdiv.textContent = accum;
+          wrap.scrollTop = wrap.scrollHeight;
+        }
+
+        if(data.type === 'done'){
+          // Respuesta completa — renderizar markdown/código
+          accum = data.response || accum;
+          bdiv.innerHTML = renderMsg(accum);
+          bdiv.querySelectorAll('pre code').forEach(b => {
+            if(typeof hljs !== 'undefined') hljs.highlightElement(b);
+          });
+          uChatHistory.push({role:'user',      content: msg});
+          uChatHistory.push({role:'assistant', content: accum});
+          wrap.scrollTop = wrap.scrollHeight;
+        }
+      }
+    }
+
+    // Si por algún motivo no llegó done pero hay contenido
+    if(accum && firstToken === false && !uChatHistory.find(m => m.content === accum)){
+      bdiv.innerHTML = renderMsg(accum);
+      bdiv.querySelectorAll('pre code').forEach(b => {
+        if(typeof hljs !== 'undefined') hljs.highlightElement(b);
+      });
+      uChatHistory.push({role:'user',      content: msg});
+      uChatHistory.push({role:'assistant', content: accum});
+    }
+
+  } catch(e) {
+    bdiv.innerHTML = '<span style="color:var(--red)">⚠️ ' + esc(e.message) + '</span>';
+    console.error('Error uSend streaming:', e);
+  }
+
+  uClearImg();
+  wrap.scrollTop = wrap.scrollHeight;
+}
+
+/*
+ * TAMBIÉN: busca la función "async function devSendMsg()" en el HTML
+ * y reemplaza la parte interna del try{} donde llama a /api/chat
+ * por esta versión con streaming.
+ *
+ * Busca la línea:
+ *   else{result=await req('/api/chat','POST',{message:msg,mode,history:chatHistory});}
+ *
+ * Y reemplaza ese bloque else{...} por el bloque de abajo (devSendStream).
+ * El if(devImgB64){...} déjalo igual — solo cambia el else.
+ */
+
+// REEMPLAZO para el else de devSendMsg (panel developer):
+// Pega esto en lugar de: else{result=await req('/api/chat','POST',...)}
+// y adapta las referencias a las variables del contexto dev (tb, msgs, chatHistory, meta div)
+async function devSendStream(msg, mode, tb, bw, msgs, t0){
+  let accum = '';
+  let firstToken = true;
+
+  try {
+    const response = await fetch(API + '/api/chat/stream', {
+      method:  'POST',
+      headers: {
+        'Content-Type':  'application/json',
+        'Authorization': 'Bearer ' + getToken()
+      },
+      body: JSON.stringify({ message: msg, mode: mode })
+    });
+
+    if(!response.ok) throw new Error('Error ' + response.status);
+
+    const reader  = response.body.getReader();
+    const decoder = new TextDecoder();
+    let   buffer  = '';
+
+    while(true){
+      const { done, value } = await reader.read();
+      if(done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop();
+
+      for(const line of lines){
+        if(!line.startsWith('data: ')) continue;
+        const raw = line.slice(6).trim();
+        if(!raw) continue;
+        let data;
+        try { data = JSON.parse(raw); } catch { continue; }
+
+        if(data.type === 'token'){
+          if(firstToken){ tb.innerHTML = ''; firstToken = false; }
+          accum += data.content;
+          tb.textContent = accum;
+          msgs.scrollTop = msgs.scrollHeight;
+        }
+        if(data.type === 'done'){
+          accum = data.response || accum;
+          tb.innerHTML = renderMsg(accum);
+          tb.querySelectorAll('pre code').forEach(b => {
+            if(typeof hljs !== 'undefined') hljs.highlightElement(b);
+          });
+          chatHistory.push({role:'user', content: msg});
+          chatHistory.push({role:'assistant', content: accum});
+          const meta = document.createElement('div');
+          meta.className = 'msg-meta';
+          meta.textContent = `groq_stream · ${((Date.now()-t0)/1000).toFixed(1)}s`;
+          bw.appendChild(meta);
+          document.getElementById('testInfo').textContent =
+            `groq_stream | streaming | ${((Date.now()-t0)/1000).toFixed(1)}s | historial: ${chatHistory.length/2|0}`;
+          msgs.scrollTop = msgs.scrollHeight;
+        }
+        if(data.type === 'error'){
+          tb.innerHTML = '<span style="color:var(--red)">⚠️ ' + esc(data.content) + '</span>';
+        }
+      }
+    }
+  } catch(e) {
+    tb.innerHTML = '<span style="color:var(--red)">⚠️ ' + esc(e.message) + '</span>';
+  }
 }
 function uHandleImg(input){
   const f=input.files[0];if(!f)return;
