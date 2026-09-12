@@ -210,6 +210,7 @@ tr:hover td{background:rgba(108,99,255,.04);}
         <option value="balanced">Balanceado</option>
         <option value="fast">Rápido</option>
         <option value="complete">Completo</option>
+        <option value="cic_brain">🧠 CicBrain (motor propio)</option>
       </select>
       <button class="btn btn-outline btn-sm" onclick="doLogout()">Salir</button>
     </div>
@@ -1889,9 +1890,23 @@ async function uSend(){
       return;
     }
 
-    // === TEXTO: usa streaming SSE ===
+    // === TEXTO: usa streaming SSE o CicBrain directo ===
     let accum = '';
     let firstToken = true;
+
+    // Si el modo es CicBrain, usar ruta propia no-streaming
+    if(mode === 'cic_brain'){
+      bdiv.innerHTML = '<span style="color:var(--accent2)">🧠 CicBrain procesando...</span>';
+      const result = await req('/api/brain/chat', 'POST', { message: msg });
+      const resp   = result.response || result.error || 'Sin respuesta';
+      const src    = result.brain_used ? '🧠 CicBrain' : ('↩️ delegado a ' + (result.provider || 'externo'));
+      bdiv.innerHTML = renderMsg(resp) + `<div style="font-size:.72rem;opacity:.5;margin-top:6px">${src} · ${result.confidence ? (result.confidence*100).toFixed(0)+'% confianza' : ''}</div>`;
+      bdiv.querySelectorAll('pre code').forEach(b => { if(typeof hljs !== 'undefined') hljs.highlightElement(b); });
+      uChatHistory.push({role:'user', content: msg});
+      uChatHistory.push({role:'assistant', content: resp});
+      wrap.scrollTop = wrap.scrollHeight;
+      return;
+    }
 
     const response = await fetch(API + '/api/chat/stream', {
       method:  'POST',
