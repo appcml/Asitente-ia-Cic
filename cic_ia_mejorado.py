@@ -24,6 +24,7 @@ import pickle
 import numpy as np
 from functools import wraps
 from sqlalchemy import text, inspect
+from modules.cic_brain import CicBrain
 
 # ========== CONFIGURACIÓN ==========
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(name)s: %(message)s')
@@ -827,6 +828,7 @@ class CicIA:
         self.search_engine = WebSearchEngine()
         self.llm           = LLMEngine()
         self.memory_engine = MemoryEngine()
+        self.brain         = CicBrain(app=app, db=db)  # Motor propio — aprende desde el primer día
         self._start_background_tasks()
 
         with app.app_context():
@@ -838,6 +840,7 @@ class CicIA:
             has_key = bool(ANTHROPIC_API_KEY or OPENAI_API_KEY or os.environ.get('GROQ_API_KEY'))
             logger.info(f"   API Keys:        {'✅ OK' if has_key else '⚠️ Sin API Key'}")
             logger.info(f"   Streaming:       ✅ Activo")
+            logger.info(f"   CicBrain:        ✅ Motor propio activo (indexando...)")
             logger.info("=" * 55)
 
     def _start_background_tasks(self):
@@ -1010,11 +1013,18 @@ class CicIA:
             return []
 
     def _build_system_prompt(self, memories: list, manual_knowledge: list,
-                              db_history: list) -> str:
+                              db_history: list, query: str = '') -> str:
         """Construye el system prompt enriquecido con contexto relevante."""
         base = get_config('system_prompt',
                           'Eres Cic_IA, un asistente inteligente en español.')
         parts = [base, '']
+
+        # ── Conocimiento propio de CicBrain (máxima prioridad) ──
+        if query:
+            brain_context = self.brain.get_context_for_llm(query, max_docs=3)
+            if brain_context:
+                parts.append(brain_context)
+                parts.append('')
 
         parts.append("""=== INSTRUCCIONES DE RAZONAMIENTO ===
 Antes de responder, analiza internamente:
@@ -1070,7 +1080,7 @@ Responde directamente sin mostrar este proceso.""")
 
         # Construir system prompt enriquecido
         db_hist_for_prompt = self._get_db_history(user_id, limit=4)
-        system_prompt = self._build_system_prompt(memories, manual_knowledge, db_hist_for_prompt)
+        system_prompt = self._build_system_prompt(memories, manual_knowledge, db_hist_for_prompt, query=user_message)
 
         # Armar lista de mensajes
         messages = [{'role': 'system', 'content': system_prompt}]
@@ -1113,6 +1123,14 @@ Responde directamente sin mostrar este proceso.""")
         )
 
         response_text = llm_result['response']
+
+        # ── CicBrain aprende de la respuesta del LLM externo ──
+        if llm_result.get('success') and response_text:
+            self.brain.learn_from_external(
+                question        = user_message,
+                external_answer = response_text,
+                provider        = llm_result.get('provider', 'external')
+            )
 
         # Búsqueda web si el LLM falla
         if not llm_result.get('success') and get_config('web_search_enabled', True):
@@ -1770,6 +1788,9 @@ def dev_add_knowledge():
         db.session.add(mem)
         db.session.commit()
 
+        # ── CicBrain indexa el nuevo conocimiento en tiempo real ──
+        cic_ia.brain.learn_from_dataset([{'pregunta': title, 'respuesta': content}])
+
         return jsonify({'success': True, 'id': mk.id,
                         'message': f'Conocimiento "{title}" agregado', 'memory_id': mem.id})
     except Exception as e:
@@ -2053,6 +2074,28 @@ def internal_error(error):
 @app.errorhandler(413)
 def too_large(error):
     return jsonify({'error': 'Archivo demasiado grande (máx 32MB)'}), 413
+
+# ========== CICBRAIN — ESTADO DEL MOTOR PROPIO ==========
+
+@app.route('/api/brain/status', methods=['GET'])
+@jwt_required
+def brain_status():
+    """Estado del motor propio CicBrain — cuánto ha aprendido y de dónde."""
+    return jsonify(cic_ia.brain.status())
+
+@app.route('/api/brain/learn', methods=['POST'])
+@dev_required
+def brain_learn_dataset():
+    """Carga masiva de pares pregunta/respuesta directamente a CicBrain."""
+    try:
+        data  = request.json or {}
+        pairs = data.get('pairs', [])
+        if not pairs:
+            return jsonify({'error': 'Se requiere lista pairs [{pregunta, respuesta}]'}), 400
+        loaded = cic_ia.brain.learn_from_dataset(pairs)
+        return jsonify({'success': True, 'loaded': loaded, 'total': cic_ia.brain.index.size()})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 # ========== INICIO ==========
 
