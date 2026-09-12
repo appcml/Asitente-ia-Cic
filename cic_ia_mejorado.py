@@ -1115,22 +1115,36 @@ Responde directamente sin mostrar este proceso.""")
         # El último mensaje es el user actual — extraerlo
         hist_msgs = conv_msgs[:-1] if len(conv_msgs) > 1 else []
 
-        llm_result = self.llm.chat(
-            user_message=user_message,
-            system_prompt=system,
-            conversation_history=hist_msgs,
-            max_tokens=meta['max_tokens']
-        )
-
-        response_text = llm_result['response']
-
-        # ── CicBrain aprende de la respuesta del LLM externo ──
-        if llm_result.get('success') and response_text:
-            self.brain.learn_from_external(
-                question        = user_message,
-                external_answer = response_text,
-                provider        = llm_result.get('provider', 'external')
+        # ── CicBrain intenta responder primero con motor propio ──
+        brain_result = self.brain.respond(user_message, user_id)
+        if brain_result.get('answered'):
+            response_text = brain_result['answer']
+            used_provider = 'cic_brain'
+            used_model    = f"CicBrain {self.brain.VERSION} ({brain_result.get('method','match')})"
+            tokens_used   = 0
+            success       = True
+            logger.info(f"[CicBrain] Respondió solo — confianza {brain_result.get('confidence',0):.2f} método={brain_result.get('method')}")
+        else:
+            # CicBrain no sabe suficiente → delega al LLM externo
+            llm_result = self.llm.chat(
+                user_message=user_message,
+                system_prompt=system,
+                conversation_history=hist_msgs,
+                max_tokens=meta['max_tokens']
             )
+            response_text = llm_result['response']
+            used_provider = llm_result.get('provider', 'unknown')
+            used_model    = llm_result.get('model', 'unknown')
+            tokens_used   = llm_result.get('tokens', 0)
+            success       = llm_result.get('success', False)
+
+            # CicBrain aprende de lo que respondió el externo
+            if success and response_text:
+                self.brain.learn_from_external(
+                    question        = user_message,
+                    external_answer = response_text,
+                    provider        = used_provider
+                )
 
         # Búsqueda web si el LLM falla
         if not llm_result.get('success') and get_config('web_search_enabled', True):
@@ -1143,24 +1157,27 @@ Responde directamente sin mostrar este proceso.""")
             append_session(user_id, 'user', user_message)
             append_session(user_id, 'assistant', response_text)
 
-        # Guardar en BD
+        # Guardar en BD — CicBrain aprenderá también de esta conversación
         self._save_conversation(
             user_msg=user_message,
             bot_resp=response_text,
             user_id=user_id,
-            tokens=llm_result.get('tokens', 0),
-            sources=['llm', llm_result.get('provider', 'unknown')]
+            tokens=tokens_used,
+            sources=[used_provider]
         )
+        # Aprendizaje continuo: toda respuesta propia también refuerza el índice
+        self.brain.learn_from_conversation(user_message, response_text)
 
         return {
             'response':       response_text,
-            'provider':       llm_result.get('provider', 'unknown'),
-            'model':          llm_result.get('model', 'unknown'),
-            'tokens_used':    llm_result.get('tokens', 0),
+            'provider':       used_provider,
+            'model':          used_model,
+            'tokens_used':    tokens_used,
             'memories_used':  meta['memories_used'],
             'manual_kb_used': meta['manual_kb_used'],
             'history_used':   meta['history_used'],
-            'success':        llm_result.get('success', False)
+            'success':        success,
+            'brain_used':     brain_result.get('answered', False)
         }
 
     def _search_and_cache(self, query: str) -> str:
@@ -2074,6 +2091,75 @@ def internal_error(error):
 @app.errorhandler(413)
 def too_large(error):
     return jsonify({'error': 'Archivo demasiado grande (máx 32MB)'}), 413
+
+@app.route('/api/brain/chat', methods=['POST'])
+@jwt_required
+def brain_chat(current_user):
+    """
+    Ruta de chat directo con CicBrain.
+    Responde con el motor propio; si no sabe, delega al LLM externo y aprende.
+    """
+    try:
+        data    = request.json or {}
+        message = data.get('message', '').strip()
+        if not message:
+            return jsonify({'error': 'Mensaje vacío'}), 400
+
+        user_id = current_user.id if current_user else None
+
+        # Intentar responder con motor propio
+        brain_result = cic_ia.brain.respond(message, user_id)
+
+        if brain_result.get('answered'):
+            response_text = brain_result['answer']
+            # Guardar y reforzar el índice
+            cic_ia._save_conversation(
+                user_msg=message, bot_resp=response_text,
+                user_id=user_id, tokens=0, sources=['cic_brain']
+            )
+            cic_ia.brain.learn_from_conversation(message, response_text)
+            return jsonify({
+                'response':    response_text,
+                'brain_used':  True,
+                'confidence':  brain_result.get('confidence', 0),
+                'method':      brain_result.get('method', ''),
+                'provider':    'cic_brain',
+                'tokens_used': 0
+            })
+
+        # No sabe → delega al LLM externo e inyecta contexto propio
+        messages, meta = cic_ia.build_messages_for_stream(message, user_id, 'balanced')
+        system    = messages[0]['content'] if messages and messages[0]['role'] == 'system' else ''
+        conv_msgs = [m for m in messages if m['role'] != 'system']
+        hist_msgs = conv_msgs[:-1] if len(conv_msgs) > 1 else []
+
+        llm_result    = cic_ia.llm.chat(
+            user_message=message, system_prompt=system,
+            conversation_history=hist_msgs, max_tokens=meta['max_tokens']
+        )
+        response_text = llm_result.get('response', '')
+
+        # CicBrain aprende de lo que respondió el externo
+        if response_text:
+            cic_ia.brain.learn_from_external(message, response_text, llm_result.get('provider', 'external'))
+            cic_ia._save_conversation(
+                user_msg=message, bot_resp=response_text,
+                user_id=user_id, tokens=llm_result.get('tokens', 0),
+                sources=[llm_result.get('provider', 'external')]
+            )
+
+        return jsonify({
+            'response':    response_text,
+            'brain_used':  False,
+            'confidence':  0,
+            'provider':    llm_result.get('provider', 'external'),
+            'model':       llm_result.get('model', ''),
+            'tokens_used': llm_result.get('tokens', 0)
+        })
+
+    except Exception as e:
+        logger.error(f"Error en /api/brain/chat: {e}")
+        return jsonify({'error': str(e)}), 500
 
 # ========== CICBRAIN — ESTADO DEL MOTOR PROPIO ==========
 
