@@ -87,6 +87,14 @@ def clear_session(user_id: int):
     with _session_lock:
         _session_history.pop(user_id, None)
 
+def strip_think(text: str) -> str:
+    """Elimina los bloques <think>...</think> que generan modelos como Qwen."""
+    if not text:
+        return text
+    import re
+    cleaned = re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL)
+    return cleaned.strip()
+
 # ========== QUERY EXPANSION — Stop Words ==========
 # Inspirado en xai-grok-memory/src/query_expansion.rs
 # Filtra palabras vacías antes de buscar en memoria para mejorar precisión.
@@ -1132,7 +1140,7 @@ Responde directamente sin mostrar este proceso.""")
                 conversation_history=hist_msgs,
                 max_tokens=meta['max_tokens']
             )
-            response_text = llm_result['response']
+            response_text = strip_think(llm_result['response'])
             used_provider = llm_result.get('provider', 'unknown')
             used_model    = llm_result.get('model', 'unknown')
             tokens_used   = llm_result.get('tokens', 0)
@@ -1413,7 +1421,7 @@ def chat_stream(current_user):
                 yield f"data: {json.dumps({'type': 'token', 'content': token})}\n\n"
 
             # Respuesta completa
-            complete = ''.join(full_response)
+            complete = strip_think(''.join(full_response))
 
             if not complete.strip():
                 # Groq no respondió → fallback a modo clásico
@@ -2137,7 +2145,7 @@ def brain_chat(current_user):
             user_message=message, system_prompt=system,
             conversation_history=hist_msgs, max_tokens=meta['max_tokens']
         )
-        response_text = llm_result.get('response', '')
+        response_text = strip_think(llm_result.get('response', ''))
 
         # CicBrain aprende de lo que respondió el externo
         if response_text:
