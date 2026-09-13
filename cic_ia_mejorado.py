@@ -2093,7 +2093,7 @@ def too_large(error):
     return jsonify({'error': 'Archivo demasiado grande (máx 32MB)'}), 413
 
 @app.route('/api/brain/chat', methods=['POST'])
-@jwt_required
+@token_required
 def brain_chat(current_user):
     """
     Ruta de chat directo con CicBrain.
@@ -2164,7 +2164,7 @@ def brain_chat(current_user):
 # ========== CICBRAIN — ESTADO DEL MOTOR PROPIO ==========
 
 @app.route('/api/brain/status', methods=['GET'])
-@jwt_required
+@token_required
 def brain_status():
     """Estado del motor propio CicBrain — cuánto ha aprendido y de dónde."""
     return jsonify(cic_ia.brain.status())
