@@ -1146,8 +1146,8 @@ Responde directamente sin mostrar este proceso.""")
                     provider        = used_provider
                 )
 
-        # Búsqueda web si el LLM falla
-        if not llm_result.get('success') and get_config('web_search_enabled', True):
+        # Búsqueda web si el LLM falla (solo aplica cuando usó LLM externo)
+        if not success and not brain_result.get('answered') and get_config('web_search_enabled', True):
             web_data = self._search_and_cache(user_message)
             if web_data:
                 response_text += f"\n\n📖 Información web:\n{web_data}"
