@@ -210,7 +210,7 @@ tr:hover td{background:rgba(108,99,255,.04);}
         <option value="balanced">Balanceado</option>
         <option value="fast">Rápido</option>
         <option value="complete">Completo</option>
-        <option value="cic_brain">🧠 CicBrain (motor propio)</option>
+        <option value="cic_brain">🧠 CicBrain</option>
       </select>
       <button class="btn btn-outline btn-sm" onclick="doLogout()">Salir</button>
     </div>
@@ -466,6 +466,7 @@ tr:hover td{background:rgba(108,99,255,.04);}
               <option value="balanced">Balanceado</option>
               <option value="fast">Rápido</option>
               <option value="complete">Completo</option>
+              <option value="cic_brain">🧠 CicBrain</option>
             </select>
             <button class="btn btn-outline btn-sm" onclick="newConv()">✏️ Nueva</button>
             <button class="btn btn-sm" style="background:#2d3561;color:var(--text)" onclick="clearChat()">🗑️</button>
@@ -2253,6 +2254,21 @@ async function sendTestMsg(){
   try{
     let result;
     if(devImgB64){result=await req('/api/chat/analyze-image','POST',{image_b64:devImgB64,message:msg||'Describe esta imagen en español',mime_type:devImgMime});}
+    else if(mode==='cic_brain'){
+      tb.innerHTML='<span style="color:var(--accent2)">🧠 CicBrain procesando...</span>';
+      result=await req('/api/brain/chat','POST',{message:msg});
+      const src=result.brain_used?`🧠 CicBrain · ${result.confidence?(result.confidence*100).toFixed(0)+'% conf':''}`:('↩️ delegado a '+(result.provider||'externo'));
+      const resp=result.response||result.error||'Sin respuesta';
+      chatHistory.push({role:'user',content:msg});
+      chatHistory.push({role:'assistant',content:resp});
+      tb.innerHTML=renderMsg(resp)+`<div style="font-size:.72rem;opacity:.5;margin-top:4px">${src}</div>`;
+      tb.querySelectorAll('pre code').forEach(b=>{if(typeof hljs!=='undefined')hljs.highlightElement(b);});
+      const meta=document.createElement('div');meta.className='msg-meta';
+      meta.textContent=`${result.provider||'cic_brain'} · ${result.tokens_used||0} tokens · ${((Date.now()-t0)/1000).toFixed(1)}s`;
+      bw.appendChild(meta);
+      document.getElementById('testInfo').textContent=`${result.provider||'cic_brain'} | CicBrain v1 | ${result.tokens_used||0} tokens | historial: ${chatHistory.length/2|0}`;
+      clearImg();devImgB64=null;msgs.scrollTop=msgs.scrollHeight;return;
+    }
     else{result=await req('/api/chat','POST',{message:msg,mode,history:chatHistory});}
     chatHistory.push({role:'user',content:msg});
     const resp=result.response||result.error||'Sin respuesta';
