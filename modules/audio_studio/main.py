@@ -110,66 +110,44 @@ def tts_gtts(text: str, lang: str = "es", slow: bool = False) -> bytes:
 
 def tts_edge(text: str, voice: str = "es-CL-CatalinaNeural", rate: str = "+0%", volume: str = "+0%") -> bytes:
     """
-    Genera audio MP3 con edge-tts.
-    Usa gevent.subprocess para ser compatible con el worker gevent de gunicorn.
+    Genera audio MP3 con edge-tts (Microsoft, gratis, HD).
+    Usa un thread dedicado para evitar conflictos de event loop con gunicorn.
     """
     try:
-        import edge_tts as _chk  # noqa
+        import edge_tts
     except ImportError:
         raise RuntimeError("edge-tts no instalado. Agrega 'edge-tts' a requirements.txt")
 
-    import sys, tempfile, os
+    import asyncio
+    import concurrent.futures
 
-    # gevent parchea subprocess — usar gevent.subprocess directamente
-    try:
-        from gevent import subprocess as gsubprocess
-    except ImportError:
-        import subprocess as gsubprocess
+    async def _gen():
+        communicate = edge_tts.Communicate(text, voice, rate=rate, volume=volume)
+        buf = io.BytesIO()
+        async for chunk in communicate.stream():
+            if chunk["type"] == "audio":
+                buf.write(chunk["data"])
+        buf.seek(0)
+        return buf.read()
 
-    # Escribir texto a temp file para evitar problemas de encoding en argv
-    with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False, encoding='utf-8') as tf:
-        tf.write(text)
-        txt_path = tf.name
+    def _run_in_thread():
+        # Crear un event loop completamente nuevo en un thread separado
+        # Esto evita conflictos con el loop de gunicorn/Flask
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            return loop.run_until_complete(_gen())
+        finally:
+            loop.close()
 
-    with tempfile.NamedTemporaryFile(suffix='.mp3', delete=False) as af:
-        mp3_path = af.name
+    # Ejecutar siempre en un thread propio — compatible con gunicorn sync workers
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+        future = executor.submit(_run_in_thread)
+        result = future.result(timeout=60)
 
-    try:
-        script = (
-            "import asyncio, edge_tts
-"
-            "async def main():
-"
-            f"    with open({repr(txt_path)}, encoding='utf-8') as f: text=f.read()
-"
-            f"    c=edge_tts.Communicate(text,{repr(voice)},rate={repr(rate)},volume={repr(volume)})
-"
-            f"    await c.save({repr(mp3_path)})
-"
-            "asyncio.run(main())
-"
-        )
-        proc = gsubprocess.run(
-            [sys.executable, '-c', script],
-            timeout=90,
-            capture_output=True,
-            text=True
-        )
-        if proc.returncode != 0:
-            err = (proc.stderr or '').strip()[-300:] or 'error desconocido'
-            raise RuntimeError(f"edge-tts falló: {err}")
-
-        with open(mp3_path, 'rb') as f:
-            result = f.read()
-
-        if not result:
-            raise RuntimeError("edge-tts no generó audio")
-        return result
-
-    finally:
-        for p in (txt_path, mp3_path):
-            try: os.unlink(p)
-            except OSError: pass
+    if not result:
+        raise RuntimeError("edge-tts no generó audio — verifica la voz o la conexión")
+    return result
 
 
 def tts_elevenlabs(text: str, voice_id: str = "21m00Tcm4TlvDq8ikWAM",
@@ -337,81 +315,6 @@ def split_into_segments(text: str, max_chars: int = 600) -> list[str]:
     return segments
 
 
-def merge_audio_parts(audio_parts_b64: list[str], silence_ms: int = 300) -> dict:
-    """
-    Fusiona una lista de segmentos MP3 (base64) en un solo archivo MP3.
-    Estrategia principal: concatenacion directa de bytes MP3 (funciona en
-    cualquier version de Python, sin ffmpeg, sin pyaudioop).
-    Fallback: pydub si esta disponible y funcional.
-    """
-    try:
-        if not audio_parts_b64:
-            return {'success': False, 'error': 'Lista de segmentos vacia'}
-
-        parts_bytes = []
-        for b64 in audio_parts_b64:
-            raw = base64.b64decode(b64)
-            if raw:
-                parts_bytes.append(raw)
-
-        if not parts_bytes:
-            return {'success': False, 'error': 'No se pudieron decodificar los segmentos'}
-
-        # ── Intentar con pydub primero (mejor calidad de silencio) ──
-        try:
-            from pydub import AudioSegment
-            combined = AudioSegment.empty()
-            silence  = AudioSegment.silent(duration=silence_ms)
-            for i, raw in enumerate(parts_bytes):
-                seg = AudioSegment.from_mp3(io.BytesIO(raw))
-                if i > 0:
-                    combined += silence
-                combined += seg
-            out = io.BytesIO()
-            combined.export(out, format='mp3')
-            out.seek(0)
-            merged_bytes = out.read()
-            logger.info(f"merge_audio_parts: pydub OK, {len(merged_bytes)} bytes")
-            return {
-                'success':     True,
-                'audio_b64':   base64.b64encode(merged_bytes).decode('utf-8'),
-                'format':      'mp3',
-                'method':      'pydub',
-            }
-        except Exception as pydub_err:
-            logger.warning(f"pydub no disponible ({pydub_err}), usando concatenacion de bytes")
-
-        # ── Fallback: concatenacion directa de bytes MP3 ──
-        # Los frames MP3 son self-contained — la concatenacion produce un MP3
-        # valido que cualquier reproductor lee correctamente y en orden.
-        # Silencio: frames MP3 vacios (header valido + datos nulos).
-        # 1 frame a 128kbps = 417 bytes = ~26ms
-        SILENCE_FRAME = bytes([
-            0xFF, 0xFB, 0x90, 0x00,   # MP3 header MPEG1, Layer3, 128kbps, 44100, stereo
-        ] + [0x00] * 413)             # 417 bytes total
-        frames_needed  = max(1, silence_ms // 26)
-        silence_bytes  = SILENCE_FRAME * frames_needed
-
-        buf = io.BytesIO()
-        for i, raw in enumerate(parts_bytes):
-            if i > 0:
-                buf.write(silence_bytes)
-            buf.write(raw)
-        merged_bytes = buf.getvalue()
-
-        logger.info(f"merge_audio_parts: bytes concat OK, {len(merged_bytes)} bytes, {len(parts_bytes)} segmentos")
-        return {
-            'success':   True,
-            'audio_b64': base64.b64encode(merged_bytes).decode('utf-8'),
-            'format':    'mp3',
-            'method':    'concat',
-        }
-
-    except Exception as e:
-        logger.error(f"merge_audio_parts error: {e}")
-        return {'success': False, 'error': str(e)}
-
-
 def _silence_mp3(ms: int = 500) -> bytes:
     """Genera silencio como bytes MP3 vacío (frame nulo)."""
     # MP3 frame de silencio: 128kbps, 44100Hz
@@ -479,9 +382,9 @@ def generate_podcast(script: str, engine: str = "gtts", host_voice: dict = None,
                 segments.append({"speaker": "host", "text": seg})
 
         # Limitar segmentos para evitar OOM en Render plan gratuito
-        if len(segments) > 12:
-            logger.warning(f"Podcast truncado de {len(segments)} a 12 segmentos para evitar OOM")
-            segments = segments[:12]
+        if len(segments) > 8:
+            logger.warning(f"Podcast truncado de {len(segments)} a 8 segmentos para evitar OOM")
+            segments = segments[:8]
 
         # Generar audio para cada segmento
         total = len(segments)
@@ -510,9 +413,8 @@ def generate_podcast(script: str, engine: str = "gtts", host_voice: dict = None,
 
         return {
             "success":      True,
-            "audio_parts":  audio_parts,   # lista de base64, uno por segmento
-            "audio_merged": None,          # se fusiona aparte via /api/audio/merge
-            "segments":     segments,
+            "audio_parts":  audio_parts,        # lista de base64, uno por segmento
+            "segments":     segments,            # [{speaker, text}, ...]
             "total_parts":  len(audio_parts),
             "failed_parts": len(errors),
             "errors":       errors,
@@ -528,110 +430,6 @@ def generate_podcast(script: str, engine: str = "gtts", host_voice: dict = None,
     except Exception as e:
         logger.error(f"Podcast error: {e}", exc_info=True)
         return {"success": False, "error": str(e)}
-
-
-# ──────────────────────────────────────────────────────────────────
-# PODCAST STREAMING — genera segmentos de a uno, libera RAM entre c/u
-# ──────────────────────────────────────────────────────────────────
-
-def generate_podcast_stream(script: str, engine: str = "gtts", host_voice: dict = None,
-                             guest_voice: dict = None, format_type: str = "monologue",
-                             title: str = "Podcast", **kwargs):
-    """
-    Generador que produce un segmento a la vez como SSE JSON.
-    Cada yield es una linea "data: {...}\n\n".
-    Al terminar emite un evento final con metadatos.
-    Mantiene RAM baja: solo un segmento de audio en memoria a la vez.
-    """
-    import json as _json
-
-    host_voice  = host_voice  or {}
-    guest_voice = guest_voice or {}
-    t0 = time.time()
-
-    # ── Parsear segmentos ──────────────────────────────────────────
-    segments = []
-    if format_type == "dialogue":
-        for line in script.split("\n"):
-            line = line.strip()
-            if not line:
-                continue
-            if line.upper().startswith("HOST:"):
-                segments.append({"speaker": "host",  "text": line[5:].strip()})
-            elif line.upper().startswith("GUEST:"):
-                segments.append({"speaker": "guest", "text": line[6:].strip()})
-            elif line:
-                segments.append({"speaker": "host",  "text": line})
-    else:
-        for seg in split_into_segments(script):
-            segments.append({"speaker": "host", "text": seg})
-
-    # Limitar para no agotar RAM
-    MAX_SEG = 8
-    if len(segments) > MAX_SEG:
-        logger.warning(f"Podcast stream truncado a {MAX_SEG} segmentos")
-        segments = segments[:MAX_SEG]
-
-    total = len(segments)
-
-    # ── Emitir metadatos iniciales ─────────────────────────────────
-    yield "data: " + _json.dumps({
-        "event":   "start",
-        "total":   total,
-        "title":   title,
-        "engine":  engine,
-        "segments": [{"speaker": s["speaker"], "text": s["text"]} for s in segments]
-    }) + "\n\n"
-
-    # ── Generar y emitir un segmento a la vez ─────────────────────
-    success_count = 0
-    for i, seg in enumerate(segments):
-        voice_kwargs = host_voice if seg["speaker"] == "host" else guest_voice
-        if engine == "edge_tts" and format_type == "dialogue":
-            if seg["speaker"] == "guest" and "voice" not in voice_kwargs:
-                voice_kwargs = {**voice_kwargs, "voice": "es-CL-LorenzoNeural"}
-
-        try:
-            result = generate_tts(seg["text"], engine=engine, **{**kwargs, **voice_kwargs})
-            if result["success"]:
-                success_count += 1
-                yield "data: " + _json.dumps({
-                    "event":    "segment",
-                    "index":    i,
-                    "total":    total,
-                    "speaker":  seg["speaker"],
-                    "text":     seg["text"],
-                    "audio_b64": result["audio_b64"],
-                    "format":   "mp3",
-                }) + "\n\n"
-            else:
-                yield "data: " + _json.dumps({
-                    "event": "segment_error",
-                    "index": i,
-                    "error": result.get("error", "unknown"),
-                }) + "\n\n"
-        except Exception as e:
-            logger.warning(f"Podcast stream seg {i+1}/{total} error: {e}")
-            yield "data: " + _json.dumps({
-                "event": "segment_error",
-                "index": i,
-                "error": str(e),
-            }) + "\n\n"
-
-    # ── Evento final ───────────────────────────────────────────────
-    elapsed = round(time.time() - t0, 2)
-    total_words = sum(len(s["text"].split()) for s in segments)
-    yield "data: " + _json.dumps({
-        "event":        "done",
-        "total_parts":  success_count,
-        "failed_parts": total - success_count,
-        "engine":       engine,
-        "format_type":  format_type,
-        "title":        title,
-        "words":        total_words,
-        "est_duration": round(total_words / 2.5, 1),
-        "gen_time":     elapsed,
-    }) + "\n\n"
 
 
 # ──────────────────────────────────────────────────────────────────
