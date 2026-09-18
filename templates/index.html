@@ -4263,24 +4263,72 @@ async function podGenerate() {
     const lang=document.getElementById('pod-gtts-lang')?.value||'es';
     body.lang=lang; _podVoiceConfig={lang};
   }
+  // ── SSE streaming — un segmento a la vez, RAM mínima ──
+  const _audioParts = [];
+  const _audioSegs  = [];
+  let   _metaDone   = null;
+
   try{
-    const r=await fetch('/api/audio/podcast',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+getToken()},body:JSON.stringify(body)});
+    const r = await fetch('/api/audio/podcast/stream', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json','Authorization':'Bearer '+getToken()},
+      body: JSON.stringify(body)
+    });
     if(!r.ok){
       const txt=await r.text().catch(()=>'');
-      throw new Error(`Error ${r.status}: ${txt.substring(0,200)||'respuesta vacía del servidor'}`);
+      throw new Error(`Error ${r.status}: ${txt.substring(0,200)||'respuesta vacía'}`);
     }
-    const d=await r.json();
-    if(d.success){
-      _podSegments=d.segments||[];
-      _podCurrentId=null;
-      document.getElementById('pod-meta').textContent=
-        `${d.total_parts} segmentos · ~${d.est_duration}s · ${d.engine}${d.music_mixed?' · 🎵 '+_podMusicCat:''} · ${d.gen_time}s`;
-      podRenderPlayers(d.audio_parts,d.segments,title,d.audio_formats,d.music_parts);
-      res.style.display='';
-      res._audioParts = d.audio_parts;
-      // Fusionar en llamada separada para no bloquear la UI
-      podMergeAsync(d.audio_parts, title);
-    }else{alert('❌ '+d.error);}
+
+    res.style.display='';
+    document.getElementById('pod-players').innerHTML='';
+    document.getElementById('pod-meta').textContent='⏳ Generando segmentos...';
+
+    const reader  = r.body.getReader();
+    const decoder = new TextDecoder();
+    let   buf     = '';
+
+    while(true){
+      const {done, value} = await reader.read();
+      if(done) break;
+      buf += decoder.decode(value, {stream:true});
+      const lines = buf.split('
+');
+      buf = lines.pop(); // último fragmento incompleto
+      for(const line of lines){
+        if(!line.startsWith('data: ')) continue;
+        let ev;
+        try{ ev = JSON.parse(line.slice(6)); }catch{ continue; }
+
+        if(ev.event === 'start'){
+          _podSegments = ev.segments || [];
+          document.getElementById('pod-meta').textContent =
+            `⏳ Generando ${ev.total} segmentos con ${ev.engine}...`;
+
+        } else if(ev.event === 'segment'){
+          _audioParts.push(ev.audio_b64);
+          _audioSegs.push({speaker: ev.speaker, text: ev.text});
+          // Renderizar este segmento inmediatamente
+          podAppendPlayer(ev.index, ev.audio_b64, ev.speaker, ev.text, title);
+          document.getElementById('pod-meta').textContent =
+            `⏳ ${ev.index+1}/${ev.total} segmentos generados...`;
+
+        } else if(ev.event === 'segment_error'){
+          console.warn('Segmento', ev.index, 'falló:', ev.error);
+
+        } else if(ev.event === 'done'){
+          _metaDone = ev;
+          _podCurrentId = null;
+          document.getElementById('pod-meta').textContent =
+            `${ev.total_parts} segmentos · ~${ev.est_duration}s · ${ev.engine} · ${ev.gen_time}s`;
+          res._audioParts = _audioParts;
+          // Fusionar en llamada separada
+          if(_audioParts.length > 0) podMergeAsync(_audioParts, title);
+        }
+      }
+    }
+
+    if(!_audioParts.length) alert('❌ No se pudo generar ningún segmento');
+
   }catch(e){alert('❌ Error: '+e.message);}
   finally{btn.disabled=false;btn.textContent='🎙️ Generar episodio';}
 }
@@ -4522,6 +4570,34 @@ function audioBufferToWav(buffer) {
     }
   }
   return arrayBuf;
+}
+
+function podAppendPlayer(index, b64, speaker, text, title) {
+  const players = document.getElementById('pod-players');
+  const src     = 'data:audio/mp3;base64,' + b64;
+  const label   = speaker === 'guest' ? '👤 GUEST' : '🎙️ HOST';
+  const div     = document.createElement('div');
+  div.id        = 'pod-seg-' + index;
+  div.style.cssText = 'background:var(--bg3);border-radius:8px;padding:12px;border:1px solid #2d3561';
+  div.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+      <span style="font-size:.78rem;color:var(--accent);font-weight:600">${label} · Segmento ${index+1}</span>
+      <div style="display:flex;gap:5px">
+        <a class="btn btn-outline btn-sm" href="${src}" download="${(title||'episodio').replace(/\s+/g,'_')}_seg${index+1}.mp3" style="font-size:.7rem;padding:2px 8px">⬇️</a>
+        <button class="btn btn-outline btn-sm" style="font-size:.7rem;padding:2px 8px" onclick="podToggleEdit(${index})">✏️ Editar</button>
+      </div>
+    </div>
+    <audio id="pod-audio-${index}" controls style="width:100%;height:32px;margin-bottom:6px" src="${src}"></audio>
+    <div id="pod-editor-${index}" style="display:none;margin-top:8px;border-top:1px solid #2d3561;padding-top:8px">
+      <label style="font-size:.75rem;color:var(--text2);display:block;margin-bottom:4px">Editar texto:</label>
+      <textarea id="pod-text-${index}" rows="3" style="width:100%;background:var(--bg2);border:1px solid #2d3561;border-radius:6px;padding:8px;color:var(--text);font-size:.83rem;resize:vertical;box-sizing:border-box">${(text||'').replace(/</g,'&lt;')}</textarea>
+      <div style="display:flex;gap:6px;margin-top:6px;align-items:center">
+        <button class="btn btn-primary btn-sm" onclick="podRegenSeg(${index})" id="pod-regen-btn-${index}">🔄 Re-generar</button>
+        <button class="btn btn-outline btn-sm" onclick="podToggleEdit(${index})">✕</button>
+        <span id="pod-regen-status-${index}" style="font-size:.75rem;color:var(--text2)"></span>
+      </div>
+    </div>`;
+  players.appendChild(div);
 }
 
 function podRenderPlayers(audioParts, segments, title, formats, musicParts) {
