@@ -457,9 +457,9 @@ def generate_podcast(script: str, engine: str = "gtts", host_voice: dict = None,
                 segments.append({"speaker": "host", "text": seg})
 
         # Limitar segmentos para evitar OOM en Render plan gratuito
-        if len(segments) > 8:
-            logger.warning(f"Podcast truncado de {len(segments)} a 8 segmentos para evitar OOM")
-            segments = segments[:8]
+        if len(segments) > 12:
+            logger.warning(f"Podcast truncado de {len(segments)} a 12 segmentos para evitar OOM")
+            segments = segments[:12]
 
         # Generar audio para cada segmento
         total = len(segments)
@@ -486,17 +486,11 @@ def generate_podcast(script: str, engine: str = "gtts", host_voice: dict = None,
         total_words = sum(len(s["text"].split()) for s in segments)
         est_dur     = round(total_words / 2.5, 1)
 
-        # ── Fusionar todos los segmentos en un solo MP3 ──────────────
-        merge_result = merge_audio_parts(audio_parts, silence_ms=400)
-        audio_merged = merge_result.get("audio_b64") if merge_result["success"] else None
-        if not merge_result["success"]:
-            logger.warning(f"Fusion de audio fallo: {merge_result.get('error')} — se devuelven segmentos separados")
-
         return {
             "success":      True,
-            "audio_parts":  audio_parts,        # lista de base64, uno por segmento (compatibilidad)
-            "audio_merged": audio_merged,        # MP3 unico fusionado (nuevo)
-            "segments":     segments,            # [{speaker, text}, ...]
+            "audio_parts":  audio_parts,   # lista de base64, uno por segmento
+            "audio_merged": None,          # se fusiona aparte via /api/audio/merge
+            "segments":     segments,
             "total_parts":  len(audio_parts),
             "failed_parts": len(errors),
             "errors":       errors,
