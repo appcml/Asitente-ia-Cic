@@ -4265,6 +4265,10 @@ async function podGenerate() {
   }
   try{
     const r=await fetch('/api/audio/podcast',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+getToken()},body:JSON.stringify(body)});
+    if(!r.ok){
+      const txt=await r.text().catch(()=>'');
+      throw new Error(`Error ${r.status}: ${txt.substring(0,200)||'respuesta vacía del servidor'}`);
+    }
     const d=await r.json();
     if(d.success){
       _podSegments=d.segments||[];
@@ -4274,8 +4278,8 @@ async function podGenerate() {
       podRenderPlayers(d.audio_parts,d.segments,title,d.audio_formats,d.music_parts);
       res.style.display='';
       res._audioParts = d.audio_parts;
-      // Mostrar audio fusionado si el backend lo devolvió
-      podShowMerged(d.audio_merged, title);
+      // Fusionar en llamada separada para no bloquear la UI
+      podMergeAsync(d.audio_parts, title);
     }else{alert('❌ '+d.error);}
   }catch(e){alert('❌ Error: '+e.message);}
   finally{btn.disabled=false;btn.textContent='🎙️ Generar episodio';}
@@ -4292,6 +4296,39 @@ function podShowMerged(mergedB64, title) {
   if (audio)  { audio.src = src; audio.load(); }
   if (dl)     { dl.href = src; dl.download = (title||'episodio').replace(/\s+/g,'_') + '_completo.mp3'; }
   if (wrap)   { wrap.style.display = ''; }
+}
+
+// ── Fusión asíncrona después de generar segmentos — no bloquea la UI ─────────────
+async function podMergeAsync(audioParts, title) {
+  const wrap   = document.getElementById('pod-merged-wrap');
+  const audio  = document.getElementById('pod-merged-audio');
+  const dl     = document.getElementById('pod-merged-dl');
+  if (!wrap) return;
+
+  // Mostrar spinner mientras fusiona
+  wrap.style.display = '';
+  if (audio) { audio.removeAttribute('src'); }
+  if (dl)    { dl.style.display = 'none'; }
+  wrap.querySelector('span')?.setAttribute('data-original', wrap.querySelector('span')?.textContent || '');
+  const label = wrap.querySelector('span');
+  if (label) label.textContent = '⏳ Fusionando audio...';
+
+  try {
+    const r = await fetch('/api/audio/merge', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + getToken() },
+      body: JSON.stringify({ audio_parts: audioParts, silence_ms: 400 })
+    });
+    if (!r.ok) throw new Error('Error ' + r.status);
+    const d = await r.json();
+    if (!d.success) throw new Error(d.error || 'Error al fusionar');
+    podShowMerged(d.audio_b64, title);
+    if (label) label.textContent = '🎧 Audio completo';
+    if (dl)    dl.style.display = '';
+  } catch(e) {
+    if (label) label.textContent = '⚠️ Fusión no disponible — descarga segmentos individuales';
+    console.warn('Merge async error:', e);
+  }
 }
 
 // ── Re-fusionar segmentos después de editar/regenerar alguno ─────────────────────
