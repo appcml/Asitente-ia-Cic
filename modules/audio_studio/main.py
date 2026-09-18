@@ -315,6 +315,43 @@ def split_into_segments(text: str, max_chars: int = 600) -> list[str]:
     return segments
 
 
+def merge_audio_parts(audio_parts_b64: list[str], silence_ms: int = 300) -> dict:
+    """
+    Fusiona una lista de segmentos MP3 (base64) en un solo archivo MP3.
+    Inserta un breve silencio entre segmentos.
+    Requiere pydub (ya en requirements.txt); funciona sin ffmpeg via minimp3.
+    Retorna {'success': True, 'audio_b64': '...', 'format': 'mp3'} o error.
+    """
+    try:
+        from pydub import AudioSegment
+
+        combined = AudioSegment.empty()
+        silence  = AudioSegment.silent(duration=silence_ms)
+
+        for i, b64 in enumerate(audio_parts_b64):
+            raw   = base64.b64decode(b64)
+            seg   = AudioSegment.from_mp3(io.BytesIO(raw))
+            if i > 0:
+                combined += silence
+            combined += seg
+
+        out = io.BytesIO()
+        combined.export(out, format="mp3")
+        out.seek(0)
+        merged_bytes = out.read()
+
+        return {
+            'success':   True,
+            'audio_b64': base64.b64encode(merged_bytes).decode('utf-8'),
+            'format':    'mp3',
+            'duration_ms': len(combined),
+        }
+
+    except Exception as e:
+        logger.error(f"merge_audio_parts error: {e}")
+        return {'success': False, 'error': str(e)}
+
+
 def _silence_mp3(ms: int = 500) -> bytes:
     """Genera silencio como bytes MP3 vacío (frame nulo)."""
     # MP3 frame de silencio: 128kbps, 44100Hz
@@ -411,9 +448,16 @@ def generate_podcast(script: str, engine: str = "gtts", host_voice: dict = None,
         total_words = sum(len(s["text"].split()) for s in segments)
         est_dur     = round(total_words / 2.5, 1)
 
+        # ── Fusionar todos los segmentos en un solo MP3 ──────────────
+        merge_result = merge_audio_parts(audio_parts, silence_ms=400)
+        audio_merged = merge_result.get("audio_b64") if merge_result["success"] else None
+        if not merge_result["success"]:
+            logger.warning(f"Fusion de audio fallo: {merge_result.get('error')} — se devuelven segmentos separados")
+
         return {
             "success":      True,
-            "audio_parts":  audio_parts,        # lista de base64, uno por segmento
+            "audio_parts":  audio_parts,        # lista de base64, uno por segmento (compatibilidad)
+            "audio_merged": audio_merged,        # MP3 unico fusionado (nuevo)
             "segments":     segments,            # [{speaker, text}, ...]
             "total_parts":  len(audio_parts),
             "failed_parts": len(errors),
