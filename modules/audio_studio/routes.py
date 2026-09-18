@@ -126,48 +126,6 @@ def register(app):
         return jsonify(result), (200 if result["success"] else 500)
 
     # ─── POST /api/audio/podcast ─────────────────────────────────
-    @bp.route("/podcast/stream", methods=["POST"])
-    def audio_podcast_stream():
-        """
-        POST /api/audio/podcast/stream  — SSE streaming
-        Genera un segmento a la vez y lo envía inmediatamente.
-        El cliente acumula los segmentos sin necesitar todo en RAM al mismo tiempo.
-        """
-        from flask import Response, stream_with_context
-        data        = request.json or {}
-        script      = data.get("script", "").strip()
-        title       = data.get("title", "Podcast")
-        engine      = data.get("engine", "gtts")
-        format_type = data.get("format_type", "monologue")
-        host_voice  = data.get("host_voice", {})
-        guest_voice = data.get("guest_voice", {})
-        if not script:
-            return jsonify({"success": False, "error": "'script' es requerido"}), 400
-        kwargs = {}
-        if engine == "gtts":
-            kwargs["lang"] = data.get("lang", "es")
-            kwargs["slow"] = bool(data.get("slow", False))
-        elif engine == "edge_tts":
-            kwargs["voice"]  = data.get("voice", "es-CL-CatalinaNeural")
-            kwargs["rate"]   = data.get("rate", "+0%")
-            kwargs["volume"] = data.get("volume", "+0%")
-
-        def gen():
-            yield from audio_main.generate_podcast_stream(
-                script=script, engine=engine,
-                host_voice=host_voice, guest_voice=guest_voice,
-                format_type=format_type, title=title, **kwargs
-            )
-
-        return Response(
-            stream_with_context(gen()),
-            mimetype="text/event-stream",
-            headers={
-                "Cache-Control":   "no-cache",
-                "X-Accel-Buffering": "no",
-            }
-        )
-
     @bp.route("/podcast", methods=["POST"])
     def audio_podcast():
         data        = request.json or {}
@@ -257,23 +215,6 @@ def register(app):
         except Exception:
             return jsonify({"success": False, "error": "audio_b64 inválido"}), 400
         result = mix_audio_with_music(voice_bytes, category=category, music_volume_db=vol_db)
-        return jsonify(result)
-
-    # ─── MERGE: fusionar segmentos en un solo MP3 ────────────────
-
-    @bp.route("/merge", methods=["POST"])
-    def audio_merge():
-        """
-        POST /api/audio/merge
-        Body: { audio_parts: [b64, b64, ...], silence_ms: 400 }
-        Fusiona los segmentos en orden y devuelve un solo MP3 base64.
-        """
-        data        = request.json or {}
-        parts       = data.get("audio_parts", [])
-        silence_ms  = int(data.get("silence_ms", 400))
-        if not parts:
-            return jsonify({"success": False, "error": "audio_parts requerido"}), 400
-        result = audio_main.merge_audio_parts(parts, silence_ms=silence_ms)
         return jsonify(result)
 
     # ─── PROYECTOS ────────────────────────────────────────────────
