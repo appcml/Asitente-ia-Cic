@@ -318,33 +318,71 @@ def split_into_segments(text: str, max_chars: int = 600) -> list[str]:
 def merge_audio_parts(audio_parts_b64: list[str], silence_ms: int = 300) -> dict:
     """
     Fusiona una lista de segmentos MP3 (base64) en un solo archivo MP3.
-    Inserta un breve silencio entre segmentos.
-    Requiere pydub (ya en requirements.txt); funciona sin ffmpeg via minimp3.
-    Retorna {'success': True, 'audio_b64': '...', 'format': 'mp3'} o error.
+    Estrategia principal: concatenacion directa de bytes MP3 (funciona en
+    cualquier version de Python, sin ffmpeg, sin pyaudioop).
+    Fallback: pydub si esta disponible y funcional.
     """
     try:
-        from pydub import AudioSegment
+        if not audio_parts_b64:
+            return {'success': False, 'error': 'Lista de segmentos vacia'}
 
-        combined = AudioSegment.empty()
-        silence  = AudioSegment.silent(duration=silence_ms)
+        parts_bytes = []
+        for b64 in audio_parts_b64:
+            raw = base64.b64decode(b64)
+            if raw:
+                parts_bytes.append(raw)
 
-        for i, b64 in enumerate(audio_parts_b64):
-            raw   = base64.b64decode(b64)
-            seg   = AudioSegment.from_mp3(io.BytesIO(raw))
+        if not parts_bytes:
+            return {'success': False, 'error': 'No se pudieron decodificar los segmentos'}
+
+        # ── Intentar con pydub primero (mejor calidad de silencio) ──
+        try:
+            from pydub import AudioSegment
+            combined = AudioSegment.empty()
+            silence  = AudioSegment.silent(duration=silence_ms)
+            for i, raw in enumerate(parts_bytes):
+                seg = AudioSegment.from_mp3(io.BytesIO(raw))
+                if i > 0:
+                    combined += silence
+                combined += seg
+            out = io.BytesIO()
+            combined.export(out, format='mp3')
+            out.seek(0)
+            merged_bytes = out.read()
+            logger.info(f"merge_audio_parts: pydub OK, {len(merged_bytes)} bytes")
+            return {
+                'success':     True,
+                'audio_b64':   base64.b64encode(merged_bytes).decode('utf-8'),
+                'format':      'mp3',
+                'method':      'pydub',
+            }
+        except Exception as pydub_err:
+            logger.warning(f"pydub no disponible ({pydub_err}), usando concatenacion de bytes")
+
+        # ── Fallback: concatenacion directa de bytes MP3 ──
+        # Los frames MP3 son self-contained — la concatenacion produce un MP3
+        # valido que cualquier reproductor lee correctamente y en orden.
+        # Silencio: frames MP3 vacios (header valido + datos nulos).
+        # 1 frame a 128kbps = 417 bytes = ~26ms
+        SILENCE_FRAME = bytes([
+            0xFF, 0xFB, 0x90, 0x00,   # MP3 header MPEG1, Layer3, 128kbps, 44100, stereo
+        ] + [0x00] * 413)             # 417 bytes total
+        frames_needed  = max(1, silence_ms // 26)
+        silence_bytes  = SILENCE_FRAME * frames_needed
+
+        buf = io.BytesIO()
+        for i, raw in enumerate(parts_bytes):
             if i > 0:
-                combined += silence
-            combined += seg
+                buf.write(silence_bytes)
+            buf.write(raw)
+        merged_bytes = buf.getvalue()
 
-        out = io.BytesIO()
-        combined.export(out, format="mp3")
-        out.seek(0)
-        merged_bytes = out.read()
-
+        logger.info(f"merge_audio_parts: bytes concat OK, {len(merged_bytes)} bytes, {len(parts_bytes)} segmentos")
         return {
             'success':   True,
             'audio_b64': base64.b64encode(merged_bytes).decode('utf-8'),
             'format':    'mp3',
-            'duration_ms': len(combined),
+            'method':    'concat',
         }
 
     except Exception as e:
