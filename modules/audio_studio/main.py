@@ -110,61 +110,37 @@ def tts_gtts(text: str, lang: str = "es", slow: bool = False) -> bytes:
 
 def tts_edge(text: str, voice: str = "es-CL-CatalinaNeural", rate: str = "+0%", volume: str = "+0%") -> bytes:
     """
-    Genera audio MP3 con edge-tts via subprocess.
-    Evita conflictos entre asyncio y gevent (monkey-patching de gunicorn).
-    Corre edge-tts en un proceso Python completamente separado.
+    Genera audio MP3 con edge-tts (Microsoft, gratis, HD).
+    Usa asyncio en un thread propio — compatible con gthread workers de gunicorn.
     """
     try:
-        import edge_tts as _check_edge  # noqa — solo verifica que está instalado
+        import edge_tts
     except ImportError:
         raise RuntimeError("edge-tts no instalado. Agrega 'edge-tts' a requirements.txt")
 
-    import subprocess, sys, tempfile, os
+    import asyncio
 
-    # Escribir texto a archivo temporal para evitar problemas de encoding en argv
-    with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False, encoding='utf-8') as tf:
-        tf.write(text)
-        txt_path = tf.name
+    async def _gen():
+        communicate = edge_tts.Communicate(text, voice, rate=rate, volume=volume)
+        buf = io.BytesIO()
+        async for chunk in communicate.stream():
+            if chunk["type"] == "audio":
+                buf.write(chunk["data"])
+        buf.seek(0)
+        return buf.read()
 
-    with tempfile.NamedTemporaryFile(suffix='.mp3', delete=False) as af:
-        mp3_path = af.name
-
+    # Crear un event loop limpio en el thread actual (gthread no parchea threading)
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
     try:
-        # Script inline que corre asyncio en su propio proceso — aislado de gevent
-        script = f"""
-import asyncio, edge_tts, sys
-
-async def main():
-    with open({repr(txt_path)}, 'r', encoding='utf-8') as f:
-        text = f.read()
-    comm = edge_tts.Communicate(text, {repr(voice)}, rate={repr(rate)}, volume={repr(volume)})
-    await comm.save({repr(mp3_path)})
-
-asyncio.run(main())
-"""
-        proc = subprocess.run(
-            [sys.executable, '-c', script],
-            timeout=90,
-            capture_output=True,
-            text=True
-        )
-        if proc.returncode != 0:
-            err = proc.stderr.strip()[-300:] if proc.stderr else 'error desconocido'
-            raise RuntimeError(f"edge-tts proceso falló: {err}")
-
-        with open(mp3_path, 'rb') as f:
-            result = f.read()
-
-        if not result:
-            raise RuntimeError("edge-tts no generó audio — verifica la voz o la conexión")
-        return result
-
+        result = loop.run_until_complete(_gen())
     finally:
-        for p in (txt_path, mp3_path):
-            try:
-                os.unlink(p)
-            except OSError:
-                pass
+        loop.close()
+        asyncio.set_event_loop(None)
+
+    if not result:
+        raise RuntimeError("edge-tts no generó audio — verifica la voz o la conexión")
+    return result
 
 
 def tts_elevenlabs(text: str, voice_id: str = "21m00Tcm4TlvDq8ikWAM",
@@ -523,6 +499,110 @@ def generate_podcast(script: str, engine: str = "gtts", host_voice: dict = None,
     except Exception as e:
         logger.error(f"Podcast error: {e}", exc_info=True)
         return {"success": False, "error": str(e)}
+
+
+# ──────────────────────────────────────────────────────────────────
+# PODCAST STREAMING — genera segmentos de a uno, libera RAM entre c/u
+# ──────────────────────────────────────────────────────────────────
+
+def generate_podcast_stream(script: str, engine: str = "gtts", host_voice: dict = None,
+                             guest_voice: dict = None, format_type: str = "monologue",
+                             title: str = "Podcast", **kwargs):
+    """
+    Generador que produce un segmento a la vez como SSE JSON.
+    Cada yield es una linea "data: {...}\n\n".
+    Al terminar emite un evento final con metadatos.
+    Mantiene RAM baja: solo un segmento de audio en memoria a la vez.
+    """
+    import json as _json
+
+    host_voice  = host_voice  or {}
+    guest_voice = guest_voice or {}
+    t0 = time.time()
+
+    # ── Parsear segmentos ──────────────────────────────────────────
+    segments = []
+    if format_type == "dialogue":
+        for line in script.split("\n"):
+            line = line.strip()
+            if not line:
+                continue
+            if line.upper().startswith("HOST:"):
+                segments.append({"speaker": "host",  "text": line[5:].strip()})
+            elif line.upper().startswith("GUEST:"):
+                segments.append({"speaker": "guest", "text": line[6:].strip()})
+            elif line:
+                segments.append({"speaker": "host",  "text": line})
+    else:
+        for seg in split_into_segments(script):
+            segments.append({"speaker": "host", "text": seg})
+
+    # Limitar para no agotar RAM
+    MAX_SEG = 8
+    if len(segments) > MAX_SEG:
+        logger.warning(f"Podcast stream truncado a {MAX_SEG} segmentos")
+        segments = segments[:MAX_SEG]
+
+    total = len(segments)
+
+    # ── Emitir metadatos iniciales ─────────────────────────────────
+    yield "data: " + _json.dumps({
+        "event":   "start",
+        "total":   total,
+        "title":   title,
+        "engine":  engine,
+        "segments": [{"speaker": s["speaker"], "text": s["text"]} for s in segments]
+    }) + "\n\n"
+
+    # ── Generar y emitir un segmento a la vez ─────────────────────
+    success_count = 0
+    for i, seg in enumerate(segments):
+        voice_kwargs = host_voice if seg["speaker"] == "host" else guest_voice
+        if engine == "edge_tts" and format_type == "dialogue":
+            if seg["speaker"] == "guest" and "voice" not in voice_kwargs:
+                voice_kwargs = {**voice_kwargs, "voice": "es-CL-LorenzoNeural"}
+
+        try:
+            result = generate_tts(seg["text"], engine=engine, **{**kwargs, **voice_kwargs})
+            if result["success"]:
+                success_count += 1
+                yield "data: " + _json.dumps({
+                    "event":    "segment",
+                    "index":    i,
+                    "total":    total,
+                    "speaker":  seg["speaker"],
+                    "text":     seg["text"],
+                    "audio_b64": result["audio_b64"],
+                    "format":   "mp3",
+                }) + "\n\n"
+            else:
+                yield "data: " + _json.dumps({
+                    "event": "segment_error",
+                    "index": i,
+                    "error": result.get("error", "unknown"),
+                }) + "\n\n"
+        except Exception as e:
+            logger.warning(f"Podcast stream seg {i+1}/{total} error: {e}")
+            yield "data: " + _json.dumps({
+                "event": "segment_error",
+                "index": i,
+                "error": str(e),
+            }) + "\n\n"
+
+    # ── Evento final ───────────────────────────────────────────────
+    elapsed = round(time.time() - t0, 2)
+    total_words = sum(len(s["text"].split()) for s in segments)
+    yield "data: " + _json.dumps({
+        "event":        "done",
+        "total_parts":  success_count,
+        "failed_parts": total - success_count,
+        "engine":       engine,
+        "format_type":  format_type,
+        "title":        title,
+        "words":        total_words,
+        "est_duration": round(total_words / 2.5, 1),
+        "gen_time":     elapsed,
+    }) + "\n\n"
 
 
 # ──────────────────────────────────────────────────────────────────
