@@ -110,37 +110,66 @@ def tts_gtts(text: str, lang: str = "es", slow: bool = False) -> bytes:
 
 def tts_edge(text: str, voice: str = "es-CL-CatalinaNeural", rate: str = "+0%", volume: str = "+0%") -> bytes:
     """
-    Genera audio MP3 con edge-tts (Microsoft, gratis, HD).
-    Usa asyncio en un thread propio — compatible con gthread workers de gunicorn.
+    Genera audio MP3 con edge-tts.
+    Usa gevent.subprocess para ser compatible con el worker gevent de gunicorn.
     """
     try:
-        import edge_tts
+        import edge_tts as _chk  # noqa
     except ImportError:
         raise RuntimeError("edge-tts no instalado. Agrega 'edge-tts' a requirements.txt")
 
-    import asyncio
+    import sys, tempfile, os
 
-    async def _gen():
-        communicate = edge_tts.Communicate(text, voice, rate=rate, volume=volume)
-        buf = io.BytesIO()
-        async for chunk in communicate.stream():
-            if chunk["type"] == "audio":
-                buf.write(chunk["data"])
-        buf.seek(0)
-        return buf.read()
-
-    # Crear un event loop limpio en el thread actual (gthread no parchea threading)
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
+    # gevent parchea subprocess — usar gevent.subprocess directamente
     try:
-        result = loop.run_until_complete(_gen())
-    finally:
-        loop.close()
-        asyncio.set_event_loop(None)
+        from gevent import subprocess as gsubprocess
+    except ImportError:
+        import subprocess as gsubprocess
 
-    if not result:
-        raise RuntimeError("edge-tts no generó audio — verifica la voz o la conexión")
-    return result
+    # Escribir texto a temp file para evitar problemas de encoding en argv
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False, encoding='utf-8') as tf:
+        tf.write(text)
+        txt_path = tf.name
+
+    with tempfile.NamedTemporaryFile(suffix='.mp3', delete=False) as af:
+        mp3_path = af.name
+
+    try:
+        script = (
+            "import asyncio, edge_tts
+"
+            "async def main():
+"
+            f"    with open({repr(txt_path)}, encoding='utf-8') as f: text=f.read()
+"
+            f"    c=edge_tts.Communicate(text,{repr(voice)},rate={repr(rate)},volume={repr(volume)})
+"
+            f"    await c.save({repr(mp3_path)})
+"
+            "asyncio.run(main())
+"
+        )
+        proc = gsubprocess.run(
+            [sys.executable, '-c', script],
+            timeout=90,
+            capture_output=True,
+            text=True
+        )
+        if proc.returncode != 0:
+            err = (proc.stderr or '').strip()[-300:] or 'error desconocido'
+            raise RuntimeError(f"edge-tts falló: {err}")
+
+        with open(mp3_path, 'rb') as f:
+            result = f.read()
+
+        if not result:
+            raise RuntimeError("edge-tts no generó audio")
+        return result
+
+    finally:
+        for p in (txt_path, mp3_path):
+            try: os.unlink(p)
+            except OSError: pass
 
 
 def tts_elevenlabs(text: str, voice_id: str = "21m00Tcm4TlvDq8ikWAM",
