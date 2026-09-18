@@ -1893,6 +1893,88 @@ def dev_bulk_learn():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/dev/dataset/fast-upload', methods=['POST'])
+@dev_required
+def dev_dataset_fast_upload():
+    """
+    Carga masiva de dataset directo a BD sin búsqueda web.
+    Acepta hasta 10.000 items por llamada.
+    Body: { items: [{title, content, category, priority}], notify_brain: bool }
+    """
+    try:
+        data     = request.json or {}
+        items    = data.get('items', [])
+        category = data.get('category', 'dataset')
+        priority = int(data.get('priority', 1))
+        notify_b = data.get('notify_brain', True)   # ¿indexar en CicBrain también?
+
+        if not items:
+            return jsonify({'error': 'Se requiere lista items [{title, content}]'}), 400
+        if len(items) > 10_000:
+            return jsonify({'error': 'Máximo 10.000 items por llamada'}), 400
+
+        token   = _get_token_from_request()
+        session = UserSession.query.filter_by(token=token).first()
+        user_id = session.user_id if session else None
+
+        now = datetime.utcnow()
+
+        # ── Construir objetos ORM en memoria (sin commits intermedios) ──
+        mk_objects  = []
+        mem_objects = []
+        brain_pairs = []
+
+        for item in items:
+            title   = str(item.get('title',   '') or '').strip()[:200]
+            content = str(item.get('content', '') or '').strip()
+            if not title or not content:
+                continue
+            cat  = str(item.get('category', category) or category)[:100]
+            prio = int(item.get('priority', priority) or priority)
+
+            mk_objects.append(ManualKnowledge(
+                title=title, content=content,
+                category=cat, priority=prio,
+                tags=['dataset_bulk'], added_by=user_id,
+                active=True, created_at=now, updated_at=now
+            ))
+            mem_objects.append(Memory(
+                content=f"{title}\n\n{content[:600]}",
+                source='manual_dev', topic=title,
+                relevance_score=0.9 + (prio * 0.03),
+                tags=['dataset_bulk'], created_at=now
+            ))
+            if notify_b:
+                brain_pairs.append({'pregunta': title, 'respuesta': content})
+
+        if not mk_objects:
+            return jsonify({'error': 'Ningún item tenía title y content válidos'}), 400
+
+        # ── Un único commit para todo el lote ──
+        db.session.bulk_save_objects(mk_objects)
+        db.session.bulk_save_objects(mem_objects)
+        db.session.commit()
+
+        # ── Indexar en CicBrain (en memoria, no bloquea la respuesta) ──
+        if brain_pairs and cic_ia.brain._ready:
+            import threading
+            threading.Thread(
+                target=cic_ia.brain.learn_from_dataset,
+                args=(brain_pairs,),
+                daemon=True
+            ).start()
+
+        return jsonify({
+            'success': True,
+            'saved':   len(mk_objects),
+            'total':   cic_ia.brain.index.size()
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/api/dev/config', methods=['GET'])
 @dev_required
 def dev_get_config():
