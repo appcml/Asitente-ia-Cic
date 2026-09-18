@@ -110,44 +110,61 @@ def tts_gtts(text: str, lang: str = "es", slow: bool = False) -> bytes:
 
 def tts_edge(text: str, voice: str = "es-CL-CatalinaNeural", rate: str = "+0%", volume: str = "+0%") -> bytes:
     """
-    Genera audio MP3 con edge-tts (Microsoft, gratis, HD).
-    Usa un thread dedicado para evitar conflictos de event loop con gunicorn.
+    Genera audio MP3 con edge-tts via subprocess.
+    Evita conflictos entre asyncio y gevent (monkey-patching de gunicorn).
+    Corre edge-tts en un proceso Python completamente separado.
     """
     try:
-        import edge_tts
+        import edge_tts as _check_edge  # noqa — solo verifica que está instalado
     except ImportError:
         raise RuntimeError("edge-tts no instalado. Agrega 'edge-tts' a requirements.txt")
 
-    import asyncio
-    import concurrent.futures
+    import subprocess, sys, tempfile, os
 
-    async def _gen():
-        communicate = edge_tts.Communicate(text, voice, rate=rate, volume=volume)
-        buf = io.BytesIO()
-        async for chunk in communicate.stream():
-            if chunk["type"] == "audio":
-                buf.write(chunk["data"])
-        buf.seek(0)
-        return buf.read()
+    # Escribir texto a archivo temporal para evitar problemas de encoding en argv
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False, encoding='utf-8') as tf:
+        tf.write(text)
+        txt_path = tf.name
 
-    def _run_in_thread():
-        # Crear un event loop completamente nuevo en un thread separado
-        # Esto evita conflictos con el loop de gunicorn/Flask
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-            return loop.run_until_complete(_gen())
-        finally:
-            loop.close()
+    with tempfile.NamedTemporaryFile(suffix='.mp3', delete=False) as af:
+        mp3_path = af.name
 
-    # Ejecutar siempre en un thread propio — compatible con gunicorn sync workers
-    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-        future = executor.submit(_run_in_thread)
-        result = future.result(timeout=60)
+    try:
+        # Script inline que corre asyncio en su propio proceso — aislado de gevent
+        script = f"""
+import asyncio, edge_tts, sys
 
-    if not result:
-        raise RuntimeError("edge-tts no generó audio — verifica la voz o la conexión")
-    return result
+async def main():
+    with open({repr(txt_path)}, 'r', encoding='utf-8') as f:
+        text = f.read()
+    comm = edge_tts.Communicate(text, {repr(voice)}, rate={repr(rate)}, volume={repr(volume)})
+    await comm.save({repr(mp3_path)})
+
+asyncio.run(main())
+"""
+        proc = subprocess.run(
+            [sys.executable, '-c', script],
+            timeout=90,
+            capture_output=True,
+            text=True
+        )
+        if proc.returncode != 0:
+            err = proc.stderr.strip()[-300:] if proc.stderr else 'error desconocido'
+            raise RuntimeError(f"edge-tts proceso falló: {err}")
+
+        with open(mp3_path, 'rb') as f:
+            result = f.read()
+
+        if not result:
+            raise RuntimeError("edge-tts no generó audio — verifica la voz o la conexión")
+        return result
+
+    finally:
+        for p in (txt_path, mp3_path):
+            try:
+                os.unlink(p)
+            except OSError:
+                pass
 
 
 def tts_elevenlabs(text: str, voice_id: str = "21m00Tcm4TlvDq8ikWAM",
