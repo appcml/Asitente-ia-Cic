@@ -1128,19 +1128,11 @@ tr:hover td{background:rgba(108,99,255,.04);}
                   <div style="display:flex;gap:8px">
                     <div style="flex:1">
                       <label style="font-size:.8rem;color:var(--text2)">Voz HOST</label>
-                      <div style="display:flex;gap:5px;margin-top:4px;align-items:center">
-                        <select id="pod-host-voice" class="input-field" style="flex:1"></select>
-                        <button class="btn btn-outline btn-sm" title="Preescuchar voz" onclick="voicePreview('pod-host-voice',this)" style="padding:4px 8px;white-space:nowrap">🔊</button>
-                      </div>
-                      <div id="pod-host-preview-status" style="font-size:.72rem;color:var(--text2);margin-top:3px;min-height:14px"></div>
+                      <select id="pod-host-voice" class="input-field" style="margin-top:4px"></select>
                     </div>
                     <div id="pod-guest-voice-wrap" style="flex:1;display:none">
                       <label style="font-size:.8rem;color:var(--text2)">Voz GUEST</label>
-                      <div style="display:flex;gap:5px;margin-top:4px;align-items:center">
-                        <select id="pod-guest-voice" class="input-field" style="flex:1"></select>
-                        <button class="btn btn-outline btn-sm" title="Preescuchar voz" onclick="voicePreview('pod-guest-voice',this)" style="padding:4px 8px;white-space:nowrap">🔊</button>
-                      </div>
-                      <div id="pod-guest-preview-status" style="font-size:.72rem;color:var(--text2);margin-top:3px;min-height:14px"></div>
+                      <select id="pod-guest-voice" class="input-field" style="margin-top:4px"></select>
                     </div>
                   </div>
                   <!-- Velocidad podcast -->
@@ -1204,27 +1196,7 @@ tr:hover td{background:rgba(108,99,255,.04);}
                 <label style="font-weight:600;font-size:.85rem">🎙️ Episodio generado</label>
                 <span id="pod-meta" style="font-size:.78rem;color:var(--text2)"></span>
               </div>
-              <!-- Audio fusionado principal -->
-              <div id="pod-merged-wrap" style="display:none;background:var(--bg3);border-radius:10px;padding:14px;margin-bottom:12px;border:1px solid var(--accent)">
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-                  <span style="font-size:.83rem;font-weight:600;color:var(--accent)">🎧 Audio completo</span>
-                  <a id="pod-merged-dl" href="#" download="episodio_completo.mp3" class="btn btn-primary btn-sm" style="font-size:.75rem">⬇️ Descargar MP3</a>
-                </div>
-                <audio id="pod-merged-audio" controls style="width:100%;height:36px"></audio>
-              </div>
-              <!-- Segmentos individuales (colapsable) -->
-              <details style="margin-bottom:8px">
-                <summary style="cursor:pointer;font-size:.8rem;color:var(--text2);padding:6px 0;user-select:none">
-                  ▸ Ver/editar segmentos individuales
-                </summary>
-                <div id="pod-players" style="display:flex;flex-direction:column;gap:8px;margin-top:8px"></div>
-                <div style="margin-top:8px">
-                  <button class="btn btn-outline btn-sm" onclick="podRefuseMerge()" id="pod-remerge-btn" style="font-size:.75rem">
-                    🔁 Re-fusionar segmentos
-                  </button>
-                  <span id="pod-remerge-status" style="font-size:.75rem;color:var(--text2);margin-left:8px"></span>
-                </div>
-              </details>
+              <div id="pod-players" style="display:flex;flex-direction:column;gap:8px"></div>
             </div>
           </div>
         </div>
@@ -3951,26 +3923,13 @@ async function dsDelete(id){
   if(!confirm('¿Eliminar este dataset?'))return;
   try{await req('/api/dev/knowledge/'+id,'DELETE');dsLoadHistory();dsLoadStats();}catch(e){alert(e.message);}
 }
-/* ── Parsear CSV respetando comillas y comas dentro de celdas ── */
-function parseCsvLine(line){
-  const result=[];let cur='';let inQ=false;
-  for(let i=0;i<line.length;i++){
-    const ch=line[i];
-    if(ch==='"'){if(inQ&&line[i+1]==='"'){cur+='"';i++;}else{inQ=!inQ;}}
-    else if(ch===','&&!inQ){result.push(cur);cur='';}
-    else{cur+=ch;}
-  }
-  result.push(cur);
-  return result.map(s=>s.trim());
-}
-
 async function dsUpload(){
   const file=document.getElementById('dsFile').files[0];
   const category=document.getElementById('dsCategory').value.trim()||'dataset';
   const priority=parseInt(document.getElementById('dsPriority').value)||1;
   if(!file)return showAlert('dsAlert','Selecciona un archivo primero','error');
 
-  showAlert('dsAlert','⏳ Leyendo archivo...','info');
+  showAlert('dsAlert','⏳ Procesando archivo...','info');
 
   try{
     const text=await file.text();
@@ -3980,61 +3939,55 @@ async function dsUpload(){
       const parsed=JSON.parse(text);
       const arr=Array.isArray(parsed)?parsed:parsed.data||parsed.items||[];
       items=arr.map((item,i)=>{
+        // Detectar formato
         if(item.pregunta||item.question)
-          return{title:`Q&A #${i+1}: ${(item.pregunta||item.question||'').substring(0,60)}`,
-                 content:`Pregunta: ${item.pregunta||item.question||''}\nRespuesta: ${item.respuesta||item.answer||item.output||''}`,
-                 category,priority};
+          return{title:`Q&A #${i+1}: ${(item.pregunta||item.question||'').substring(0,60)}`,content:`Pregunta: ${item.pregunta||item.question||''}
+Respuesta: ${item.respuesta||item.answer||item.output||''}`,category,priority};
         if(item.instruction||item.input)
-          return{title:`Instrucción #${i+1}`,
-                 content:`Instrucción: ${item.instruction||''}\nEntrada: ${item.input||''}\nSalida: ${item.output||''}`,
-                 category,priority};
+          return{title:`Instrucción #${i+1}`,content:`Instrucción: ${item.instruction||''}
+Entrada: ${item.input||''}
+Salida: ${item.output||''}`,category,priority};
         if(item.text||item.content)
           return{title:`Texto #${i+1}`,content:item.text||item.content,category,priority};
+        // Formato genérico
         return{title:`Item #${i+1}`,content:JSON.stringify(item),category,priority};
       });
     } else if(file.name.endsWith('.csv')){
       const lines=text.split('\n').filter(l=>l.trim());
-      const headers=parseCsvLine(lines[0]).map(h=>h.toLowerCase().replace(/"/g,''));
+      const headers=lines[0].split(',').map(h=>h.trim().toLowerCase().replace(/"/g,''));
       items=lines.slice(1).map((line,i)=>{
-        const cols=parseCsvLine(line);
+        const cols=line.split(',').map(c=>c.trim().replace(/^"|"$/g,''));
         const obj={};headers.forEach((h,j)=>obj[h]=cols[j]||'');
-        const pregunta=obj.pregunta||obj.question||obj.input||cols[0]||'';
-        const respuesta=obj.respuesta||obj.answer||obj.output||cols[1]||'';
-        if(!pregunta&&!respuesta)return null;
-        return{title:`Fila #${i+1}: ${pregunta.substring(0,60)}`,
-               content:`Pregunta: ${pregunta}\nRespuesta: ${respuesta}`,
-               category,priority};
-      }).filter(Boolean).filter(item=>item.content.length>10);
+        const pregunta=obj.pregunta||obj.question||obj.input||Object.values(obj)[0]||'';
+        const respuesta=obj.respuesta||obj.answer||obj.output||Object.values(obj)[1]||'';
+        return{title:`Fila #${i+1}: ${pregunta.substring(0,60)}`,content:`Pregunta: ${pregunta}\nRespuesta: ${respuesta}`,category,priority};
+      }).filter(item=>item.content.length>10);
     } else {
+      // TXT — dividir en párrafos
       const paragraphs=text.split(/\n\n+/).filter(p=>p.trim().length>50);
-      items=paragraphs.map((p,i)=>({title:`Párrafo #${i+1}: ${p.substring(0,60)}...`,
-                                     content:p.trim(),category,priority}));
+      items=paragraphs.map((p,i)=>({title:`Párrafo #${i+1}: ${p.substring(0,60)}...`,content:p.trim(),category,priority}));
     }
 
     if(!items.length)return showAlert('dsAlert','No se encontraron datos válidos en el archivo','error');
 
-    // Preview
+    // Mostrar preview
     const preview=document.getElementById('dsPreview');
     preview.style.display='block';
-    preview.innerHTML=`<strong>Preview (${items.length} items):</strong><br>`+
-      items.slice(0,3).map(i=>`• ${i.title}`).join('<br>')+
-      (items.length>3?`<br>... y ${items.length-3} más`:'');
+    preview.innerHTML=`<strong>Preview (${items.length} items):</strong><br>${items.slice(0,3).map(i=>`• ${i.title}`).join('<br>')}${items.length>3?`<br>... y ${items.length-3} más`:''}`;
 
-    showAlert('dsAlert',`⏳ Enviando ${items.length} items al servidor...`,'info');
+    showAlert('dsAlert',`⏳ Cargando ${items.length} items...`,'info');
 
-    // ── Carga rápida: un POST por cada chunk de 2.000 (sin búsqueda web, sin sleep) ──
-    const CHUNK=2000;
-    let saved=0;
-    for(let i=0;i<items.length;i+=CHUNK){
-      const chunk=items.slice(i,i+CHUNK);
-      showAlert('dsAlert',`⏳ Guardando ${Math.min(saved+chunk.length,items.length)}/${items.length}...`,'info');
-      const r=await req('/api/dev/dataset/fast-upload','POST',{
-        items:chunk, category, priority, notify_brain:true
-      });
-      saved+=r.saved||chunk.length;
+    // Cargar en lotes de 10
+    let loaded=0;
+    const batchSize=10;
+    for(let i=0;i<items.length;i+=batchSize){
+      const batch=items.slice(i,i+batchSize);
+      await req('/api/dev/learn/bulk','POST',{items:batch.map(item=>({topic:item.title,content:item.content,category:item.category,priority:item.priority}))});
+      loaded+=batch.length;
+      showAlert('dsAlert',`⏳ Cargando... ${loaded}/${items.length}`,'info');
     }
 
-    showAlert('dsAlert',`✅ Dataset cargado: ${saved} items en categoría "${category}"`, 'success');
+    showAlert('dsAlert',`✅ Dataset cargado: ${items.length} items en categoría "${category}"`,  'success');
     document.getElementById('dsFile').value='';
     preview.style.display='none';
     dsLoadStats();dsLoadHistory();
@@ -4265,292 +4218,22 @@ async function podGenerate() {
   }
   try{
     const r=await fetch('/api/audio/podcast',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+getToken()},body:JSON.stringify(body)});
-    if(!r.ok){
-      const txt=await r.text().catch(()=>'');
-      throw new Error(`Error ${r.status}: ${txt.substring(0,200)||'respuesta vacía del servidor'}`);
-    }
     const d=await r.json();
     if(d.success){
       _podSegments=d.segments||[];
-      _podCurrentId=null;
+      _podCurrentId=null; // nuevo episodio sin guardar
       document.getElementById('pod-meta').textContent=
-        `${d.total_parts} segmentos · ~${d.est_duration}s · ${d.engine} · ${d.gen_time}s`;
+        `${d.total_parts} segmentos · ~${d.est_duration}s · ${d.engine}${d.music_mixed?' · 🎵 '+_podMusicCat:''} · ${d.gen_time}s`;
       podRenderPlayers(d.audio_parts,d.segments,title,d.audio_formats,d.music_parts);
       res.style.display='';
+      // Guardar audio_parts para poder guardar proyecto después
       res._audioParts = d.audio_parts;
-      podMergeAsync(d.audio_parts, title);
     }else{alert('❌ '+d.error);}
   }catch(e){alert('❌ Error: '+e.message);}
   finally{btn.disabled=false;btn.textContent='🎙️ Generar episodio';}
 }
 
 // ── Renderizar players con editor ─────────────────────────────────
-// ── Mostrar/actualizar el audio fusionado principal ─────────────────────────────────
-function podShowMerged(mergedB64, title) {
-  const wrap  = document.getElementById('pod-merged-wrap');
-  const audio = document.getElementById('pod-merged-audio');
-  const dl    = document.getElementById('pod-merged-dl');
-  if (!mergedB64) { if(wrap) wrap.style.display='none'; return; }
-  const src = 'data:audio/mp3;base64,' + mergedB64;
-  if (audio)  { audio.src = src; audio.load(); }
-  if (dl)     { dl.href = src; dl.download = (title||'episodio').replace(/\s+/g,'_') + '_completo.mp3'; }
-  if (wrap)   { wrap.style.display = ''; }
-}
-
-// ── Fusión asíncrona después de generar segmentos — no bloquea la UI ─────────────
-async function podMergeAsync(audioParts, title) {
-  const wrap   = document.getElementById('pod-merged-wrap');
-  const audio  = document.getElementById('pod-merged-audio');
-  const dl     = document.getElementById('pod-merged-dl');
-  if (!wrap) return;
-
-  // Mostrar spinner mientras fusiona
-  wrap.style.display = '';
-  if (audio) { audio.removeAttribute('src'); }
-  if (dl)    { dl.style.display = 'none'; }
-  wrap.querySelector('span')?.setAttribute('data-original', wrap.querySelector('span')?.textContent || '');
-  const label = wrap.querySelector('span');
-  if (label) label.textContent = '⏳ Fusionando audio...';
-
-  try {
-    const r = await fetch('/api/audio/merge', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + getToken() },
-      body: JSON.stringify({ audio_parts: audioParts, silence_ms: 400 })
-    });
-    if (!r.ok) throw new Error('Error ' + r.status);
-    const d = await r.json();
-    if (!d.success) throw new Error(d.error || 'Error al fusionar');
-    podShowMerged(d.audio_b64, title);
-    if (label) label.textContent = '🎧 Audio completo';
-    if (dl)    dl.style.display = '';
-  } catch(e) {
-    if (label) label.textContent = '⚠️ Fusión no disponible — descarga segmentos individuales';
-    console.warn('Merge async error:', e);
-  }
-}
-
-// ── Re-fusionar segmentos después de editar/regenerar alguno ─────────────────────
-async function podRefuseMerge() {
-  const btn    = document.getElementById('pod-remerge-btn');
-  const status = document.getElementById('pod-remerge-status');
-
-  // Recoger base64 actual de cada player (pueden haber sido regenerados)
-  const audioEls = document.querySelectorAll('[id^="pod-audio-"]');
-  if (!audioEls.length) return;
-
-  const parts = [];
-  audioEls.forEach(el => {
-    if (el.src && el.src.startsWith('data:audio')) {
-      parts.push(el.src.split(',')[1]);
-    }
-  });
-  if (!parts.length) { if(status) status.textContent = '❌ No hay segmentos'; return; }
-
-  btn.disabled = true;
-  btn.textContent = '⏳ Fusionando...';
-  if (status) status.textContent = '';
-
-  try {
-    const r = await fetch('/api/audio/merge', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + getToken() },
-      body: JSON.stringify({ audio_parts: parts, silence_ms: 400 })
-    });
-    const d = await r.json();
-    if (!d.success) throw new Error(d.error || 'Error al fusionar');
-    const title = document.getElementById('pod-title')?.value || 'episodio';
-    podShowMerged(d.audio_b64, title);
-    if (status) { status.textContent = '✅ Listo'; setTimeout(()=>{ status.textContent=''; }, 3000); }
-  } catch(e) {
-    if (status) { status.textContent = '❌ ' + e.message; }
-  } finally {
-    btn.disabled = false;
-    btn.textContent = '🔁 Re-fusionar segmentos';
-  }
-}
-
-// ── Preview de voz — genera 2 segundos de muestra antes de escoger ─────────────────
-async function voicePreview(selectId, btn) {
-  const sel = document.getElementById(selectId);
-  if (!sel) return;
-  const voice = sel.value;
-  if (!voice) return;
-
-  // Detectar qué status label usar
-  const statusId = selectId === 'pod-host-voice' ? 'pod-host-preview-status' : 'pod-guest-preview-status';
-  const statusEl = document.getElementById(statusId);
-
-  const original = btn.textContent;
-  btn.disabled = true;
-  btn.textContent = '⏳';
-  if (statusEl) { statusEl.textContent = 'Generando muestra...'; statusEl.style.color = 'var(--text2)'; }
-
-  // Texto de muestra breve
-  const sampleText = 'Hola, esta es una muestra de mi voz. Espero que te guste.';
-
-  try {
-    const r = await fetch('/api/audio/tts', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + getToken() },
-      body: JSON.stringify({ text: sampleText, engine: 'edge_tts', voice: voice, rate: '+0%' })
-    });
-    const d = await r.json();
-    if (!d.success) throw new Error(d.error || 'Error generando muestra');
-
-    // Reproducir inline sin crear elemento visible
-    const audio = new Audio('data:audio/mp3;base64,' + d.audio_b64);
-    audio.play();
-    if (statusEl) { statusEl.textContent = '▶ Reproduciendo...'; statusEl.style.color = 'var(--accent)'; }
-    audio.onended = () => {
-      if (statusEl) { statusEl.textContent = ''; }
-    };
-  } catch(e) {
-    if (statusEl) { statusEl.textContent = '❌ ' + e.message; statusEl.style.color = '#e55'; }
-    setTimeout(() => { if (statusEl) statusEl.textContent = ''; }, 3000);
-  } finally {
-    btn.disabled = false;
-    btn.textContent = original;
-  }
-}
-
-// ── Fusionar todos los segmentos en un solo audio y descargar ────────────────────
-async function podMergeDownload() {
-  const btn    = document.getElementById('pod-merge-btn');
-  const status = document.getElementById('pod-merge-status');
-
-  // Recoger todos los src de los players actuales
-  const audioEls = document.querySelectorAll('[id^="pod-audio-"]');
-  if (!audioEls.length) { if(status) status.textContent = 'No hay segmentos generados'; return; }
-
-  btn.disabled = true;
-  btn.textContent = '⏳ Fusionando...';
-  if (status) { status.textContent = ''; }
-
-  try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
-
-    // Decodificar cada segmento
-    const buffers = [];
-    for (const el of audioEls) {
-      const src = el.src;
-      if (!src || !src.startsWith('data:audio')) continue;
-      // Extraer base64
-      const b64  = src.split(',')[1];
-      const raw  = atob(b64);
-      const bytes = new Uint8Array(raw.length);
-      for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
-      const decoded = await ctx.decodeAudioData(bytes.buffer.slice(0));
-      buffers.push(decoded);
-    }
-
-    if (!buffers.length) throw new Error('No se pudieron decodificar los segmentos');
-
-    // Calcular duración total
-    const totalSamples = buffers.reduce((acc, b) => acc + b.length, 0);
-    const numChannels  = Math.max(...buffers.map(b => b.numberOfChannels));
-    const sampleRate   = buffers[0].sampleRate;
-
-    // Crear buffer combinado
-    const merged = ctx.createBuffer(numChannels, totalSamples, sampleRate);
-    let offset = 0;
-    for (const buf of buffers) {
-      for (let ch = 0; ch < numChannels; ch++) {
-        const src  = ch < buf.numberOfChannels ? buf.getChannelData(ch) : new Float32Array(buf.length);
-        merged.getChannelData(ch).set(src, offset);
-      }
-      offset += buf.length;
-    }
-
-    // Convertir a WAV (los navegadores no pueden exportar MP3 nativo)
-    const wav = audioBufferToWav(merged);
-    const blob = new Blob([wav], { type: 'audio/wav' });
-    const url  = URL.createObjectURL(blob);
-
-    // Trigger descarga
-    const title = (document.getElementById('pod-title')?.value || 'episodio').replace(/\s+/g,'_');
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = title + '_completo.wav';
-    a.click();
-    URL.revokeObjectURL(url);
-
-    if (status) { status.textContent = '✅ Descargado'; setTimeout(() => { status.textContent = ''; }, 3000); }
-
-  } catch(e) {
-    if (status) { status.textContent = '❌ ' + e.message; }
-    console.error('Merge error:', e);
-  } finally {
-    btn.disabled = false;
-    btn.textContent = '⬇️ Descargar todo fusionado';
-  }
-}
-
-// ── Utilidad: AudioBuffer → WAV (PCM 16-bit) ────────────────────────────────────
-function audioBufferToWav(buffer) {
-  const numCh     = buffer.numberOfChannels;
-  const length    = buffer.length * numCh * 2;
-  const sampleRate = buffer.sampleRate;
-  const arrayBuf  = new ArrayBuffer(44 + length);
-  const view      = new DataView(arrayBuf);
-
-  function writeStr(off, str) { for (let i = 0; i < str.length; i++) view.setUint8(off + i, str.charCodeAt(i)); }
-  function writeU16(off, v)   { view.setUint16(off, v, true); }
-  function writeU32(off, v)   { view.setUint32(off, v, true); }
-
-  writeStr(0,  'RIFF');
-  writeU32(4,  36 + length);
-  writeStr(8,  'WAVE');
-  writeStr(12, 'fmt ');
-  writeU32(16, 16);          // PCM chunk size
-  writeU16(20, 1);           // PCM format
-  writeU16(22, numCh);
-  writeU32(24, sampleRate);
-  writeU32(28, sampleRate * numCh * 2);  // byte rate
-  writeU16(32, numCh * 2);  // block align
-  writeU16(34, 16);          // bits per sample
-  writeStr(36, 'data');
-  writeU32(40, length);
-
-  let offset = 44;
-  for (let i = 0; i < buffer.length; i++) {
-    for (let ch = 0; ch < numCh; ch++) {
-      const sample = Math.max(-1, Math.min(1, buffer.getChannelData(ch)[i]));
-      view.setInt16(offset, sample < 0 ? sample * 0x8000 : sample * 0x7FFF, true);
-      offset += 2;
-    }
-  }
-  return arrayBuf;
-}
-
-function podAppendPlayer(index, b64, speaker, text, title) {
-  const players = document.getElementById('pod-players');
-  const src     = 'data:audio/mp3;base64,' + b64;
-  const label   = speaker === 'guest' ? '👤 GUEST' : '🎙️ HOST';
-  const div     = document.createElement('div');
-  div.id        = 'pod-seg-' + index;
-  div.style.cssText = 'background:var(--bg3);border-radius:8px;padding:12px;border:1px solid #2d3561';
-  div.innerHTML = `
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-      <span style="font-size:.78rem;color:var(--accent);font-weight:600">${label} · Segmento ${index+1}</span>
-      <div style="display:flex;gap:5px">
-        <a class="btn btn-outline btn-sm" href="${src}" download="${(title||'episodio').replace(/\s+/g,'_')}_seg${index+1}.mp3" style="font-size:.7rem;padding:2px 8px">⬇️</a>
-        <button class="btn btn-outline btn-sm" style="font-size:.7rem;padding:2px 8px" onclick="podToggleEdit(${index})">✏️ Editar</button>
-      </div>
-    </div>
-    <audio id="pod-audio-${index}" controls style="width:100%;height:32px;margin-bottom:6px" src="${src}"></audio>
-    <div id="pod-editor-${index}" style="display:none;margin-top:8px;border-top:1px solid #2d3561;padding-top:8px">
-      <label style="font-size:.75rem;color:var(--text2);display:block;margin-bottom:4px">Editar texto:</label>
-      <textarea id="pod-text-${index}" rows="3" style="width:100%;background:var(--bg2);border:1px solid #2d3561;border-radius:6px;padding:8px;color:var(--text);font-size:.83rem;resize:vertical;box-sizing:border-box">${(text||'').replace(/</g,'&lt;')}</textarea>
-      <div style="display:flex;gap:6px;margin-top:6px;align-items:center">
-        <button class="btn btn-primary btn-sm" onclick="podRegenSeg(${index})" id="pod-regen-btn-${index}">🔄 Re-generar</button>
-        <button class="btn btn-outline btn-sm" onclick="podToggleEdit(${index})">✕</button>
-        <span id="pod-regen-status-${index}" style="font-size:.75rem;color:var(--text2)"></span>
-      </div>
-    </div>`;
-  players.appendChild(div);
-}
-
 function podRenderPlayers(audioParts, segments, title, formats, musicParts) {
   const players=document.getElementById('pod-players');
   players.innerHTML='';
