@@ -4263,71 +4263,23 @@ async function podGenerate() {
     const lang=document.getElementById('pod-gtts-lang')?.value||'es';
     body.lang=lang; _podVoiceConfig={lang};
   }
-  // ── SSE streaming — un segmento a la vez, RAM mínima ──
-  const _audioParts = [];
-  const _audioSegs  = [];
-  let   _metaDone   = null;
-
   try{
-    const r = await fetch('/api/audio/podcast/stream', {
-      method: 'POST',
-      headers: {'Content-Type':'application/json','Authorization':'Bearer '+getToken()},
-      body: JSON.stringify(body)
-    });
+    const r=await fetch('/api/audio/podcast',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+getToken()},body:JSON.stringify(body)});
     if(!r.ok){
       const txt=await r.text().catch(()=>'');
-      throw new Error(`Error ${r.status}: ${txt.substring(0,200)||'respuesta vacía'}`);
+      throw new Error(`Error ${r.status}: ${txt.substring(0,200)||'respuesta vacía del servidor'}`);
     }
-
-    res.style.display='';
-    document.getElementById('pod-players').innerHTML='';
-    document.getElementById('pod-meta').textContent='⏳ Generando segmentos...';
-
-    const reader  = r.body.getReader();
-    const decoder = new TextDecoder();
-    let   buf     = '';
-
-    while(true){
-      const {done, value} = await reader.read();
-      if(done) break;
-      buf += decoder.decode(value, {stream:true});
-      const lines = buf.split('\n');
-      buf = lines.pop(); // último fragmento incompleto
-      for(const line of lines){
-        if(!line.startsWith('data: ')) continue;
-        let ev;
-        try{ ev = JSON.parse(line.slice(6)); }catch{ continue; }
-
-        if(ev.event === 'start'){
-          _podSegments = ev.segments || [];
-          document.getElementById('pod-meta').textContent =
-            `⏳ Generando ${ev.total} segmentos con ${ev.engine}...`;
-
-        } else if(ev.event === 'segment'){
-          _audioParts.push(ev.audio_b64);
-          _audioSegs.push({speaker: ev.speaker, text: ev.text});
-          // Renderizar este segmento inmediatamente
-          podAppendPlayer(ev.index, ev.audio_b64, ev.speaker, ev.text, title);
-          document.getElementById('pod-meta').textContent =
-            `⏳ ${ev.index+1}/${ev.total} segmentos generados...`;
-
-        } else if(ev.event === 'segment_error'){
-          console.warn('Segmento', ev.index, 'falló:', ev.error);
-
-        } else if(ev.event === 'done'){
-          _metaDone = ev;
-          _podCurrentId = null;
-          document.getElementById('pod-meta').textContent =
-            `${ev.total_parts} segmentos · ~${ev.est_duration}s · ${ev.engine} · ${ev.gen_time}s`;
-          res._audioParts = _audioParts;
-          // Fusionar en llamada separada
-          if(_audioParts.length > 0) podMergeAsync(_audioParts, title);
-        }
-      }
-    }
-
-    if(!_audioParts.length) alert('❌ No se pudo generar ningún segmento');
-
+    const d=await r.json();
+    if(d.success){
+      _podSegments=d.segments||[];
+      _podCurrentId=null;
+      document.getElementById('pod-meta').textContent=
+        `${d.total_parts} segmentos · ~${d.est_duration}s · ${d.engine} · ${d.gen_time}s`;
+      podRenderPlayers(d.audio_parts,d.segments,title,d.audio_formats,d.music_parts);
+      res.style.display='';
+      res._audioParts = d.audio_parts;
+      podMergeAsync(d.audio_parts, title);
+    }else{alert('❌ '+d.error);}
   }catch(e){alert('❌ Error: '+e.message);}
   finally{btn.disabled=false;btn.textContent='🎙️ Generar episodio';}
 }
