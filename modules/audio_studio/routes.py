@@ -217,6 +217,23 @@ def register(app):
         result = mix_audio_with_music(voice_bytes, category=category, music_volume_db=vol_db)
         return jsonify(result)
 
+    # ─── MERGE: fusionar segmentos en un solo MP3 ────────────────
+
+    @bp.route("/merge", methods=["POST"])
+    def audio_merge():
+        """
+        POST /api/audio/merge
+        Body: { audio_parts: [b64, b64, ...], silence_ms: 400 }
+        Fusiona los segmentos en orden y devuelve un solo MP3 base64.
+        """
+        data        = request.json or {}
+        parts       = data.get("audio_parts", [])
+        silence_ms  = int(data.get("silence_ms", 400))
+        if not parts:
+            return jsonify({"success": False, "error": "audio_parts requerido"}), 400
+        result = audio_main.merge_audio_parts(parts, silence_ms=silence_ms)
+        return jsonify(result)
+
     # ─── PROYECTOS ────────────────────────────────────────────────
 
     def _auth(req):
