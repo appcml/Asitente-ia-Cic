@@ -1261,6 +1261,19 @@ Responde directamente sin mostrar este proceso.""")
 # Instancia global
 cic_ia = CicIA()
 
+from modules.learning_models import register_learning_models
+from modules.tutor_loop import TutorLoop
+from modules.learning_panel import create_learning_blueprint
+
+ExamQuestion, ExamRun, LearningCycle = register_learning_models(db)
+_learning_models = {
+    'ExamQuestion': ExamQuestion,
+    'ExamRun': ExamRun,
+    'LearningCycle': LearningCycle,
+}
+tutor_loop = TutorLoop(app, db, cic_ia.brain, cic_ia.llm, _learning_models)
+app.register_blueprint(create_learning_blueprint(db, _learning_models, tutor_loop))
+tutor_loop.start(interval_seconds=4 * 3600, questions_per_cycle=5)
 # ========== RUTAS PÚBLICAS ==========
 
 @app.route('/')
