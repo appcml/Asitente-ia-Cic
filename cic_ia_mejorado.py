@@ -512,7 +512,7 @@ class LLMEngine:
         self.openai_key    = OPENAI_API_KEY
         self.groq_key      = os.environ.get('GROQ_API_KEY', '')
         self.ollama_url    = os.environ.get('OLLAMA_URL', '')
-        self.groq_model    = os.environ.get('GROQ_MODEL', 'qwen/qwen3.6-27b')
+        self.groq_model    = os.environ.get('GROQ_MODEL', 'openai/gpt-oss-20b')
         self.ollama_model  = os.environ.get('OLLAMA_MODEL', 'llama3.2')
 
     def chat(self, user_message: str, system_prompt: str, context: str = '',
