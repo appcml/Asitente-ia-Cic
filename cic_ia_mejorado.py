@@ -1264,6 +1264,15 @@ Responde directamente sin mostrar este proceso.""")
 # Instancia global
 cic_ia = CicIA()
 
+_reset = os.environ.get('RESET_DEV_PASSWORD', '').strip()
+if _reset:
+    with app.app_context():
+        _dev = User.query.filter_by(is_developer=True).first()
+        if _dev:
+            _dev.set_password(_reset)
+            db.session.commit()
+            logger.warning(f"Clave de desarrollador restablecida para {_dev.username}")
+                    
 from modules.learning_models import register_learning_models
 from modules.tutor_loop import TutorLoop
 from modules.learning_panel import create_learning_blueprint
