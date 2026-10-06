@@ -41,6 +41,9 @@ app.config['SECRET_KEY'] = _secret
 database_url = os.environ.get('DATABASE_URL', '')
 if database_url.startswith('postgres://'):
     database_url = database_url.replace('postgres://', 'postgresql://', 1)
+# SQLAlchemy 2.1 usa psycopg (v3) por defecto. El repo instala psycopg2.
+if database_url.startswith('postgresql://') and '+' not in database_url.split('://', 1)[0]:
+    database_url = database_url.replace('postgresql://', 'postgresql+psycopg2://', 1)
 _is_postgres = database_url and 'postgresql' in database_url
 if _is_postgres and 'sslmode' not in database_url:
     sep = '&' if '?' in database_url else '?'
