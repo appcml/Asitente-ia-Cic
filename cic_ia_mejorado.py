@@ -524,7 +524,7 @@ class LLMEngine:
             full_system += f'\n\n{context}'
 
         provider = get_config('ai_provider', 'auto')
-        providers = ['groq', 'ollama', 'anthropic', 'openai'] if provider == 'auto' else [provider]
+        providers = ['groq', 'gemini', 'ollama', 'anthropic', 'openai'] if provider == 'auto' else [provider]
 
         for p in providers:
             result = self._try_provider(p, user_message, full_system, conversation_history, max_tokens)
@@ -601,9 +601,42 @@ class LLMEngine:
                 return self._call_anthropic(user_message, system, history, max_tokens)
             elif provider == 'openai':
                 return self._call_openai(user_message, system, history, max_tokens)
+            elif provider == 'gemini':
+                return self._call_gemini(user_message, system, history, max_tokens)
             return {'success': False, 'error': f'Proveedor {provider} desconocido'}
         except Exception as e:
             return {'success': False, 'error': str(e)}
+
+
+    def _call_gemini(self, user_message: str, system: str,
+                     history: list = None, max_tokens: int = 1200) -> dict:
+        api_key = os.environ.get('GEMINI_API_KEY', '')
+        if not api_key:
+            return {'success': False, 'error': 'Sin GEMINI_API_KEY'}
+        model = os.environ.get('GEMINI_MODEL', 'gemini-2.5-flash')
+        contents = []
+        if history:
+            for h in history[-10:]:
+                role = 'user' if h.get('role') == 'user' else 'model'
+                contents.append({'role': role, 'parts': [{'text': h.get('content', '')}]})
+        contents.append({'role': 'user', 'parts': [{'text': user_message}]})
+        resp = requests.post(
+            f'https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent',
+            params={'key': api_key},
+            json={
+                'systemInstruction': {'parts': [{'text': system or ''}]},
+                'contents': contents,
+                'generationConfig': {'temperature': 0.4, 'maxOutputTokens': max_tokens},
+            },
+            timeout=60,
+        )
+        if resp.status_code != 200:
+            return {'success': False, 'error': resp.text[:240]}
+        data = resp.json()
+        text = data['candidates'][0]['content']['parts'][0]['text']
+        tokens = data.get('usageMetadata', {}).get('candidatesTokenCount', 0)
+        return {'success': True, 'response': text, 'tokens': tokens,
+                'provider': 'gemini', 'model': model}
 
     def _call_groq(self, user_message: str, system: str,
                    history: list = None, max_tokens: int = 1200) -> dict:
