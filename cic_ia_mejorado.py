@@ -1320,7 +1320,7 @@ _learning_models = {
 }
 tutor_loop = TutorLoop(app, db, cic_ia.brain, cic_ia.llm, _learning_models)
 app.register_blueprint(create_learning_blueprint(db, _learning_models, tutor_loop))
-tutor_loop.start(interval_seconds=1 * 3600, questions_per_cycle=5)
+tutor_loop.start(interval_seconds=1 * 3600, questions_per_cycle=20)
 # ========== RUTAS PÚBLICAS ==========
 
 @app.route('/')
