@@ -2181,6 +2181,18 @@ def dev_test_ai():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/dev/purge-fallback', methods=['POST'])
+@dev_required
+def dev_purge_fallback():
+    rows = Conversation.query.filter(
+        Conversation.bot_response.contains('Sin motor de IA activo')
+    ).all()
+    n = len(rows)
+    for r in rows:
+        db.session.delete(r)
+    db.session.commit()
+    return jsonify({'success': True, 'borradas': n})
+            
 @app.route('/api/dev/setup', methods=['POST'])
 def dev_setup():
     existing_dev = User.query.filter_by(is_developer=True).first()
